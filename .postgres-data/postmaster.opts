@@ -1,0 +1,1 @@
+C:/DEV/mmbrussia-partners/node_modules/@embedded-postgres/windows-x64/native/bin/postgres.exe "-D" "C:\DEV\mmbrussia-partners\.postgres-data" "-p" "5433"

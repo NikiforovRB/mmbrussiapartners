@@ -1,0 +1,57 @@
+import { notFound, redirect } from "next/navigation";
+import { auth } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { fioFromParts } from "@/lib/utils";
+import { Topbar } from "@/components/cabinet/topbar";
+import { LicenseDetailEditor } from "@/components/licenses/license-detail-editor";
+
+export const dynamic = "force-dynamic";
+
+export default async function LicenseDetailDealerPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const session = await auth();
+  if (!session?.user) redirect("/login");
+  const { id } = await params;
+  const license = await db.license.findUnique({
+    where: { id },
+    include: { auditLogs: { orderBy: { createdAt: "desc" }, take: 50, include: { actor: true } } },
+  });
+  if (!license) notFound();
+  if (license.dealerId !== session.user.id && !session.user.isSuperAdmin) {
+    redirect("/dealer/licenses");
+  }
+
+  const user = await db.user.findUnique({
+    where: { id: session.user.id },
+    include: { dealerProfile: true, role: true },
+  });
+
+  const fio = fioFromParts({
+    firstName: user?.dealerProfile?.firstName,
+    lastName: user?.dealerProfile?.lastName,
+    middleName: user?.dealerProfile?.middleName,
+  });
+
+  return (
+    <>
+      <Topbar
+        title={`Лицензия ${license.number}`}
+        subtitle="Редактирование, скачивание, аннулирование"
+        user={{
+          name: fio || user?.email || session.user.email || "",
+          email: user?.email ?? session.user.email ?? "",
+          role: user?.role.name ?? "Представитель",
+        }}
+      />
+      <div className="mt-6">
+        <LicenseDetailEditor
+          license={JSON.parse(JSON.stringify(license))}
+          context="dealer"
+        />
+      </div>
+    </>
+  );
+}
