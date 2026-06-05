@@ -17,8 +17,12 @@ async function main() {
     password: PASSWORD,
     port: PORT,
     persistent: true,
-    onLog: (msg: string) => process.stdout.write(msg),
-    onError: (err: Error) => process.stderr.write(String(err) + "\n"),
+    onLog: (msg: string) => {
+      process.stdout.write(msg);
+    },
+    onError: (messageOrError: unknown) => {
+      process.stderr.write(String(messageOrError) + "\n");
+    },
   });
 
   const cmd = process.argv[2] ?? "start";
