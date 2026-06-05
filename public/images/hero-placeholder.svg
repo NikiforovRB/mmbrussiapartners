@@ -1,0 +1,21 @@
+<svg width="800" height="700" viewBox="0 0 800 700" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="800" y2="700" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#dfe6f5"/>
+      <stop offset="1" stop-color="#eef2fa"/>
+    </linearGradient>
+    <linearGradient id="a" x1="0" y1="0" x2="800" y2="0" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2a9fff"/>
+      <stop offset="1" stop-color="#1487f0"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="700" rx="12" fill="url(#g)"/>
+  <rect x="120" y="230" width="560" height="280" rx="20" fill="#0a0d14"/>
+  <rect x="150" y="262" width="500" height="190" rx="10" fill="url(#a)" opacity="0.85"/>
+  <rect x="176" y="292" width="220" height="20" rx="6" fill="#ffffff" opacity="0.9"/>
+  <rect x="176" y="328" width="320" height="14" rx="5" fill="#ffffff" opacity="0.55"/>
+  <rect x="176" y="356" width="280" height="14" rx="5" fill="#ffffff" opacity="0.4"/>
+  <circle cx="560" cy="350" r="44" fill="#ffffff" opacity="0.9"/>
+  <rect x="150" y="468" width="500" height="14" rx="7" fill="#ffffff" opacity="0.25"/>
+  <text x="400" y="588" font-family="Arial, sans-serif" font-size="22" fill="#5b677d" text-anchor="middle">0<5=8B5 87>1@065=85 2 04<8=:5</text>
+</svg>

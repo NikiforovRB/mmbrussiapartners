@@ -1,0 +1,1 @@
+ALTER TABLE "CompanySettings" ADD COLUMN IF NOT EXISTS "homepage" JSONB;
