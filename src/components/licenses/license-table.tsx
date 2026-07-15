@@ -37,6 +37,8 @@ type License = {
   licenseKey?: string | null;
   deletedAt?: Date | string | null;
   dealerId: string;
+  platform?: string | null;
+  issuedWithoutPayment?: boolean;
 };
 
 export function LicenseTable({
@@ -77,6 +79,7 @@ export function LicenseTable({
     else url.searchParams.delete("status");
     if (next.type) url.searchParams.set("type", next.type);
     else url.searchParams.delete("type");
+    url.searchParams.delete("page");
     router.replace(`${pathname}${url.search}`);
   }
 
@@ -103,7 +106,10 @@ export function LicenseTable({
       return;
     }
     setCancelLoading(true);
-    const res = await fetch(`/api/licenses/${cancelTarget.id}/cancel`, {
+    const endpoint = isAdmin
+      ? `/api/licenses/${cancelTarget.id}/cancel`
+      : `/api/licenses/${cancelTarget.id}/cancel-request`;
+    const res = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ reason: cancelReason }),
@@ -111,10 +117,10 @@ export function LicenseTable({
     setCancelLoading(false);
     if (!res.ok) {
       const j = await res.json().catch(() => ({}));
-      toast.error(j.error ?? "Не удалось аннулировать");
+      toast.error(j.error ?? (isAdmin ? "Не удалось аннулировать" : "Не удалось отправить заявку"));
       return;
     }
-    toast.success("Лицензия аннулирована");
+    toast.success(isAdmin ? "Лицензия аннулирована" : "Заявка на аннулирование отправлена");
     setCancelTarget(null);
     setCancelReason("");
     router.refresh();
@@ -214,8 +220,8 @@ export function LicenseTable({
       </div>
 
       <div className="rounded-panel bg-card-light p-2.5">
-        <div className="overflow-hidden rounded-panel bg-white">
-          <table className="w-full text-sm">
+        <div className="overflow-x-auto scrollbar-clean rounded-panel bg-white">
+          <table className="w-full min-w-[760px] text-sm">
             <thead>
               <tr className="text-left text-[11.5px] uppercase tracking-tight text-ink-subtle">
                 <th className="px-4 py-3">Номер</th>
@@ -245,6 +251,11 @@ export function LicenseTable({
                     <Link href={`${basePath}/${l.id}`} className=" text-ink hover:text-accent">
                       {l.number}
                     </Link>
+                    {l.issuedWithoutPayment ? (
+                      <div className="mt-1">
+                        <Tag tone="warning">Без оплаты</Tag>
+                      </div>
+                    ) : null}
                   </td>
                   <td className="px-4 py-3">
                     <Tag tone={l.type === "FULL" ? "accent" : l.type === "ECO" ? "muted" : "neutral"}>
@@ -305,7 +316,7 @@ export function LicenseTable({
                           icon={<XCircle className="h-4 w-4" />}
                           onClick={() => setCancelTarget(l)}
                         >
-                          Аннулировать
+                          {isAdmin ? "Аннулировать" : "Запросить аннулирование"}
                         </Button>
                       ) : null}
                       {isAdmin ? (
@@ -332,8 +343,12 @@ export function LicenseTable({
       <Modal
         open={!!cancelTarget}
         onClose={() => setCancelTarget(null)}
-        title={`Аннулировать ${cancelTarget?.number ?? ""}`}
-        description="Уведомление будет отправлено администраторам. Действие можно будет восстановить только через админа."
+        title={`${isAdmin ? "Аннулировать" : "Заявка на аннулирование"} ${cancelTarget?.number ?? ""}`}
+        description={
+          isAdmin
+            ? "Уведомление будет отправлено администраторам. Действие можно будет восстановить только через админа."
+            : "Заявка поступит администратору. Лицензия будет аннулирована после одобрения."
+        }
       >
         <div className="space-y-3">
           <Textarea
@@ -349,7 +364,7 @@ export function LicenseTable({
             Отмена
           </Button>
           <Button variant="danger" loading={cancelLoading} icon={<XCircle className="h-4 w-4" />} onClick={onCancel}>
-            Аннулировать
+            {isAdmin ? "Аннулировать" : "Отправить заявку"}
           </Button>
         </div>
       </Modal>

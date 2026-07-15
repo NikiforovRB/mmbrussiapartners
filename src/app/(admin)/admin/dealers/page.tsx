@@ -10,13 +10,16 @@ import { Button } from "@/components/ui/button";
 import { ChevronRight, Search } from "lucide-react";
 import { fioFromParts } from "@/lib/utils";
 import { DealersFilters } from "./dealers-filters";
+import { Pagination, parsePage } from "@/components/cabinet/pagination";
 
 export const dynamic = "force-dynamic";
+
+const PAGE_SIZE = 20;
 
 export default async function AdminDealersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; status?: string }>;
+  searchParams: Promise<{ q?: string; status?: string; page?: string }>;
 }) {
   const session = await auth();
   if (!session?.user) return null;
@@ -45,12 +48,17 @@ export default async function AdminDealersPage({
     });
   }
 
-  const dealers = await db.user.findMany({
-    where,
-    include: { dealerProfile: true, role: true },
-    orderBy: [{ status: "asc" }, { createdAt: "desc" }],
-    take: 100,
-  });
+  const page = parsePage(sp.page);
+  const [total, dealers] = await Promise.all([
+    db.user.count({ where }),
+    db.user.findMany({
+      where,
+      include: { dealerProfile: true, role: true },
+      orderBy: [{ status: "asc" }, { createdAt: "desc" }],
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
+    }),
+  ]);
 
   return (
     <>
@@ -70,8 +78,8 @@ export default async function AdminDealersPage({
         />
         <DealersFilters initialQuery={sp.q ?? ""} initialStatus={sp.status ?? ""} />
         <Card className="mt-5">
-          <div className="overflow-hidden rounded-panel bg-white">
-            <table className="w-full text-sm">
+          <div className="overflow-x-auto scrollbar-clean rounded-panel bg-white">
+            <table className="w-full min-w-[720px] text-sm">
               <thead>
                 <tr className="text-left text-[11.5px] uppercase tracking-tight text-ink-subtle">
                   <th className="px-4 py-3">Представитель</th>
@@ -142,6 +150,13 @@ export default async function AdminDealersPage({
               </tbody>
             </table>
           </div>
+          <Pagination
+            page={page}
+            pageSize={PAGE_SIZE}
+            total={total}
+            basePath="/admin/dealers"
+            query={{ q: sp.q, status: sp.status }}
+          />
         </Card>
       </div>
     </>

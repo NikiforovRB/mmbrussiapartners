@@ -9,6 +9,7 @@ import { Select } from "@/components/ui/select";
 import { DateRangePicker, type DateRange } from "@/components/ui/date-range-picker";
 import { addDays, addMonths, formatRuDate } from "@/lib/dates";
 import { usePermissions } from "@/hooks/use-permissions";
+import { LICENSE_PLATFORM_OPTIONS } from "@/lib/license-options";
 
 const PRESETS = [
   { id: "today", label: "Сегодня", days: 0 },
@@ -27,6 +28,7 @@ export function ReportsBuilder({ context }: { context: "dealer" | "admin" }) {
   }));
   const [status, setStatus] = React.useState<string>("");
   const [type, setType] = React.useState<string>("");
+  const [platform, setPlatform] = React.useState<string>("");
   const [loading, setLoading] = React.useState(false);
 
   function applyPreset(days: number) {
@@ -49,6 +51,7 @@ export function ReportsBuilder({ context }: { context: "dealer" | "admin" }) {
         to: range.to.toISOString(),
         status: status || null,
         type: type || null,
+        platform: platform || null,
         scope: context,
       }),
     });
@@ -98,6 +101,13 @@ export function ReportsBuilder({ context }: { context: "dealer" | "admin" }) {
               { value: "CUSTOM", label: "CUSTOM" },
             ]}
           />
+          <Select
+            label="Тип платформы"
+            value={platform}
+            onChange={(v) => setPlatform(v)}
+            placeholder="Любая"
+            options={[{ value: "", label: "Любая" }, ...LICENSE_PLATFORM_OPTIONS]}
+          />
         </div>
         <div className="mt-3">
           <DateRangePicker value={range} onChange={setRange} />
@@ -142,6 +152,7 @@ export function ReportsBuilder({ context }: { context: "dealer" | "admin" }) {
           </Line>
           <Line label="Статус">{status || "Все"}</Line>
           <Line label="Тип">{type || "Любой"}</Line>
+          <Line label="Платформа">{platform || "Любая"}</Line>
         </div>
         <div className="divider my-4" />
         <div className="text-xs text-ink-muted">

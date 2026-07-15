@@ -1,26 +1,36 @@
+import Link from "next/link";
+import { Plus } from "lucide-react";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { hasPermission } from "@/lib/permissions";
 import { Topbar } from "@/components/cabinet/topbar";
 import { PageHeader } from "@/components/cabinet/page-header";
+import { Button } from "@/components/ui/button";
 import { LicenseTable } from "@/components/licenses/license-table";
+import { Pagination, parsePage } from "@/components/cabinet/pagination";
 
 export const dynamic = "force-dynamic";
+
+const PAGE_SIZE = 20;
 
 export default async function AdminLicensesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; status?: string; type?: string }>;
+  searchParams: Promise<{ q?: string; status?: string; type?: string; page?: string }>;
 }) {
   const session = await auth();
   if (!session?.user) return null;
   const sp = await searchParams;
   const where = buildWhere(sp);
+  const page = parsePage(sp.page);
 
-  const [licenses, me] = await Promise.all([
+  const [total, licenses, me] = await Promise.all([
+    db.license.count({ where }),
     db.license.findMany({
       where,
       orderBy: { createdAt: "desc" },
-      take: 100,
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
     }),
     db.user.findUnique({
       where: { id: session.user.id },
@@ -43,6 +53,13 @@ export default async function AdminLicensesPage({
         <PageHeader
           title="Лицензии"
           description="Глобальный список всех лицензий системы. Фильтрация и редактирование."
+          actions={
+            hasPermission(session.user.permissions, "licenses.create", session.user.isSuperAdmin) ? (
+              <Link href="/admin/licenses/new">
+                <Button icon={<Plus className="h-4 w-4" />}>Новая лицензия</Button>
+              </Link>
+            ) : null
+          }
         />
         <LicenseTable
           licenses={licenses}
@@ -51,6 +68,13 @@ export default async function AdminLicensesPage({
           initialQuery={sp.q ?? ""}
           initialStatus={sp.status ?? ""}
           initialType={sp.type ?? ""}
+        />
+        <Pagination
+          page={page}
+          pageSize={PAGE_SIZE}
+          total={total}
+          basePath="/admin/licenses"
+          query={{ q: sp.q, status: sp.status, type: sp.type }}
         />
       </div>
     </>

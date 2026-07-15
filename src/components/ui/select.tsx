@@ -54,6 +54,7 @@ export function Select<T extends string = string>({
           onClick={() => !disabled && setOpen((v) => !v)}
           className={cn(
             "field-control w-full h-12 rounded-panel bg-card-light px-4 flex items-center justify-between gap-3 text-left text-[14.5px] transition-colors",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-white",
             !current && "text-ink-subtle",
             disabled && "opacity-50 cursor-not-allowed",
           )}

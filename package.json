@@ -12,6 +12,7 @@
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:seed": "tsx --env-file=.env prisma/seed.ts",
+    "db:seed:demo": "tsx --env-file=.env prisma/seed-demo.ts",
     "db:studio": "prisma studio",
     "db:local:init": "tsx scripts/dev-db.ts init",
     "db:local:start": "tsx scripts/dev-db.ts start",

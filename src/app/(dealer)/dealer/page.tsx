@@ -14,6 +14,7 @@ import { Card } from "@/components/ui/card";
 import { Tag } from "@/components/ui/tag";
 import { Button } from "@/components/ui/button";
 import { ScrollReveal } from "@/components/animations/scroll-reveal";
+import { DayActivity } from "@/components/dealer/day-activity";
 import { fioFromParts, formatCurrency } from "@/lib/utils";
 import { formatRuDate } from "@/lib/dates";
 
@@ -29,7 +30,7 @@ export default async function DealerDashboard() {
   });
   if (!user) return null;
 
-  const [licenses, recent, totalActive, totalRevenue] = await Promise.all([
+  const [licenses, recent, totalActive, totalRevenue, byStatus, byType] = await Promise.all([
     db.license.count({ where: { dealerId: user.id, deletedAt: null } }),
     db.license.findMany({
       where: { dealerId: user.id, deletedAt: null },
@@ -43,7 +44,33 @@ export default async function DealerDashboard() {
       where: { dealerId: user.id, status: "PAID" },
       _sum: { amount: true },
     }),
+    db.license.groupBy({
+      by: ["status"],
+      where: { dealerId: user.id, deletedAt: null },
+      _count: { _all: true },
+    }),
+    db.license.groupBy({
+      by: ["type"],
+      where: { dealerId: user.id, deletedAt: null },
+      _count: { _all: true },
+    }),
   ]);
+
+  const statusCounts = Object.fromEntries(byStatus.map((r) => [r.status, r._count._all]));
+  const typeCounts = Object.fromEntries(byType.map((r) => [r.type, r._count._all]));
+  const totalForBars = Math.max(1, licenses);
+  const statusBreakdown: { key: string; label: string; count: number }[] = [
+    { key: "ACTIVE", label: "Активные", count: statusCounts.ACTIVE ?? 0 },
+    { key: "EXPIRED", label: "Истекли", count: statusCounts.EXPIRED ?? 0 },
+    { key: "CANCELLED", label: "Аннулированы", count: statusCounts.CANCELLED ?? 0 },
+    { key: "REVOKED", label: "Отозваны", count: statusCounts.REVOKED ?? 0 },
+    { key: "DRAFT", label: "Черновики", count: statusCounts.DRAFT ?? 0 },
+  ].filter((s) => s.count > 0);
+  const typeBreakdown: { key: string; count: number }[] = [
+    { key: "ECO", count: typeCounts.ECO ?? 0 },
+    { key: "FULL", count: typeCounts.FULL ?? 0 },
+    { key: "CUSTOM", count: typeCounts.CUSTOM ?? 0 },
+  ].filter((t) => t.count > 0);
 
   const fio = fioFromParts({
     firstName: user.dealerProfile?.firstName,
@@ -178,6 +205,49 @@ export default async function DealerDashboard() {
           )}
         </Card>
       </ScrollReveal>
+
+      <div className="grid lg:grid-cols-2 gap-4 mt-6">
+        <ScrollReveal>
+          <Card>
+            <div className="flex items-center gap-2 mb-4">
+              <TrendingUp className="h-4 w-4 text-accent" />
+              <div className="font-display text-lg tracking-tight">Аналитика по лицензиям</div>
+            </div>
+            {statusBreakdown.length === 0 ? (
+              <div className="py-6 text-center text-sm text-ink-muted">Пока нет данных</div>
+            ) : (
+              <div className="space-y-3">
+                {statusBreakdown.map((s) => (
+                  <div key={s.key}>
+                    <div className="flex items-center justify-between text-sm mb-1">
+                      <span className="text-ink-muted">{s.label}</span>
+                      <span className="tracking-tight">{s.count}</span>
+                    </div>
+                    <div className="h-2 rounded-full bg-card-light overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-accent"
+                        style={{ width: `${Math.round((s.count / totalForBars) * 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+                {typeBreakdown.length > 0 ? (
+                  <div className="pt-2 flex flex-wrap gap-2">
+                    {typeBreakdown.map((t) => (
+                      <Tag key={t.key} tone={t.key === "FULL" ? "accent" : "neutral"}>
+                        {t.key}: {t.count}
+                      </Tag>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            )}
+          </Card>
+        </ScrollReveal>
+        <ScrollReveal delay={0.05}>
+          <DayActivity />
+        </ScrollReveal>
+      </div>
     </>
   );
 }

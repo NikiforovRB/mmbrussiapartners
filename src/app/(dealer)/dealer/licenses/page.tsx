@@ -7,13 +7,16 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { fioFromParts } from "@/lib/utils";
 import { LicenseTable } from "@/components/licenses/license-table";
+import { Pagination, parsePage } from "@/components/cabinet/pagination";
 
 export const dynamic = "force-dynamic";
+
+const PAGE_SIZE = 20;
 
 export default async function DealerLicensesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; status?: string; type?: string }>;
+  searchParams: Promise<{ q?: string; status?: string; type?: string; page?: string }>;
 }) {
   const session = await auth();
   if (!session?.user) return null;
@@ -25,12 +28,17 @@ export default async function DealerLicensesPage({
 
   const sp = await searchParams;
   const where = buildWhere(sp, user.id);
+  const page = parsePage(sp.page);
 
-  const licenses = await db.license.findMany({
-    where,
-    orderBy: { createdAt: "desc" },
-    take: 50,
-  });
+  const [total, licenses] = await Promise.all([
+    db.license.count({ where }),
+    db.license.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
+    }),
+  ]);
 
   const fio = fioFromParts({
     firstName: user.dealerProfile?.firstName,
@@ -62,6 +70,13 @@ export default async function DealerLicensesPage({
           initialQuery={sp.q ?? ""}
           initialStatus={sp.status ?? ""}
           initialType={sp.type ?? ""}
+        />
+        <Pagination
+          page={page}
+          pageSize={PAGE_SIZE}
+          total={total}
+          basePath="/dealer/licenses"
+          query={{ q: sp.q, status: sp.status, type: sp.type }}
         />
       </div>
     </>

@@ -21,11 +21,13 @@ import {
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card } from "@/components/ui/card";
 import { Tag } from "@/components/ui/tag";
 import { formatRuDate, addMonths } from "@/lib/dates";
+import { LICENSE_PLATFORM_OPTIONS } from "@/lib/license-options";
 
 type Step = 1 | 2 | 3 | 4;
 
@@ -49,13 +51,25 @@ const FEATURE_LABELS: Record<string, string> = {
   hud: "HUD",
 };
 
-export function LicenseStepper({ limit, used }: { limit: number; used: number }) {
+export function LicenseStepper({
+  limit,
+  used,
+  context = "dealer",
+}: {
+  limit: number;
+  used: number;
+  context?: "dealer" | "admin";
+}) {
   const router = useRouter();
+  const isAdmin = context === "admin";
+  const basePath = isAdmin ? "/admin/licenses" : "/dealer/licenses";
   const remaining = Math.max(0, limit - used);
   const [step, setStep] = React.useState<Step>(1);
 
   const [file, setFile] = React.useState<File | null>(null);
   const [type, setType] = React.useState<"ECO" | "FULL" | "CUSTOM">("FULL");
+  const [platform, setPlatform] = React.useState<string>("");
+  const [withoutPayment, setWithoutPayment] = React.useState<boolean>(isAdmin);
   const [features, setFeatures] = React.useState(FEATURES_DEFAULT);
   const [termStart, setTermStart] = React.useState<Date | null>(new Date());
   const [termEnd, setTermEnd] = React.useState<Date | null>(addMonths(new Date(), 12));
@@ -118,6 +132,8 @@ export function LicenseStepper({ limit, used }: { limit: number; used: number })
     fd.append("customerCity", customer.city);
     fd.append("vehicleVin", customer.vehicleVin);
     fd.append("vehicleModel", customer.vehicleModel);
+    fd.append("platform", platform);
+    if (isAdmin && withoutPayment) fd.append("issuedWithoutPayment", "true");
 
     const res = await fetch("/api/licenses/generate", { method: "POST", body: fd });
     setSubmitting(false);
@@ -226,6 +242,15 @@ export function LicenseStepper({ limit, used }: { limit: number; used: number })
                       </button>
                     ))}
                   </div>
+                  <div className="mt-3">
+                    <Select
+                      label="Тип платформы"
+                      value={platform}
+                      onChange={setPlatform}
+                      placeholder="Выберите платформу"
+                      options={[{ value: "", label: "Не указана" }, ...LICENSE_PLATFORM_OPTIONS]}
+                    />
+                  </div>
                   <div className="divider my-5" />
                   <div className="grid sm:grid-cols-2 gap-3">
                     {Object.keys(FEATURE_LABELS).map((k) => (
@@ -319,6 +344,7 @@ export function LicenseStepper({ limit, used }: { limit: number; used: number })
                 <div className="font-display text-lg  tracking-tight mb-4">Подтверждение</div>
                 <div className="grid sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
                   <Row label="Тип лицензии" value={<Tag tone="accent">{type}</Tag>} />
+                  <Row label="Тип платформы" value={platform || "—"} />
                   <Row label="Файл device-id.bin" value={file ? `${file.name} · ${formatBytes(file.size)}` : "—"} />
                   <Row label="Срок начала" value={termStart ? formatRuDate(termStart) : "—"} />
                   <Row label="Срок окончания" value={termEnd ? formatRuDate(termEnd) : "—"} />
@@ -339,6 +365,19 @@ export function LicenseStepper({ limit, used }: { limit: number; used: number })
                     <span className="text-sm text-ink-muted">— ни одной не выбрано</span>
                   ) : null}
                 </div>
+                {isAdmin ? (
+                  <>
+                    <div className="divider my-5" />
+                    <div className="rounded-panel bg-white p-4">
+                      <Checkbox
+                        checked={withoutPayment}
+                        onChange={setWithoutPayment}
+                        label="Выдать без оплаты"
+                        description="Лицензия будет помечена как выданная без оплаты (комплимент/тест)."
+                      />
+                    </div>
+                  </>
+                ) : null}
                 <div className="mt-6 flex justify-between gap-2">
                   <Button variant="ghost" onClick={back} icon={<ArrowLeft className="h-4 w-4" />}>
                     Назад
@@ -370,7 +409,7 @@ export function LicenseStepper({ limit, used }: { limit: number; used: number })
                     <a href={result.downloadUrl} download="device-license.bin">
                       <Button variant="primary" icon={<Download className="h-4 w-4" />}>Скачать device-license.bin</Button>
                     </a>
-                    <a href={`/dealer/licenses/${result.licenseId}`}>
+                    <a href={`${basePath}/${result.licenseId}`}>
                       <Button variant="ghost" className="text-white hover:bg-white/10" icon={<FileBox className="h-4 w-4" />}>
                         Открыть карточку
                       </Button>
