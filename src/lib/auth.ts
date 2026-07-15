@@ -25,7 +25,10 @@ type AuthJwt = {
   status?: string;
   roleName?: string;
   permissions?: PermissionKey[];
+  refreshedAt?: number;
 };
+
+const JWT_REFRESH_MS = 60_000;
 
 const credentialsSchema = z.object({
   email: z.string().email(),
@@ -78,7 +81,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
   callbacks: {
-    jwt({ token, user }) {
+    async jwt({ token, user, trigger }) {
       const t = token as AuthJwt & Record<string, unknown>;
       if (user) {
         const u = user as Record<string, unknown>;
@@ -87,6 +90,23 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         t.status = u.status as string;
         t.roleName = u.roleName as string;
         t.permissions = (u.permissions as PermissionKey[]) ?? [];
+        t.refreshedAt = Date.now();
+        return t as typeof token;
+      }
+
+      const stale = !t.refreshedAt || Date.now() - t.refreshedAt > JWT_REFRESH_MS;
+      if (t.id && (trigger === "update" || stale)) {
+        const fresh = await db.user.findUnique({
+          where: { id: t.id },
+          include: { role: true },
+        });
+        if (fresh) {
+          t.isSuperAdmin = fresh.isSuperAdmin;
+          t.status = fresh.status;
+          t.roleName = fresh.role.name;
+          t.permissions = fresh.role.permissions as PermissionKey[];
+        }
+        t.refreshedAt = Date.now();
       }
       return t as typeof token;
     },

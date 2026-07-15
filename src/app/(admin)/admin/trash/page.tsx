@@ -5,20 +5,33 @@ import { Card } from "@/components/ui/card";
 import { Tag } from "@/components/ui/tag";
 import { TrashRow } from "./trash-row";
 import { formatRuDate } from "@/lib/dates";
+import { Pagination, parsePage } from "@/components/cabinet/pagination";
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminTrashPage() {
+const PAGE_SIZE = 20;
+
+export default async function AdminTrashPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
   const session = await auth();
   if (!session?.user) return null;
 
-  const [me, deleted] = await Promise.all([
+  const sp = await searchParams;
+  const page = parsePage(sp.page);
+  const where = { deletedAt: { not: null } };
+
+  const [me, total, deleted] = await Promise.all([
     db.user.findUnique({ where: { id: session.user.id }, include: { role: true } }),
+    db.license.count({ where }),
     db.license.findMany({
-      where: { deletedAt: { not: null } },
+      where,
       orderBy: { deletedAt: "desc" },
       include: { dealer: true },
-      take: 100,
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
     }),
   ]);
 
@@ -34,8 +47,8 @@ export default async function AdminTrashPage() {
           {deleted.length === 0 ? (
             <div className="text-sm text-ink-muted py-10 text-center">Корзина пуста</div>
           ) : (
-            <div className="overflow-hidden rounded-panel bg-white">
-              <table className="w-full text-sm">
+            <div className="overflow-x-auto scrollbar-clean rounded-panel bg-white">
+              <table className="w-full min-w-[640px] text-sm">
                 <thead>
                   <tr className="text-left text-[11.5px] uppercase tracking-tight text-ink-subtle">
                     <th className="px-4 py-3">Номер</th>
@@ -65,6 +78,7 @@ export default async function AdminTrashPage() {
               </table>
             </div>
           )}
+          <Pagination page={page} pageSize={PAGE_SIZE} total={total} basePath="/admin/trash" />
         </Card>
       </div>
     </>

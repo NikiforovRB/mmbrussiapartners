@@ -2,9 +2,11 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { hasPermission } from "@/lib/permissions";
 import { uploadObject, getDownloadUrl } from "@/lib/s3";
 import { generateLicense, validateDeviceIdFile } from "@/lib/license-engine";
 import { generateLicenseNumber, normalizePhone } from "@/lib/utils";
+import { isLicensePlatform } from "@/lib/license-options";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,6 +24,8 @@ const paramsSchema = z.object({
   customerCity: z.string().optional().or(z.literal("")),
   vehicleVin: z.string().optional().or(z.literal("")),
   vehicleModel: z.string().optional().or(z.literal("")),
+  platform: z.string().optional().or(z.literal("")),
+  issuedWithoutPayment: z.string().optional().or(z.literal("")),
 });
 
 export async function POST(req: Request) {
@@ -54,12 +58,21 @@ export async function POST(req: Request) {
     customerCity: raw.customerCity,
     vehicleVin: raw.vehicleVin,
     vehicleModel: raw.vehicleModel,
+    platform: raw.platform,
+    issuedWithoutPayment: raw.issuedWithoutPayment,
   });
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.errors[0]?.message ?? "Неверные параметры" }, { status: 400 });
   }
   const params = parsed.data;
   const features = safeJson(params.features);
+  const platform = isLicensePlatform(params.platform) ? params.platform : null;
+
+  // Отметку «без оплаты» может проставить только администратор
+  const isAdminActor =
+    session.user.isSuperAdmin ||
+    hasPermission(session.user.permissions, "dealers.view", session.user.isSuperAdmin);
+  const issuedWithoutPayment = isAdminActor && params.issuedWithoutPayment === "true";
 
   const dealer = await db.user.findUnique({
     where: { id: session.user.id },
@@ -126,6 +139,8 @@ export async function POST(req: Request) {
         city: params.customerCity || null,
         vehicleVin: params.vehicleVin || null,
         vehicleModel: params.vehicleModel || null,
+        platform,
+        issuedWithoutPayment,
       },
     });
     await tx.dealerProfile.update({

@@ -28,6 +28,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { DatePicker } from "@/components/ui/date-picker";
 import { formatRuDateTime, formatRuDate } from "@/lib/dates";
 import { usePermissions } from "@/hooks/use-permissions";
+import { LICENSE_PLATFORM_OPTIONS } from "@/lib/license-options";
 
 type AuditEntry = {
   id: string;
@@ -55,8 +56,18 @@ type LicenseShape = {
   cancellationReason: string | null;
   cancelledAt: string | Date | null;
   licenseKey: string | null;
+  platform: string | null;
+  issuedWithoutPayment: boolean;
   auditLogs: AuditEntry[];
   dealerId: string;
+};
+
+type CancellationRequestInfo = {
+  id: string;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  reason: string;
+  reviewNote: string | null;
+  createdAt: string | Date;
 };
 
 const FEATURE_LABELS: Record<string, string> = {
@@ -72,9 +83,11 @@ const FEATURE_LABELS: Record<string, string> = {
 export function LicenseDetailEditor({
   license,
   context,
+  latestRequest = null,
 }: {
   license: LicenseShape;
   context: "dealer" | "admin";
+  latestRequest?: CancellationRequestInfo | null;
 }) {
   const router = useRouter();
   const { can } = usePermissions();
@@ -91,6 +104,33 @@ export function LicenseDetailEditor({
   const [revokeOpen, setRevokeOpen] = React.useState(false);
   const [revokeReason, setRevokeReason] = React.useState("");
   const [revokeLoading, setRevokeLoading] = React.useState(false);
+  const [requestOpen, setRequestOpen] = React.useState(false);
+  const [requestReason, setRequestReason] = React.useState("");
+  const [requestLoading, setRequestLoading] = React.useState(false);
+  const hasPendingRequest = latestRequest?.status === "PENDING";
+
+  async function requestCancellation() {
+    if (requestReason.trim().length < 10) {
+      toast.error("Минимум 10 символов");
+      return;
+    }
+    setRequestLoading(true);
+    const res = await fetch(`/api/licenses/${data.id}/cancel-request`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reason: requestReason }),
+    });
+    setRequestLoading(false);
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      toast.error(j.error ?? "Не удалось отправить заявку");
+      return;
+    }
+    toast.success("Заявка на аннулирование отправлена");
+    setRequestOpen(false);
+    setRequestReason("");
+    router.refresh();
+  }
 
   async function save() {
     setSaving(true);
@@ -110,6 +150,7 @@ export function LicenseDetailEditor({
         city: data.city || null,
         vehicleVin: data.vehicleVin || null,
         vehicleModel: data.vehicleModel || null,
+        platform: data.platform || null,
         ...(context === "admin" && data.status ? { status: data.status } : {}),
       }),
     });
@@ -190,9 +231,11 @@ export function LicenseDetailEditor({
             <div>
               <div className="text-xs uppercase tracking-widest text-ink-muted">Лицензия</div>
               <div className="mt-1 font-display text-3xl  tracking-tightest">{data.number}</div>
-              <div className="mt-2 flex items-center gap-2">
+              <div className="mt-2 flex flex-wrap items-center gap-2">
                 <StatusTag status={data.status} />
                 <Tag tone={data.type === "FULL" ? "accent" : "neutral"}>{data.type}</Tag>
+                {data.platform ? <Tag tone="neutral">{data.platform}</Tag> : null}
+                {data.issuedWithoutPayment ? <Tag tone="warning">Без оплаты</Tag> : null}
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -207,7 +250,18 @@ export function LicenseDetailEditor({
                   Скачать .bin
                 </Button>
               ) : null}
-              {data.status === "ACTIVE" ? (
+              {!isAdmin && data.status === "ACTIVE" ? (
+                <Button
+                  variant="ghost"
+                  disabled={hasPendingRequest}
+                  title={hasPendingRequest ? "Заявка уже на рассмотрении" : undefined}
+                  icon={<XCircle className="h-4 w-4" />}
+                  onClick={() => setRequestOpen(true)}
+                >
+                  Запросить аннулирование
+                </Button>
+              ) : null}
+              {isAdmin && data.status === "ACTIVE" ? (
                 <Button
                   variant="ghost"
                   disabled={!canCancel}
@@ -240,6 +294,33 @@ export function LicenseDetailEditor({
               ) : null}
             </div>
           ) : null}
+          {latestRequest ? (
+            <div className="mt-5 rounded-panel bg-white p-4">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-xs text-ink-subtle">Заявка на аннулирование</div>
+                <Tag
+                  tone={
+                    latestRequest.status === "PENDING"
+                      ? "warning"
+                      : latestRequest.status === "APPROVED"
+                        ? "success"
+                        : "muted"
+                  }
+                >
+                  {latestRequest.status === "PENDING"
+                    ? "На рассмотрении"
+                    : latestRequest.status === "APPROVED"
+                      ? "Одобрена"
+                      : "Отклонена"}
+                </Tag>
+              </div>
+              <div className="mt-1.5 text-sm">{latestRequest.reason}</div>
+              <div className="text-xs text-ink-muted mt-1">{formatRuDateTime(latestRequest.createdAt)}</div>
+              {latestRequest.reviewNote ? (
+                <div className="mt-2 text-xs text-ink-muted">Комментарий: {latestRequest.reviewNote}</div>
+              ) : null}
+            </div>
+          ) : null}
         </Card>
 
         <Card>
@@ -267,6 +348,14 @@ export function LicenseDetailEditor({
               disabled={!canEdit}
               value={data.termEnd ? new Date(data.termEnd) : null}
               onChange={(d) => d && setData({ ...data, termEnd: d })}
+            />
+            <Select
+              label="Тип платформы"
+              disabled={!canEdit}
+              value={data.platform ?? ""}
+              onChange={(v) => setData({ ...data, platform: v || null })}
+              placeholder="Не указана"
+              options={[{ value: "", label: "Не указана" }, ...LICENSE_PLATFORM_OPTIONS]}
             />
             {isAdmin ? (
               <Select
@@ -409,6 +498,32 @@ export function LicenseDetailEditor({
           <Button variant="ghost" onClick={() => setCancelOpen(false)}>Отмена</Button>
           <Button variant="danger" loading={cancelLoading} icon={<XCircle className="h-4 w-4" />} onClick={cancelNow}>
             Аннулировать
+          </Button>
+        </div>
+      </Modal>
+
+      <Modal
+        open={requestOpen}
+        onClose={() => setRequestOpen(false)}
+        title="Заявка на аннулирование"
+        description="Заявка поступит администратору. Лицензия будет аннулирована после одобрения."
+      >
+        <Textarea
+          label="Причина (обязательно, минимум 10 символов)"
+          value={requestReason}
+          onChange={(e) => setRequestReason(e.target.value)}
+          rows={4}
+          placeholder="Например: клиент вернул устройство, лицензия больше не нужна..."
+        />
+        <div className="mt-6 flex justify-end gap-2">
+          <Button variant="ghost" onClick={() => setRequestOpen(false)}>Отмена</Button>
+          <Button
+            variant="danger"
+            loading={requestLoading}
+            icon={<XCircle className="h-4 w-4" />}
+            onClick={requestCancellation}
+          >
+            Отправить заявку
           </Button>
         </div>
       </Modal>

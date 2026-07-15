@@ -15,6 +15,7 @@ import {
   Plus,
   History,
   LayoutDashboard,
+  ClipboardList,
 } from "lucide-react";
 
 type Item = {
@@ -37,6 +38,8 @@ const ITEMS: Item[] = [
   { id: "a-dash", label: "Дашборд (админ)", href: "/admin", icon: <LayoutDashboard className="h-4 w-4" />, scope: "admin" },
   { id: "a-dealers", label: "Представители", href: "/admin/dealers", icon: <Users className="h-4 w-4" />, scope: "admin" },
   { id: "a-licenses", label: "Все лицензии", href: "/admin/licenses", icon: <KeyRound className="h-4 w-4" />, scope: "admin" },
+  { id: "a-license-new", label: "Новая лицензия", href: "/admin/licenses/new", icon: <Plus className="h-4 w-4" />, scope: "admin", keywords: ["создать", "генерация"] },
+  { id: "a-cancel-req", label: "Заявки на аннулирование", href: "/admin/cancellation-requests", icon: <ClipboardList className="h-4 w-4" />, scope: "admin", keywords: ["аннулирование", "заявки"] },
   { id: "a-roles", label: "Роли", href: "/admin/roles", icon: <Shield className="h-4 w-4" />, scope: "admin" },
   { id: "a-reports", label: "Отчёты", href: "/admin/reports", icon: <FileSpreadsheet className="h-4 w-4" />, scope: "admin" },
   { id: "a-geo", label: "Гео-аналитика", href: "/admin/geo", icon: <MapPinned className="h-4 w-4" />, scope: "admin" },

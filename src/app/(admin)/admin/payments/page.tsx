@@ -5,19 +5,31 @@ import { Card } from "@/components/ui/card";
 import { Tag } from "@/components/ui/tag";
 import { formatCurrency } from "@/lib/utils";
 import { formatRuDate } from "@/lib/dates";
+import { Pagination, parsePage } from "@/components/cabinet/pagination";
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminPaymentsPage() {
+const PAGE_SIZE = 20;
+
+export default async function AdminPaymentsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
   const session = await auth();
   if (!session?.user) return null;
 
-  const [me, payments] = await Promise.all([
+  const sp = await searchParams;
+  const page = parsePage(sp.page);
+
+  const [me, total, payments] = await Promise.all([
     db.user.findUnique({ where: { id: session.user.id }, include: { role: true } }),
+    db.payment.count(),
     db.payment.findMany({
       include: { dealer: true, license: true },
       orderBy: { createdAt: "desc" },
-      take: 100,
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
     }),
   ]);
 
@@ -34,8 +46,8 @@ export default async function AdminPaymentsPage() {
           {payments.length === 0 ? (
             <div className="text-sm text-ink-muted py-10 text-center">Платежей пока нет</div>
           ) : (
-            <div className="overflow-hidden rounded-panel bg-white">
-              <table className="w-full text-sm">
+            <div className="overflow-x-auto scrollbar-clean rounded-panel bg-white">
+              <table className="w-full min-w-[760px] text-sm">
                 <thead>
                   <tr className="text-left text-[11.5px] uppercase tracking-tight text-ink-subtle">
                     <th className="px-4 py-3">Дата</th>
@@ -75,6 +87,7 @@ export default async function AdminPaymentsPage() {
               </table>
             </div>
           )}
+          <Pagination page={page} pageSize={PAGE_SIZE} total={total} basePath="/admin/payments" />
         </Card>
       </div>
     </>

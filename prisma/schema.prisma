@@ -58,6 +58,12 @@ enum PaymentStatus {
   REFUNDED
 }
 
+enum CancellationRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model Role {
   id          String   @id @default(cuid())
   name        String   @unique
@@ -89,14 +95,16 @@ model User {
   roleId String
   role   Role   @relation(fields: [roleId], references: [id])
 
-  dealerProfile      DealerProfile?
-  licenses           License[]      @relation("DealerLicenses")
-  auditedActions     LicenseAuditLog[] @relation("AuditActor")
-  approvedDealers    DealerProfile[]   @relation("ApprovedBy")
-  payments           Payment[]
-  uploadedFiles      FileObject[]
-  notifications      NotificationLog[]
-  sessions           Session[]
+  dealerProfile         DealerProfile?
+  licenses              License[]      @relation("DealerLicenses")
+  auditedActions        LicenseAuditLog[] @relation("AuditActor")
+  approvedDealers       DealerProfile[]   @relation("ApprovedBy")
+  payments              Payment[]
+  uploadedFiles         FileObject[]
+  notifications         NotificationLog[]
+  sessions              Session[]
+  requestedCancellations CancellationRequest[] @relation("RequestedCancellations")
+  reviewedCancellations  CancellationRequest[] @relation("ReviewedCancellations")
 
   @@index([status])
   @@index([roleId])
@@ -170,6 +178,8 @@ model License {
   region                String?
   vehicleVin            String?
   vehicleModel          String?
+  platform              String?
+  issuedWithoutPayment  Boolean       @default(false)
   price                 Decimal?      @db.Decimal(12, 2)
   cancelledAt           DateTime?
   cancellationReason    String?
@@ -177,9 +187,10 @@ model License {
   createdAt             DateTime      @default(now())
   updatedAt             DateTime      @updatedAt
 
-  dealer    User              @relation("DealerLicenses", fields: [dealerId], references: [id])
-  payment   Payment?          @relation("LicensePayment")
-  auditLogs LicenseAuditLog[]
+  dealer               User                  @relation("DealerLicenses", fields: [dealerId], references: [id])
+  payment              Payment?              @relation("LicensePayment")
+  auditLogs            LicenseAuditLog[]
+  cancellationRequests CancellationRequest[]
 
   @@index([dealerId])
   @@index([status])
@@ -225,6 +236,27 @@ model Payment {
 
   @@index([dealerId])
   @@index([status])
+}
+
+model CancellationRequest {
+  id            String                    @id @default(cuid())
+  licenseId     String
+  requestedById String
+  reason        String
+  status        CancellationRequestStatus @default(PENDING)
+  reviewedById  String?
+  reviewNote    String?
+  reviewedAt    DateTime?
+  createdAt     DateTime                  @default(now())
+  updatedAt     DateTime                  @updatedAt
+
+  license     License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  requestedBy User    @relation("RequestedCancellations", fields: [requestedById], references: [id])
+  reviewedBy  User?   @relation("ReviewedCancellations", fields: [reviewedById], references: [id])
+
+  @@index([status])
+  @@index([licenseId])
+  @@index([requestedById])
 }
 
 model NotificationLog {

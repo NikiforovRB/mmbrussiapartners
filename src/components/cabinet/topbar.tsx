@@ -7,6 +7,7 @@ import { Bell, LogOut, Search, User as UserIcon } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
+import { MobileNavTrigger } from "@/components/cabinet/mobile-nav";
 
 export function Topbar({
   title,
@@ -58,7 +59,8 @@ export function Topbar({
 
   return (
     <header className="sticky top-0 z-20 px-1 pt-4">
-      <div className="rounded-panel bg-white/70 backdrop-blur-xl px-5 py-3 flex items-center gap-4">
+      <div className="rounded-panel bg-white/70 backdrop-blur-xl px-3 sm:px-5 py-3 flex items-center gap-3 sm:gap-4">
+        <MobileNavTrigger />
         <div className="min-w-0 flex-1">
           <div className="font-display text-lg  tracking-tight truncate">{title}</div>
           {subtitle ? <div className="text-xs text-ink-muted truncate">{subtitle}</div> : null}

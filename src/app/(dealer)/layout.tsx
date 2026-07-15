@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
 import { Sidebar, type SidebarItem } from "@/components/cabinet/sidebar";
+import { MobileNavProvider } from "@/components/cabinet/mobile-nav";
 import { CommandPalette } from "@/components/cabinet/command-palette";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -46,23 +47,24 @@ export default async function DealerLayout({ children }: { children: React.React
     (user.dealerProfile?.licenseLimit ?? 0) - (user.dealerProfile?.licensesUsed ?? 0);
   const limit = user.dealerProfile?.licenseLimit ?? 0;
 
-  return (
-    <div className="min-h-screen flex bg-bg-default">
-      <Sidebar
-        items={items}
-        footer={
-          <div className="rounded-panel bg-white p-3.5">
-            <div className="text-xs text-ink-muted">Лимит лицензий</div>
-            <div className="mt-1 flex items-end gap-1">
-              <div className="font-display text-2xl  tracking-tight">{Math.max(0, remaining)}</div>
-              <div className="pb-1 text-xs text-ink-subtle">/ {limit}</div>
-            </div>
-          </div>
-        }
-      />
-      <div className="flex-1 min-w-0 px-4 lg:px-6 pb-12">{children}</div>
-      <CommandPalette />
+  const footer = (
+    <div className="rounded-panel bg-white p-3.5">
+      <div className="text-xs text-ink-muted">Лимит лицензий</div>
+      <div className="mt-1 flex items-end gap-1">
+        <div className="font-display text-2xl  tracking-tight">{Math.max(0, remaining)}</div>
+        <div className="pb-1 text-xs text-ink-subtle">/ {limit}</div>
+      </div>
     </div>
+  );
+
+  return (
+    <MobileNavProvider items={items} footer={footer}>
+      <div className="min-h-screen flex bg-bg-default">
+        <Sidebar items={items} footer={footer} />
+        <div className="flex-1 min-w-0 px-4 lg:px-6 pb-12">{children}</div>
+        <CommandPalette />
+      </div>
+    </MobileNavProvider>
   );
 }
 

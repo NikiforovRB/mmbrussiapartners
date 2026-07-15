@@ -17,12 +17,16 @@ export default async function LicenseDetailDealerPage({
   const { id } = await params;
   const license = await db.license.findUnique({
     where: { id },
-    include: { auditLogs: { orderBy: { createdAt: "desc" }, take: 50, include: { actor: true } } },
+    include: {
+      auditLogs: { orderBy: { createdAt: "desc" }, take: 50, include: { actor: true } },
+      cancellationRequests: { orderBy: { createdAt: "desc" }, take: 1 },
+    },
   });
   if (!license) notFound();
   if (license.dealerId !== session.user.id && !session.user.isSuperAdmin) {
     redirect("/dealer/licenses");
   }
+  const latestRequest = license.cancellationRequests[0] ?? null;
 
   const user = await db.user.findUnique({
     where: { id: session.user.id },
@@ -50,6 +54,7 @@ export default async function LicenseDetailDealerPage({
         <LicenseDetailEditor
           license={JSON.parse(JSON.stringify(license))}
           context="dealer"
+          latestRequest={latestRequest ? JSON.parse(JSON.stringify(latestRequest)) : null}
         />
       </div>
     </>

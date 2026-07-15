@@ -24,6 +24,7 @@ export function DealersFilters({
       else url.searchParams.delete("q");
       if (status) url.searchParams.set("status", status);
       else url.searchParams.delete("status");
+      url.searchParams.delete("page");
       router.replace(`${pathname}${url.search}`);
     }, 250);
     return () => clearTimeout(t);

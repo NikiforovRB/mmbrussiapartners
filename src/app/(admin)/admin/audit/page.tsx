@@ -6,22 +6,34 @@ import { Tag } from "@/components/ui/tag";
 import { History } from "lucide-react";
 import Link from "next/link";
 import { formatRuDateTime } from "@/lib/dates";
+import { Pagination, parsePage } from "@/components/cabinet/pagination";
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminAuditPage() {
+const PAGE_SIZE = 30;
+
+export default async function AdminAuditPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
   const session = await auth();
   if (!session?.user) return null;
 
-  const [me, logs] = await Promise.all([
+  const sp = await searchParams;
+  const page = parsePage(sp.page);
+
+  const [me, total, logs] = await Promise.all([
     db.user.findUnique({ where: { id: session.user.id }, include: { role: true } }),
+    db.licenseAuditLog.count(),
     db.licenseAuditLog.findMany({
       include: {
         actor: true,
         license: { select: { number: true, id: true } },
       },
       orderBy: { createdAt: "desc" },
-      take: 200,
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
     }),
   ]);
 
@@ -38,6 +50,9 @@ export default async function AdminAuditPage() {
             <History className="h-4 w-4 text-accent" />
             <div className="font-display  tracking-tight">События</div>
           </div>
+          {logs.length === 0 ? (
+            <div className="text-sm text-ink-muted py-10 text-center">Событий пока нет</div>
+          ) : null}
           <ul className="space-y-2.5">
             {logs.map((l) => (
               <li key={l.id} className="rounded-panel bg-white p-3.5 flex items-start justify-between gap-4">
@@ -56,6 +71,7 @@ export default async function AdminAuditPage() {
               </li>
             ))}
           </ul>
+          <Pagination page={page} pageSize={PAGE_SIZE} total={total} basePath="/admin/audit" />
         </Card>
       </div>
     </>

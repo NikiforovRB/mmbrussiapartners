@@ -38,17 +38,21 @@ function Header({ content }: { content: HomepageContent }) {
     <header className="absolute inset-x-0 top-0 z-20">
       <div className="mx-auto max-w-7xl px-6 lg:px-10 h-20 flex items-center justify-between">
         <Logo height={32} />
-        <nav className="hidden md:flex items-center gap-1 rounded-panel bg-card-light px-1.5 py-1.5">
-          <a href="#workflow" className="px-4 py-2 text-sm rounded-panel hover:bg-white">
+        <nav className="hidden md:flex items-center gap-1 rounded-panel bg-white px-1.5 py-1.5">
+          <a href="#workflow" className="px-4 py-2 text-sm rounded-panel hover:bg-card-light">
             {content.header.navWorkflow}
           </a>
-          <a href="#contacts" className="px-4 py-2 text-sm rounded-panel hover:bg-white">
+          <a href="#contacts" className="px-4 py-2 text-sm rounded-panel hover:bg-card-light">
             {content.header.navContacts}
           </a>
         </nav>
         <div className="flex items-center gap-2">
           <LoginLink>
-            <Button variant="ghost" size="sm">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="border border-[#dddcdb] hover:border-[#2a9fff] hover:bg-transparent"
+            >
               {content.header.loginButton}
             </Button>
           </LoginLink>
@@ -91,7 +95,12 @@ function Hero({ content }: { content: HomepageContent }) {
               <Button size="lg" icon={<KeyRound className="h-4 w-4" />}>{content.hero.loginButton}</Button>
             </LoginLink>
             <Link href="/register">
-              <Button size="lg" variant="secondary" icon={<ArrowRight className="h-4 w-4" />}>
+              <Button
+                size="lg"
+                variant="secondary"
+                className="bg-white hover:bg-card-light"
+                icon={<ArrowRight className="h-4 w-4" />}
+              >
                 {content.hero.registerButton}
               </Button>
             </Link>
@@ -100,7 +109,7 @@ function Hero({ content }: { content: HomepageContent }) {
         <FadeUp delay={0.25}>
           <div className="mt-14 grid grid-cols-2 md:grid-cols-4 gap-3 max-w-3xl">
             {content.hero.stats.map((s) => (
-              <div key={s.label} className="rounded-panel bg-white/60 px-5 py-4 backdrop-blur-sm">
+              <div key={s.label} className="rounded-panel bg-white px-5 py-4">
                 <div className="font-display text-2xl tracking-tight">{s.value}</div>
                 <div className="text-xs text-ink-muted mt-1">{s.label}</div>
               </div>

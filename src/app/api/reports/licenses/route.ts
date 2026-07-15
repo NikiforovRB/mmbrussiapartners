@@ -15,6 +15,7 @@ const schema = z.object({
   to: z.string().datetime(),
   status: z.string().nullable().optional(),
   type: z.string().nullable().optional(),
+  platform: z.string().nullable().optional(),
   scope: z.enum(["dealer", "admin"]),
 });
 
@@ -25,7 +26,7 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
   const parsed = schema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Некорректные параметры" }, { status: 400 });
-  const { from, to, status, type, scope } = parsed.data;
+  const { from, to, status, type, platform, scope } = parsed.data;
 
   if (scope === "admin" && !hasPermission(session.user.permissions, "reports.export", session.user.isSuperAdmin)) {
     return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
@@ -38,6 +39,7 @@ export async function POST(req: Request) {
   if (scope === "dealer") where.dealerId = session.user.id;
   if (status) where.status = status;
   if (type) where.type = type;
+  if (platform) where.platform = platform;
 
   const licenses = await db.license.findMany({
     where,
@@ -55,6 +57,8 @@ export async function POST(req: Request) {
   ws.columns = [
     { header: "Номер", key: "number", width: 22 },
     { header: "Тип", key: "type", width: 10 },
+    { header: "Платформа", key: "platform", width: 16 },
+    { header: "Без оплаты", key: "issuedWithoutPayment", width: 12 },
     { header: "Статус", key: "status", width: 14 },
     { header: "Создана", key: "createdAt", width: 18 },
     { header: "Действует до", key: "termEnd", width: 18 },
@@ -73,6 +77,8 @@ export async function POST(req: Request) {
     ws.addRow({
       number: l.number,
       type: l.type,
+      platform: l.platform ?? "",
+      issuedWithoutPayment: l.issuedWithoutPayment ? "Да" : "",
       status: l.status,
       createdAt: formatRuDate(l.createdAt),
       termEnd: formatRuDate(l.termEnd),

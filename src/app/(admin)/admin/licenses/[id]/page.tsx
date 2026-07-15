@@ -15,9 +15,11 @@ export default async function AdminLicensePage({ params }: { params: Promise<{ i
     include: {
       auditLogs: { orderBy: { createdAt: "desc" }, take: 50, include: { actor: true } },
       dealer: true,
+      cancellationRequests: { orderBy: { createdAt: "desc" }, take: 1 },
     },
   });
   if (!license) notFound();
+  const latestRequest = license.cancellationRequests[0] ?? null;
 
   const me = await db.user.findUnique({
     where: { id: session.user.id },
@@ -36,7 +38,11 @@ export default async function AdminLicensePage({ params }: { params: Promise<{ i
         }}
       />
       <div className="mt-6">
-        <LicenseDetailEditor license={JSON.parse(JSON.stringify(license))} context="admin" />
+        <LicenseDetailEditor
+          license={JSON.parse(JSON.stringify(license))}
+          context="admin"
+          latestRequest={latestRequest ? JSON.parse(JSON.stringify(latestRequest)) : null}
+        />
       </div>
     </>
   );
