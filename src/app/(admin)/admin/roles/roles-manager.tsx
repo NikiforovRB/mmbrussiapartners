@@ -129,23 +129,32 @@ export function RolesManager({ roles }: { roles: Role[] }) {
         {active ? (
           <>
             <div className="flex flex-wrap items-start justify-between gap-3 mb-5">
-              <div>
+              <div className="min-w-0">
                 <div className="text-xs uppercase tracking-widest text-ink-muted">
                   {active.isSystem ? "Системная роль" : "Кастомная роль"}
                 </div>
-                <Input
-                  className="mt-2 text-xl font-display "
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  disabled={active.isSystem}
-                />
-                <Input
-                  className="mt-2 text-sm"
-                  value={description ?? ""}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Описание роли"
-                  disabled={active.isSystem}
-                />
+                {active.isSystem ? (
+                  <>
+                    <div className="mt-1.5 font-display text-xl tracking-tight">{active.name}</div>
+                    <div className="mt-1 text-sm text-ink-muted">
+                      {active.description || "Без описания"}
+                    </div>
+                  </>
+                ) : (
+                  <div className="mt-2 space-y-2">
+                    <Input
+                      className="text-xl font-display"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                    />
+                    <Input
+                      className="text-sm"
+                      value={description ?? ""}
+                      onChange={(e) => setDescription(e.target.value)}
+                      placeholder="Описание роли"
+                    />
+                  </div>
+                )}
               </div>
               <div className="flex gap-2">
                 {!active.isSystem ? (

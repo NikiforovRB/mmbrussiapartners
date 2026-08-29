@@ -1,12 +1,15 @@
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { CreditCard, ExternalLink } from "lucide-react";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { fioFromParts, formatCurrency } from "@/lib/utils";
-import { redirect } from "next/navigation";
 import { Topbar } from "@/components/cabinet/topbar";
 import { Card } from "@/components/ui/card";
-import { Tag } from "@/components/ui/tag";
-import { CreditCard, Sparkles } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { StatusTag } from "@/components/ui/status-tag";
 import { formatRuDate } from "@/lib/dates";
+import { getPaymentProvider } from "@/lib/payments/provider";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +28,15 @@ export default async function DealerPaymentsPage() {
     take: 100,
   });
 
+  const paid = payments
+    .filter((p) => p.status === "PAID")
+    .reduce((sum, p) => sum + Number(p.amount), 0);
+  const awaiting = payments
+    .filter((p) => p.status === "PENDING")
+    .reduce((sum, p) => sum + Number(p.amount), 0);
+
+  const provider = getPaymentProvider();
+
   const fio = fioFromParts({
     firstName: user.dealerProfile?.firstName,
     lastName: user.dealerProfile?.lastName,
@@ -35,7 +47,7 @@ export default async function DealerPaymentsPage() {
     <>
       <Topbar
         title="Платежи"
-        subtitle="История оплат и баланс"
+        subtitle="История оплат и чеки"
         user={{ name: fio || user.email, email: user.email, role: user.role.name }}
       />
       <div className="mt-6">
@@ -44,17 +56,22 @@ export default async function DealerPaymentsPage() {
             style={{ background: "radial-gradient(closest-side, rgba(42,159,255,0.6), transparent)" }} />
           <div className="relative grid sm:grid-cols-[1fr_auto] gap-6 items-center">
             <div>
-              <div className="text-xs uppercase tracking-widest text-white/60">Atol Online</div>
-              <h2 className="mt-2 font-display text-3xl  tracking-tightest">
-                Оплата online
-              </h2>
+              <div className="text-xs uppercase tracking-widest text-white/60">{provider.title}</div>
+              <h2 className="mt-2 font-display text-3xl  tracking-tightest">Оплата лицензий</h2>
               <p className="mt-2 text-white/70 max-w-md">
-                Интеграция Atol Online готова к подключению. Как только будут предоставлены учётные данные, оплата заработает в один клик.
+                {provider.id === "manual"
+                  ? "Счёт формируется автоматически. После поступления оплаты администратор подтверждает платёж, и вам приходит фискальный чек."
+                  : "Оплата картой по защищённой ссылке. Фискальный чек приходит на вашу почту автоматически."}
               </p>
             </div>
-            <div className="rounded-panel surface-glass-dark p-5 text-center">
-              <Sparkles className="h-5 w-5 text-bg-accent mx-auto" />
-              <div className="mt-2 text-sm">Скоро</div>
+            <div className="rounded-panel surface-glass-dark p-5 text-center min-w-[180px]">
+              <div className="text-xs text-white/60">Оплачено</div>
+              <div className="mt-1 font-display text-2xl tracking-tight">{formatCurrency(paid)}</div>
+              {awaiting > 0 ? (
+                <div className="mt-2 text-[11px] text-white/60">
+                  ожидает оплаты: {formatCurrency(awaiting)}
+                </div>
+              ) : null}
             </div>
           </div>
         </Card>
@@ -64,44 +81,55 @@ export default async function DealerPaymentsPage() {
             <div className="font-display  tracking-tight">История платежей</div>
           </div>
           {payments.length === 0 ? (
-            <div className="text-sm text-ink-muted py-10 text-center">
-              Пока платежей нет
-            </div>
+            <div className="text-sm text-ink-muted py-10 text-center">Пока платежей нет</div>
           ) : (
-            <table className="w-full text-sm rounded-panel bg-white overflow-hidden">
-              <thead>
-                <tr className="text-left text-[11.5px] uppercase tracking-tight text-ink-subtle">
-                  <th className="px-4 py-3">Дата</th>
-                  <th className="px-4 py-3">Описание</th>
-                  <th className="px-4 py-3">Сумма</th>
-                  <th className="px-4 py-3">Статус</th>
-                </tr>
-              </thead>
-              <tbody>
-                {payments.map((p, i) => (
-                  <tr key={p.id} style={i > 0 ? { boxShadow: "inset 0 1px 0 #c1cbe1" } : undefined}>
-                    <td className="px-4 py-3">{formatRuDate(p.createdAt)}</td>
-                    <td className="px-4 py-3">{p.description ?? "—"}</td>
-                    <td className="px-4 py-3 ">{formatCurrency(Number(p.amount))}</td>
-                    <td className="px-4 py-3">
-                      <Tag
-                        tone={
-                          p.status === "PAID"
-                            ? "success"
-                            : p.status === "PENDING"
-                              ? "warning"
-                              : p.status === "FAILED"
-                                ? "danger"
-                                : "muted"
-                        }
-                      >
-                        {p.status}
-                      </Tag>
-                    </td>
+            <div className="overflow-x-auto scrollbar-clean rounded-panel bg-white">
+              <table className="w-full min-w-[720px] text-sm">
+                <thead>
+                  <tr className="text-left text-[11.5px] uppercase tracking-tight text-ink-subtle">
+                    <th className="px-4 py-3">Дата</th>
+                    <th className="px-4 py-3">Описание</th>
+                    <th className="px-4 py-3">Сумма</th>
+                    <th className="px-4 py-3">Статус</th>
+                    <th className="px-4 py-3">Чек</th>
+                    <th className="px-4 py-3" />
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {payments.map((p, i) => (
+                    <tr key={p.id} style={i > 0 ? { boxShadow: "inset 0 1px 0 #c1cbe1" } : undefined}>
+                      <td className="px-4 py-3">{formatRuDate(p.createdAt)}</td>
+                      <td className="px-4 py-3">{p.description ?? "—"}</td>
+                      <td className="px-4 py-3 ">{formatCurrency(Number(p.amount))}</td>
+                      <td className="px-4 py-3">
+                        <StatusTag kind="payment" status={p.status} />
+                      </td>
+                      <td className="px-4 py-3">
+                        {p.receiptUrl ? (
+                          <a
+                            href={p.receiptUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-accent inline-flex items-center gap-1 text-xs"
+                          >
+                            Открыть <ExternalLink className="h-3 w-3" />
+                          </a>
+                        ) : (
+                          <span className="text-ink-subtle">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        {p.status === "PENDING" ? (
+                          <Link href={`/dealer/payments/${p.id}`}>
+                            <Button size="sm" variant="secondary">Оплатить</Button>
+                          </Link>
+                        ) : null}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </Card>
       </div>

@@ -1,20 +1,22 @@
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
-import { atol } from "@/lib/payments/atol";
+import { handleAtolCallback } from "@/lib/payments/service";
 
 export const runtime = "nodejs";
 
+/**
+ * POST-колбэк АТОЛ Онлайн: приходит после обработки чека
+ * и содержит фискальные реквизиты либо причину отказа.
+ */
 export async function POST(req: Request) {
-  const payload = await req.json().catch(() => ({}));
-  const result = await atol.handleWebhook(payload);
-  if (!result) return NextResponse.json({ ok: false }, { status: 400 });
+  const payload = await req.json().catch(() => null);
+  if (!payload || typeof payload !== "object") {
+    return NextResponse.json({ ok: false }, { status: 400 });
+  }
 
-  await db.payment.update({
-    where: { id: result.paymentId },
-    data: {
-      status: result.status,
-      providerPayload: payload,
-    },
-  });
-  return NextResponse.json({ ok: true });
+  const updated = await handleAtolCallback(payload as Record<string, unknown>);
+  if (!updated) {
+    // Отвечаем 200: неизвестный uuid не должен заставлять АТОЛ повторять доставку.
+    return NextResponse.json({ ok: true, matched: false });
+  }
+  return NextResponse.json({ ok: true, matched: true });
 }

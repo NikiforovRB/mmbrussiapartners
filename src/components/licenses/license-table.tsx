@@ -13,6 +13,7 @@ import {
   Filter,
 } from "lucide-react";
 import { Tag } from "@/components/ui/tag";
+import { StatusTag } from "@/components/ui/status-tag";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { Modal } from "@/components/ui/modal";
@@ -271,7 +272,7 @@ export function LicenseTable({
                     {l.customerPhone ? <div>{l.customerPhone}</div> : null}
                   </td>
                   <td className="px-4 py-3">
-                    <StatusTag status={l.status} />
+                    <StatusTag kind="license" status={l.status} />
                   </td>
                   <td className="px-4 py-3 text-ink-muted text-xs break-all">
                     {l.versionSoftware || "—"}
@@ -395,23 +396,6 @@ export function LicenseTable({
       </Modal>
     </>
   );
-}
-
-function StatusTag({ status }: { status: string }) {
-  switch (status) {
-    case "ACTIVE":
-      return <Tag tone="success">Активна</Tag>;
-    case "EXPIRED":
-      return <Tag tone="muted">Истекла</Tag>;
-    case "CANCELLED":
-      return <Tag tone="warning">Аннулирована</Tag>;
-    case "REVOKED":
-      return <Tag tone="danger">Отозвана</Tag>;
-    case "DRAFT":
-      return <Tag tone="neutral">Черновик</Tag>;
-    default:
-      return <Tag tone="neutral">{status}</Tag>;
-  }
 }
 
 // re-export not used here, RotateCcw is for restore page, keep import via JSX

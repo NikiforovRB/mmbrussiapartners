@@ -42,12 +42,18 @@ npm run dev
 | `npm run db:migrate` | `prisma migrate dev` — создать миграцию |
 | `npm run db:seed` | Сидинг (роли, первый админ, шаблоны email) |
 | `npm run db:studio` | Prisma Studio |
+| `npm run test:integrations` | Проверка DRIVEMODS и АТОЛ Онлайн (можно передать `-- ./device_id.bin`) |
+| `npm run test:payments` | Прогон цикла платежа: счёт → оплата → чек |
 | `npm run vercel-build` | `prisma generate && prisma migrate deploy && next build` |
 
 ## Деплой на Vercel
 
 1. Создайте проект и подключите репозиторий.
 2. В Project Settings → Environment Variables — заполните всё из `.env.example`. Обязательные: `DATABASE_URL`, `DIRECT_URL`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL`, S3-блок, `PUBLIC_SITE_ORIGIN`.
+
+   Генерация лицензий (мастер-аккаунт DRIVEMODS): `DRIVEMODS_STORE_API_URL`, `DRIVEMODS_USERNAME`, `DRIVEMODS_PASSWORD`, `DRIVEMODS_CLIENT_TOKEN`.
+
+   Касса и оплата: `ATOL_LOGIN`, `ATOL_PASSWORD`, `ATOL_GROUP`, `ATOL_BASE_URL`, `ATOL_COMPANY_INN`, `ATOL_COMPANY_EMAIL`, `ATOL_COMPANY_PAYMENT_ADDRESS`, `ATOL_COMPANY_SNO`, `ATOL_VAT_TYPE`, `PAYMENT_PROVIDER`, `PAYMENT_LICENSE_PRICE` (и `ATOL_PAY_API_TOKEN`, если включаете АТОЛ Pay).
 3. Build Command — `npm run vercel-build`. Миграции применятся автоматически.
 4. Cron-задачи (`vercel.json`):
    - `/api/cron/license-expiry` — ежедневное напоминание об истекающих лицензиях.
@@ -133,9 +139,27 @@ const reps = await res.json();
 
 Аннулирование/отзыв требуют обязательную причину; при аннулировании уведомление уходит администраторам по email (Telegram-канал готов к подключению).
 
-## Платежи (Atol Online)
+## Платежи и чеки
 
-`lib/payments/atol.ts` — заглушка с интерфейсом `createPayment` / `getStatus` / `handleWebhook`. UI-кнопка оплаты доступна на странице платежей. Реальная интеграция включается заполнением `ATOL_LOGIN`, `ATOL_PASSWORD`, `ATOL_GROUP` и реализацией HTTP-вызовов в той же функции.
+Это две независимые задачи, и решают их разные сервисы:
+
+| Задача | Кто отвечает | Код |
+| --- | --- | --- |
+| Списать деньги с карты | эквайринг (АТОЛ Pay или банк) | `lib/payments/provider.ts` |
+| Пробить фискальный чек по 54-ФЗ | облачная касса АТОЛ Онлайн | `lib/payments/atol.ts` |
+
+**АТОЛ Онлайн денег не принимает** — сервис только регистрирует чеки. Реализован полный клиент API v5: `getToken` (токен кэшируется на 20 часов), `sell` (чек «Приход») и `report` (фискальные реквизиты). Ответ приходит либо POST-колбэком на `/api/atol/webhook`, либо опросом из карточки платежа.
+
+Учётные данные для API берутся в личном кабинете АТОЛ Онлайн → Настройки → Интеграция («файл настроек интеграции»). Логин и пароль от самого кабинета для API не подходят.
+
+Приём оплаты выбирается переменной `PAYMENT_PROVIDER`:
+
+- `manual` (по умолчанию) — дилер получает счёт на `/dealer/payments/[id]`, администратор подтверждает поступление кнопкой «Оплачен». Подтверждение сразу запускает фискализацию.
+- `atol_pay` — оплата по ссылке АТОЛ Pay, нужен `ATOL_PAY_API_TOKEN` из личного кабинета АТОЛ Pay.
+
+Цикл платежа: счёт (`PENDING`) → оплата (`PAID`, `paidAt`) → чек (`receiptStatus`: `wait` → `done`/`fail`) → ссылка на чек ОФД в карточке платежа и в истории дилера.
+
+Проверить конфигурацию: `npm run test:integrations` (внешние API) и `npm run test:payments` (полный цикл платежа на реальном коде).
 
 ## S3 (Twcstorage)
 
@@ -173,7 +197,7 @@ const reps = await res.json();
 
 ## Следующие шаги (когда вы будете готовы)
 
-- Заполнить ATOL credentials и реализовать настоящие HTTP-вызовы в `lib/payments/atol.ts`.
-- Заполнить `LICENSE_API_URL` и `LICENSE_API_KEY` — заглушка автоматически уступит место реальному API.
+- Внести реквизиты кассы (`ATOL_*`) — клиент API v5 уже готов, фискализация включится сама.
+- Подключить эквайринг: получить `ATOL_PAY_API_TOKEN` и переключить `PAYMENT_PROVIDER` на `atol_pay`.
 - Настроить Telegram-бот: `TELEGRAM_BOT_TOKEN` + `TELEGRAM_ADMIN_CHAT_ID`. Канал готов в `lib/notifications.ts`.
 - Привязать SMTP (любой провайдер) для email-уведомлений.

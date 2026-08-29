@@ -16,6 +16,7 @@ import {
   Building2,
   Mail,
   Phone,
+  CreditCard,
   ShieldCheck,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -97,6 +98,7 @@ export function LicenseStepper({
     number: string;
     downloadUrl: string;
     filename?: string;
+    payment?: { id: string; amount: number; payUrl: string | null } | null;
   } | null>(null);
 
   const selectedItem = info?.items.find((i) => String(i.index) === productIndex) ?? null;
@@ -182,6 +184,7 @@ export function LicenseStepper({
       number: data.number,
       downloadUrl: data.downloadUrl,
       filename: data.filename,
+      payment: data.payment ?? null,
     });
     setStep(4);
     router.refresh();
@@ -420,6 +423,25 @@ export function LicenseStepper({
                   </div>
                 </div>
               </Card>
+              {result.payment ? (
+                <Card className="mt-4">
+                  <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <CreditCard className="h-4 w-4 text-accent" />
+                        <div className="font-display tracking-tight">Счёт на оплату</div>
+                      </div>
+                      <p className="mt-1 text-sm text-ink-muted">
+                        К оплате {result.payment.amount.toLocaleString("ru-RU")} ₽. Фискальный чек
+                        придёт после подтверждения оплаты.
+                      </p>
+                    </div>
+                    <a href={result.payment.payUrl ?? `/dealer/payments/${result.payment.id}`}>
+                      <Button variant="secondary">Перейти к оплате</Button>
+                    </a>
+                  </div>
+                </Card>
+              ) : null}
             </motion.div>
           ) : null}
         </AnimatePresence>

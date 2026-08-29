@@ -14,6 +14,8 @@
     "db:seed": "tsx --env-file=.env prisma/seed.ts",
     "db:seed:demo": "tsx --env-file=.env prisma/seed-demo.ts",
     "db:studio": "prisma studio",
+    "test:integrations": "tsx --env-file=.env scripts/test-integrations.ts",
+    "test:payments": "tsx --conditions=react-server --env-file=.env scripts/test-payments.ts",
     "db:local:init": "tsx scripts/dev-db.ts init",
     "db:local:start": "tsx scripts/dev-db.ts start",
     "vercel-build": "prisma generate && prisma migrate deploy && next build"
@@ -43,6 +45,7 @@
     "react": "19.0.0",
     "react-dom": "19.0.0",
     "react-hook-form": "^7.54.2",
+    "server-only": "0.0.1",
     "sonner": "^1.7.1",
     "tailwind-merge": "^2.5.5",
     "zod": "^3.24.1"

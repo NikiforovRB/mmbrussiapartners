@@ -7,6 +7,8 @@ import { uploadObject, getDownloadUrl } from "@/lib/s3";
 import { createLic, DriveModsError, isDriveModsConfigured } from "@/lib/drivemods";
 import { generateLicenseNumber, normalizePhone, fioFromParts } from "@/lib/utils";
 import { isLicenseType } from "@/lib/license-options";
+import { defaultLicensePrice } from "@/lib/payments/provider";
+import { createPayment } from "@/lib/payments/service";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -124,6 +126,8 @@ export async function POST(req: Request) {
   const termEnd = new Date(termStart);
   termEnd.setFullYear(termEnd.getFullYear() + 100); // лицензия бессрочная
 
+  const price = issuedWithoutPayment ? 0 : defaultLicensePrice();
+
   const license = await db.$transaction(async (tx) => {
     const created = await tx.license.create({
       data: {
@@ -131,6 +135,7 @@ export async function POST(req: Request) {
         dealerId: dealer.id,
         type: p.type,
         status: "ACTIVE",
+        price: price || null,
         features: {},
         termStart,
         termEnd,
@@ -169,11 +174,31 @@ export async function POST(req: Request) {
 
   const downloadUrl = await getDownloadUrl(licenseUpload.key, 300);
 
+  // Счёт выставляем после генерации: файл уже у дилера, а оплата и чек
+  // идут своим циклом. Сбой биллинга не должен терять выданную лицензию.
+  let payment: { id: string; amount: number; payUrl: string | null } | null = null;
+  if (price > 0) {
+    try {
+      const created = await createPayment({
+        dealerId: dealer.id,
+        licenseId: license.id,
+        amount: price,
+        description: `Лицензия ${license.number} · ${p.product}`,
+        email: dealer.email,
+        phone: dealer.dealerProfile.phone,
+      });
+      payment = { id: created.id, amount: Number(created.amount), payUrl: created.payUrl };
+    } catch {
+      payment = null;
+    }
+  }
+
   return NextResponse.json({
     licenseId: license.id,
     number: license.number,
     filename: generated.lic_filename,
     downloadUrl,
+    payment,
   });
 }
 

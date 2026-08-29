@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Tag } from "@/components/ui/tag";
+import { StatusTag } from "@/components/ui/status-tag";
 import { Toggle } from "@/components/ui/toggle";
 import { Avatar } from "@/components/ui/avatar";
 import { Modal } from "@/components/ui/modal";
@@ -119,7 +120,7 @@ export function DealerEditor({ dealer }: { dealer: Dealer }) {
                 </div>
                 <div className="text-sm text-ink-muted">{data.email}</div>
                 <div className="mt-2 flex items-center gap-2">
-                  <StatusTag status={data.status} />
+                  <StatusTag kind="user" status={data.status} />
                   <Tag tone="muted">Заявка от {formatRuDate(data.createdAt)}</Tag>
                 </div>
               </div>
@@ -335,17 +336,3 @@ export function DealerEditor({ dealer }: { dealer: Dealer }) {
   );
 }
 
-function StatusTag({ status }: { status: string }) {
-  switch (status) {
-    case "APPROVED":
-      return <Tag tone="success">Одобрен</Tag>;
-    case "PENDING":
-      return <Tag tone="warning">Ожидает</Tag>;
-    case "REJECTED":
-      return <Tag tone="danger">Отклонён</Tag>;
-    case "SUSPENDED":
-      return <Tag tone="muted">Заблокирован</Tag>;
-    default:
-      return <Tag tone="neutral">{status}</Tag>;
-  }
-}

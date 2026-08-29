@@ -21,6 +21,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Tag } from "@/components/ui/tag";
+import { StatusTag } from "@/components/ui/status-tag";
 import { Modal } from "@/components/ui/modal";
 import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
@@ -227,7 +228,7 @@ export function LicenseDetailEditor({
               <div className="text-xs uppercase tracking-widest text-ink-muted">Лицензия</div>
               <div className="mt-1 font-display text-3xl  tracking-tightest">{data.number}</div>
               <div className="mt-2 flex flex-wrap items-center gap-2">
-                <StatusTag status={data.status} />
+                <StatusTag kind="license" status={data.status} />
                 <Tag tone={data.type === "Генерация" ? "accent" : "neutral"}>{data.type}</Tag>
                 {data.platform ? <Tag tone="neutral">{data.platform}</Tag> : null}
                 {data.issuedWithoutPayment ? <Tag tone="warning">Без оплаты</Tag> : null}
@@ -293,21 +294,7 @@ export function LicenseDetailEditor({
             <div className="mt-5 rounded-panel bg-white p-4">
               <div className="flex items-center justify-between gap-2">
                 <div className="text-xs text-ink-subtle">Заявка на аннулирование</div>
-                <Tag
-                  tone={
-                    latestRequest.status === "PENDING"
-                      ? "warning"
-                      : latestRequest.status === "APPROVED"
-                        ? "success"
-                        : "muted"
-                  }
-                >
-                  {latestRequest.status === "PENDING"
-                    ? "На рассмотрении"
-                    : latestRequest.status === "APPROVED"
-                      ? "Одобрена"
-                      : "Отклонена"}
-                </Tag>
+                <StatusTag kind="request" status={latestRequest.status} />
               </div>
               <div className="mt-1.5 text-sm">{latestRequest.reason}</div>
               <div className="text-xs text-ink-muted mt-1">{formatRuDateTime(latestRequest.createdAt)}</div>
@@ -529,23 +516,6 @@ function ReadonlyField({ label, value }: { label: string; value: string | null }
       <div className="mt-1 text-sm break-all">{value || "—"}</div>
     </div>
   );
-}
-
-function StatusTag({ status }: { status: string }) {
-  switch (status) {
-    case "ACTIVE":
-      return <Tag tone="success">Активна</Tag>;
-    case "EXPIRED":
-      return <Tag tone="muted">Истекла</Tag>;
-    case "CANCELLED":
-      return <Tag tone="warning">Аннулирована</Tag>;
-    case "REVOKED":
-      return <Tag tone="danger">Отозвана</Tag>;
-    case "DRAFT":
-      return <Tag tone="neutral">Черновик</Tag>;
-    default:
-      return <Tag tone="neutral">{status}</Tag>;
-  }
 }
 
 function labelAction(a: string): string {
