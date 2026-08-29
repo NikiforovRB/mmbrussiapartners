@@ -7,7 +7,7 @@ import { hasPermission } from "@/lib/permissions";
 export const runtime = "nodejs";
 
 const patchSchema = z.object({
-  type: z.enum(["ECO", "FULL", "CUSTOM"]).optional(),
+  type: z.enum(["Генерация", "Обновление", "Восстановление"]).optional(),
   features: z.record(z.union([z.boolean(), z.string()])).optional(),
   termStart: z.string().datetime().optional(),
   termEnd: z.string().datetime().optional(),

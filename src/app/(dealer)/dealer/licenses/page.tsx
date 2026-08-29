@@ -8,6 +8,7 @@ import { db } from "@/lib/db";
 import { fioFromParts } from "@/lib/utils";
 import { LicenseTable } from "@/components/licenses/license-table";
 import { Pagination, parsePage } from "@/components/cabinet/pagination";
+import { LICENSE_TYPES } from "@/lib/license-options";
 
 export const dynamic = "force-dynamic";
 
@@ -91,7 +92,7 @@ function buildWhere(
   if (sp.status && ["ACTIVE", "EXPIRED", "CANCELLED", "REVOKED", "DRAFT"].includes(sp.status)) {
     where.status = sp.status;
   }
-  if (sp.type && ["ECO", "FULL", "CUSTOM"].includes(sp.type)) {
+  if (sp.type && (LICENSE_TYPES as readonly string[]).includes(sp.type)) {
     where.type = sp.type;
   }
   if (sp.q && sp.q.trim()) {

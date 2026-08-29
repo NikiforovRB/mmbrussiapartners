@@ -1,9 +1,27 @@
 "use server";
 
 import { z } from "zod";
+import { headers } from "next/headers";
 import { db } from "@/lib/db";
 import { hashPassword } from "@/lib/auth";
 import { normalizePhone } from "@/lib/utils";
+
+async function lookupSignupGeo(): Promise<{ ip: string | null; country: string | null; city: string | null }> {
+  try {
+    const h = await headers();
+    const xff = h.get("x-forwarded-for");
+    const ip = xff ? xff.split(",")[0]?.trim() : h.get("x-real-ip")?.trim() ?? null;
+    const base = process.env.GEO_LOOKUP_URL ?? "http://ip-api.com/json";
+    const res = await fetch(`${base}/${ip ?? ""}?fields=status,country,city,query&lang=ru`, {
+      cache: "no-store",
+    });
+    const data = (await res.json()) as { status?: string; country?: string; city?: string; query?: string };
+    if (data.status !== "success") return { ip: ip ?? null, country: null, city: null };
+    return { ip: data.query ?? ip ?? null, country: data.country ?? null, city: data.city ?? null };
+  } catch {
+    return { ip: null, country: null, city: null };
+  }
+}
 
 const schema = z.object({
   email: z.string().email(),
@@ -37,6 +55,7 @@ export async function registerDealerAction(formData: FormData) {
   }
 
   const passwordHash = await hashPassword(data.password);
+  const geo = await lookupSignupGeo();
 
   await db.user.create({
     data: {
@@ -55,6 +74,9 @@ export async function registerDealerAction(formData: FormData) {
           city: data.city?.trim() || null,
           region: data.region?.trim() || null,
           licenseLimit: 0,
+          signupIp: geo.ip,
+          signupCountry: geo.country,
+          signupCity: geo.city,
         },
       },
     },

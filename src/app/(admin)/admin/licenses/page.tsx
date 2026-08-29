@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/cabinet/page-header";
 import { Button } from "@/components/ui/button";
 import { LicenseTable } from "@/components/licenses/license-table";
 import { Pagination, parsePage } from "@/components/cabinet/pagination";
+import { LICENSE_TYPES } from "@/lib/license-options";
 
 export const dynamic = "force-dynamic";
 
@@ -86,7 +87,7 @@ function buildWhere(sp: { q?: string; status?: string; type?: string }) {
   if (sp.status && ["ACTIVE", "EXPIRED", "CANCELLED", "REVOKED", "DRAFT"].includes(sp.status)) {
     where.status = sp.status;
   }
-  if (sp.type && ["ECO", "FULL", "CUSTOM"].includes(sp.type)) {
+  if (sp.type && (LICENSE_TYPES as readonly string[]).includes(sp.type)) {
     where.type = sp.type;
   }
   if (sp.q && sp.q.trim()) {

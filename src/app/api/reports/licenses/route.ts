@@ -56,7 +56,10 @@ export async function POST(req: Request) {
   });
   ws.columns = [
     { header: "Номер", key: "number", width: 22 },
-    { header: "Тип", key: "type", width: 10 },
+    { header: "Тип лицензии", key: "type", width: 16 },
+    { header: "Продукт", key: "product", width: 26 },
+    { header: "Версия ПО", key: "versionSoftware", width: 30 },
+    { header: "Версия кастома", key: "versionCustom", width: 16 },
     { header: "Платформа", key: "platform", width: 16 },
     { header: "Без оплаты", key: "issuedWithoutPayment", width: 12 },
     { header: "Статус", key: "status", width: 14 },
@@ -77,6 +80,9 @@ export async function POST(req: Request) {
     ws.addRow({
       number: l.number,
       type: l.type,
+      product: l.product ?? "",
+      versionSoftware: l.versionSoftware ?? "",
+      versionCustom: l.versionCustom ?? "",
       platform: l.platform ?? "",
       issuedWithoutPayment: l.issuedWithoutPayment ? "Да" : "",
       status: l.status,

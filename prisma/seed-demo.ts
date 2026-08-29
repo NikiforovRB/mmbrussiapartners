@@ -203,34 +203,42 @@ async function main() {
     const perDealerPlans: Record<
       string,
       Array<{
-        status: "ACTIVE" | "EXPIRED" | "CANCELLED" | "REVOKED" | "DRAFT";
-        type: "ECO" | "FULL" | "CUSTOM";
+        status: "ACTIVE" | "CANCELLED";
+        type: "Генерация" | "Обновление" | "Восстановление";
         createdDaysAgo: number;
         withoutPayment?: boolean;
         payment?: "PAID" | "PENDING" | "FAILED" | "REFUNDED";
       }>
     > = {
       dealer: [
-        { status: "ACTIVE", type: "FULL", createdDaysAgo: 0, payment: "PAID" },
-        { status: "ACTIVE", type: "ECO", createdDaysAgo: 1, payment: "PAID" },
-        { status: "ACTIVE", type: "CUSTOM", createdDaysAgo: 3, withoutPayment: true },
-        { status: "EXPIRED", type: "FULL", createdDaysAgo: 400, payment: "PAID" },
-        { status: "CANCELLED", type: "ECO", createdDaysAgo: 20, payment: "REFUNDED" },
-        { status: "REVOKED", type: "FULL", createdDaysAgo: 60, payment: "PAID" },
-        { status: "DRAFT", type: "CUSTOM", createdDaysAgo: 2 },
+        { status: "ACTIVE", type: "Генерация", createdDaysAgo: 0, payment: "PAID" },
+        { status: "ACTIVE", type: "Обновление", createdDaysAgo: 1, payment: "PAID" },
+        { status: "ACTIVE", type: "Восстановление", createdDaysAgo: 3, withoutPayment: true },
+        { status: "ACTIVE", type: "Генерация", createdDaysAgo: 6, payment: "PAID" },
+        { status: "CANCELLED", type: "Генерация", createdDaysAgo: 20, payment: "REFUNDED" },
+        { status: "ACTIVE", type: "Обновление", createdDaysAgo: 2, payment: "PENDING" },
       ],
       dealer2: [
-        { status: "ACTIVE", type: "FULL", createdDaysAgo: 5, payment: "PAID" },
-        { status: "ACTIVE", type: "ECO", createdDaysAgo: 8, payment: "PENDING" },
-        { status: "EXPIRED", type: "ECO", createdDaysAgo: 380, payment: "PAID" },
-        { status: "CANCELLED", type: "FULL", createdDaysAgo: 15, payment: "FAILED" },
+        { status: "ACTIVE", type: "Генерация", createdDaysAgo: 5, payment: "PAID" },
+        { status: "ACTIVE", type: "Обновление", createdDaysAgo: 8, payment: "PENDING" },
+        { status: "ACTIVE", type: "Восстановление", createdDaysAgo: 12, payment: "PAID" },
+        { status: "CANCELLED", type: "Генерация", createdDaysAgo: 15, payment: "FAILED" },
       ],
       dealer3: [
-        { status: "ACTIVE", type: "FULL", createdDaysAgo: 4, payment: "PAID" },
-        { status: "ACTIVE", type: "CUSTOM", createdDaysAgo: 10, withoutPayment: true },
-        { status: "REVOKED", type: "ECO", createdDaysAgo: 30, payment: "PAID" },
+        { status: "ACTIVE", type: "Генерация", createdDaysAgo: 4, payment: "PAID" },
+        { status: "ACTIVE", type: "Восстановление", createdDaysAgo: 10, withoutPayment: true },
+        { status: "CANCELLED", type: "Обновление", createdDaysAgo: 30, payment: "PAID" },
       ],
     };
+
+    const PRODUCTS = ["HM-GEN5W FULL RUS", "MB-SSWM FULL", "LG-GEN5 CUSTOM+RUS", "MB-SSWM-A9 FULL RUS"];
+    const VERSIONS_SW = [
+      "SP3C.CHN.SOPL.V1.0.221130-SP3C-L3001C",
+      "MQ422.KOR.SSW_M",
+      "DL322.KOR.SSW_M",
+      "SP2CPE.CHN.SSW_M.007.003.341221",
+    ];
+    const VERSIONS_CUSTOM = ["5.2.3", "5.5.3", "5.2.5", "6.6.1"];
 
     const createdLicenses: Record<string, { id: string; number: string; status: string }[]> = {
       dealer: [],
@@ -247,23 +255,25 @@ async function main() {
         const plan = plans[i];
         const created = atTime(daysAgo(plan.createdDaysAgo), 10 + (i % 8), (i * 7) % 60);
         const termStart = created;
-        const termEnd =
-          plan.status === "EXPIRED"
-            ? daysAgo(plan.createdDaysAgo - 365)
-            : new Date(created.getTime() + 365 * 24 * 60 * 60 * 1000);
+        const termEnd = new Date(created.getFullYear() + 100, created.getMonth(), created.getDate());
         const [region, city] = pick(REGIONS, i + Number(key.length));
         const number = licenseNumber(seq++);
+        const dealerCityComment = `${dealers[key].email.split("@")[0]}, ${city}`;
         const license = await prisma.license.create({
           data: {
             number,
             dealerId: dealer.id,
             type: plan.type,
             status: plan.status,
-            features: { carplay: true, android_auto: true, navi: plan.type !== "ECO" },
+            features: {},
             termStart,
             termEnd,
             deviceId: deviceHex(),
             licenseKey: `partners-portal/licenses/${number}-device-license.bin`,
+            product: pick(PRODUCTS, i),
+            versionSoftware: pick(VERSIONS_SW, i),
+            versionCustom: pick(VERSIONS_CUSTOM, i),
+            dealerComment: dealerCityComment,
             customerFio: pick(CUSTOMER_NAMES, custIdx++),
             customerOrganization: i % 2 === 0 ? 'ООО "Клиент"' : null,
             customerEmail: `client${custIdx}@example.ru`,
@@ -276,19 +286,15 @@ async function main() {
             issuedWithoutPayment: !!plan.withoutPayment,
             price: plan.withoutPayment ? null : 3000 + (i % 5) * 900,
             cancelledAt:
-              plan.status === "CANCELLED" || plan.status === "REVOKED"
+              plan.status === "CANCELLED"
                 ? atTime(daysAgo(Math.max(0, plan.createdDaysAgo - 5)), 15, 0)
                 : null,
             cancellationReason:
-              plan.status === "CANCELLED"
-                ? "Клиент вернул устройство"
-                : plan.status === "REVOKED"
-                  ? "Нарушение условий использования"
-                  : null,
+              plan.status === "CANCELLED" ? "Клиент вернул устройство" : null,
             createdAt: created,
           },
         });
-        if (plan.status !== "DRAFT") usedCount++;
+        usedCount++;
         createdLicenses[key].push({ id: license.id, number: license.number, status: license.status });
 
         // audit: CREATED
@@ -323,18 +329,6 @@ async function main() {
             },
           });
         }
-        if (plan.status === "REVOKED") {
-          await prisma.licenseAuditLog.create({
-            data: {
-              licenseId: license.id,
-              actorId: dealer.id,
-              action: "REVOKED",
-              reason: "Нарушение условий использования",
-              createdAt: atTime(daysAgo(Math.max(0, plan.createdDaysAgo - 5)), 16, 0),
-            },
-          });
-        }
-
         // payment
         if (plan.payment) {
           await prisma.payment.create({

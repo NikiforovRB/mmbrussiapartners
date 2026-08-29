@@ -26,7 +26,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
 import { formatRuDateTime, formatRuDate } from "@/lib/dates";
 import { usePermissions } from "@/hooks/use-permissions";
-import { LICENSE_PLATFORM_OPTIONS } from "@/lib/license-options";
+import { LICENSE_PLATFORM_OPTIONS, LICENSE_TYPE_OPTIONS } from "@/lib/license-options";
 
 type AuditEntry = {
   id: string;
@@ -38,7 +38,7 @@ type AuditEntry = {
 type LicenseShape = {
   id: string;
   number: string;
-  type: "ECO" | "FULL" | "CUSTOM";
+  type: string;
   status: "ACTIVE" | "EXPIRED" | "CANCELLED" | "REVOKED" | "DRAFT";
   features: Record<string, boolean | string>;
   termStart: string | Date;
@@ -54,8 +54,15 @@ type LicenseShape = {
   cancellationReason: string | null;
   cancelledAt: string | Date | null;
   licenseKey: string | null;
+  deviceId: string | null;
   platform: string | null;
   issuedWithoutPayment: boolean;
+  product: string | null;
+  bundle: string | null;
+  productRegion: string | null;
+  versionSoftware: string | null;
+  versionCustom: string | null;
+  dealerComment: string | null;
   auditLogs: AuditEntry[];
   dealerId: string;
 };
@@ -221,7 +228,7 @@ export function LicenseDetailEditor({
               <div className="mt-1 font-display text-3xl  tracking-tightest">{data.number}</div>
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <StatusTag status={data.status} />
-                <Tag tone={data.type === "FULL" ? "accent" : "neutral"}>{data.type}</Tag>
+                <Tag tone={data.type === "Генерация" ? "accent" : "neutral"}>{data.type}</Tag>
                 {data.platform ? <Tag tone="neutral">{data.platform}</Tag> : null}
                 {data.issuedWithoutPayment ? <Tag tone="warning">Без оплаты</Tag> : null}
               </div>
@@ -315,15 +322,11 @@ export function LicenseDetailEditor({
           <div className="font-display text-lg  tracking-tight mb-4">Тип лицензии</div>
           <div className="grid sm:grid-cols-3 gap-3">
             <Select
-              label="Тип"
+              label="Тип лицензии"
               disabled={!canEdit}
               value={data.type}
-              onChange={(v) => setData({ ...data, type: v as LicenseShape["type"] })}
-              options={[
-                { value: "ECO", label: "ECO" },
-                { value: "FULL", label: "FULL" },
-                { value: "CUSTOM", label: "CUSTOM" },
-              ]}
+              onChange={(v) => setData({ ...data, type: v })}
+              options={LICENSE_TYPE_OPTIONS}
             />
             <Select
               label="Тип платформы"
@@ -345,6 +348,14 @@ export function LicenseDetailEditor({
                 ]}
               />
             ) : null}
+          </div>
+          <div className="divider my-5" />
+          <div className="grid sm:grid-cols-2 gap-3">
+            <ReadonlyField label="Продукт" value={data.product} />
+            <ReadonlyField label="Версия ПО" value={data.versionSoftware} />
+            <ReadonlyField label="Версия кастома" value={data.versionCustom} />
+            <ReadonlyField label="ID устройства" value={data.deviceId ?? null} />
+            <ReadonlyField label="Комментарий дилера" value={data.dealerComment} />
           </div>
         </Card>
 
@@ -507,6 +518,15 @@ export function LicenseDetailEditor({
           </Button>
         </div>
       </Modal>
+    </div>
+  );
+}
+
+function ReadonlyField({ label, value }: { label: string; value: string | null }) {
+  return (
+    <div className="rounded-panel bg-white p-3">
+      <div className="text-[11px] uppercase tracking-tight text-ink-subtle">{label}</div>
+      <div className="mt-1 text-sm break-all">{value || "—"}</div>
     </div>
   );
 }

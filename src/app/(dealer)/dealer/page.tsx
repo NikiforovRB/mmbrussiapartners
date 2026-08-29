@@ -67,9 +67,9 @@ export default async function DealerDashboard() {
     { key: "DRAFT", label: "Черновики", count: statusCounts.DRAFT ?? 0 },
   ].filter((s) => s.count > 0);
   const typeBreakdown: { key: string; count: number }[] = [
-    { key: "ECO", count: typeCounts.ECO ?? 0 },
-    { key: "FULL", count: typeCounts.FULL ?? 0 },
-    { key: "CUSTOM", count: typeCounts.CUSTOM ?? 0 },
+    { key: "Генерация", count: typeCounts["Генерация"] ?? 0 },
+    { key: "Обновление", count: typeCounts["Обновление"] ?? 0 },
+    { key: "Восстановление", count: typeCounts["Восстановление"] ?? 0 },
   ].filter((t) => t.count > 0);
 
   const fio = fioFromParts({
@@ -190,7 +190,7 @@ export default async function DealerDashboard() {
                     <tr key={l.id} className={i > 0 ? "border-t border-line/0" : ""}>
                       <td className="px-4 py-3 ">{l.number}</td>
                       <td className="px-4 py-3">
-                        <Tag tone={l.type === "FULL" ? "accent" : "neutral"}>{l.type}</Tag>
+                        <Tag tone={l.type === "Генерация" ? "accent" : "neutral"}>{l.type}</Tag>
                       </td>
                       <td className="px-4 py-3">{l.customerFio}</td>
                       <td className="px-4 py-3">
@@ -234,7 +234,7 @@ export default async function DealerDashboard() {
                 {typeBreakdown.length > 0 ? (
                   <div className="pt-2 flex flex-wrap gap-2">
                     {typeBreakdown.map((t) => (
-                      <Tag key={t.key} tone={t.key === "FULL" ? "accent" : "neutral"}>
+                      <Tag key={t.key} tone={t.key === "Генерация" ? "accent" : "neutral"}>
                         {t.key}: {t.count}
                       </Tag>
                     ))}
