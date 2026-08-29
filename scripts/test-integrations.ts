@@ -85,14 +85,15 @@ async function testDriveMods() {
 
   const devicePath = process.argv[2];
   let did: string;
+  // Только base64url: обычный base64 генератор DRIVEMODS не разбирает.
   if (devicePath) {
     const { readFile } = await import("node:fs/promises");
-    did = (await readFile(devicePath)).toString("base64");
+    did = (await readFile(devicePath)).toString("base64url");
   } else {
     // Без реального device_id.bin проверяем только то, что авторизованный
     // вызов доходит до сервиса: на мусорные данные ждём бизнес-ошибку,
     // а не отказ в доступе.
-    did = Buffer.from("not-a-real-device-id").toString("base64");
+    did = Buffer.from("not-a-real-device-id").toString("base64url");
   }
 
   const res = await fetch(`${DM_BASE}/licinfo`, {

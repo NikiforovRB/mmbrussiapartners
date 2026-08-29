@@ -26,6 +26,17 @@ const PRODUCTS = [
   { product: "DriveMods LITE", bundle: null, region: "RU" },
 ];
 
+/**
+ * Настоящий сервис принимает did только в URL-безопасном алфавите: на обычном
+ * base64 его генератор отвечает 502. Повторяем это требование, иначе подмена
+ * кодировки прошла бы мимо прогона.
+ */
+function badDid(did: unknown): string | null {
+  if (typeof did !== "string" || did.length === 0) return "Отсутствуют обязательные параметры запроса";
+  if (/[+/=]/.test(did)) return "Неверный ответ генератора лицензий";
+  return null;
+}
+
 function json(res: Parameters<Parameters<typeof createServer>[0]>[1], code: number, body: unknown) {
   const payload = JSON.stringify(body);
   res.writeHead(code, { "Content-Type": "application/json; charset=utf-8" });
@@ -60,7 +71,8 @@ export function startMockDriveMods(port = 3210): Promise<Server> {
     if (!body.sessionToken) return json(res, 401, { error: "Нет сессии" });
 
     if (path === "/licinfo") {
-      if (!body.did) return json(res, 400, { error: "Нет did" });
+      const bad = badDid(body.did);
+      if (bad) return json(res, bad.startsWith("Отсутствуют") ? 400 : 502, { error: bad });
       return json(res, 200, {
         recoverable: true,
         version_software: "1.2.3-mock",
@@ -76,7 +88,11 @@ export function startMockDriveMods(port = 3210): Promise<Server> {
         mockState.failNextCreate = false;
         return json(res, 502, { error: "Заглушка: имитация отказа генератора" });
       }
-      if (!body.product) return json(res, 400, { error: "Нет product" });
+      const bad = badDid(body.did);
+      if (bad) return json(res, bad.startsWith("Отсутствуют") ? 400 : 502, { error: bad });
+      if (!body.product || !body.bundle || !body.dealer_comment) {
+        return json(res, 400, { error: "Отсутствуют обязательные параметры запроса" });
+      }
       return json(res, 200, {
         lic_file: Buffer.from(`MOCK-LICENSE ${body.product} ${Date.now()}`).toString("base64"),
         lic_filename: "device-license.bin",

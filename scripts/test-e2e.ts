@@ -153,7 +153,13 @@ const created = {
   s3Keys: new Set<string>(),
 };
 
-const DEVICE_BASE64 = Buffer.from("MOCK-DEVICE-ID-FILE-FOR-E2E").toString("base64");
+// Хвост из этих байтов даёт в обычном base64 символы «+», «/» и добивку «=» —
+// ровно то, чего не принимает генератор DRIVEMODS. Так прогон замечает, если
+// портал перестанет приводить did к URL-безопасному алфавиту.
+const DEVICE_BASE64 = Buffer.concat([
+  Buffer.from("MOCK-DEVICE-ID-FILE-FOR-E2E"),
+  Buffer.from([0xff, 0xef, 0xbe, 0xfa]),
+]).toString("base64");
 
 function licensePayload(type: string, extra: Record<string, unknown> = {}) {
   return {
