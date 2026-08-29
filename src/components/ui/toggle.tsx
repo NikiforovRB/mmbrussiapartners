@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 
 export interface ToggleProps {
@@ -33,11 +32,11 @@ export function Toggle({ checked, onChange, disabled, label, description, classN
           checked ? "bg-accent" : "bg-hairline",
         )}
       >
-        <motion.span
-          layout
-          transition={{ type: "spring", stiffness: 600, damping: 35 }}
-          className="absolute top-0.5 h-6 w-6 rounded-full bg-white"
-          style={{ left: checked ? 22 : 2 }}
+        <span
+          className={cn(
+            "absolute top-0.5 left-0.5 h-6 w-6 rounded-full bg-white transition-transform duration-200 ease-out",
+            checked && "translate-x-5",
+          )}
         />
       </button>
       {(label || description) && (

@@ -15,6 +15,7 @@ import {
 import { Sidebar, type SidebarItem } from "@/components/cabinet/sidebar";
 import { MobileNavProvider } from "@/components/cabinet/mobile-nav";
 import { CommandPalette } from "@/components/cabinet/command-palette";
+import { CabinetUserProvider } from "@/components/cabinet/cabinet-user";
 import { Avatar } from "@/components/ui/avatar";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -102,13 +103,30 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     </div>
   );
 
+  const unreadCount = await db.appNotification.count({
+    where: { userId: user.id, readAt: null },
+  });
+
   return (
-    <MobileNavProvider items={items} footer={footer}>
-      <div className="cabinet min-h-screen flex bg-bg-default">
-        <Sidebar items={items} footer={footer} />
-        <div className="flex-1 min-w-0 px-4 lg:px-6 pb-12">{children}</div>
-        <CommandPalette />
-      </div>
-    </MobileNavProvider>
+    <CabinetUserProvider
+      value={{
+        name: displayName,
+        email: user.email,
+        role: user.role.name,
+        avatarUrl,
+        basePath: "/admin",
+        unreadCount,
+        permissions: user.role.permissions,
+        isSuperAdmin: user.isSuperAdmin,
+      }}
+    >
+      <MobileNavProvider items={items} footer={footer}>
+        <div className="cabinet min-h-screen flex bg-bg-default">
+          <Sidebar items={items} footer={footer} />
+          <div className="flex-1 min-w-0 px-4 lg:px-6 pb-12">{children}</div>
+          <CommandPalette />
+        </div>
+      </MobileNavProvider>
+    </CabinetUserProvider>
   );
 }

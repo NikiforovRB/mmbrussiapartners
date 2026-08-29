@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { AnimatePresence, motion } from "framer-motion";
 import { Calendar, ChevronLeft, ChevronRight } from "lucide-react";
 import {
   RU_MONTHS_NOM,
@@ -35,10 +34,12 @@ export function DatePicker({
   const [open, setOpen] = React.useState(false);
   const ref = React.useRef<HTMLDivElement | null>(null);
   const today = React.useMemo(() => new Date(), []);
-  const [view, setView] = React.useState<{ year: number; month: number }>(() => {
-    const d = value ?? today;
-    return { year: d.getFullYear(), month: d.getMonth() };
-  });
+  const [view, setView] = React.useState<{ year: number; month: number }>(
+    () => {
+      const d = value ?? today;
+      return { year: d.getFullYear(), month: d.getMonth() };
+    },
+  );
 
   React.useEffect(() => {
     function onDoc(e: MouseEvent) {
@@ -48,7 +49,10 @@ export function DatePicker({
     return () => document.removeEventListener("mousedown", onDoc);
   }, []);
 
-  const days = React.useMemo(() => buildMonthGrid(view.year, view.month), [view]);
+  const days = React.useMemo(
+    () => buildMonthGrid(view.year, view.month),
+    [view],
+  );
 
   function shift(n: number) {
     setView((v) => {
@@ -67,7 +71,9 @@ export function DatePicker({
 
   return (
     <div ref={ref} className={cn("space-y-1.5 relative", className)}>
-      {label ? <span className="block text-[12.5px]  text-ink-muted">{label}</span> : null}
+      {label ? (
+        <span className="block text-[12.5px]  text-ink-muted">{label}</span>
+      ) : null}
       <button
         type="button"
         disabled={disabled}
@@ -98,88 +104,82 @@ export function DatePicker({
           </span>
         ) : null}
       </button>
-      <AnimatePresence>
-        {open ? (
-          <motion.div
-            initial={{ opacity: 0, y: -8, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -8, scale: 0.98 }}
-            transition={{ duration: 0.18 }}
-            className="absolute z-40 mt-2 w-[320px] rounded-panel bg-white border border-hairline p-4"
-            style={{ boxShadow: "0 24px 60px -24px rgba(11,16,32,0.18)" }}
-          >
-            <div className="flex items-center justify-between px-1">
-              <button
-                type="button"
-                onClick={() => shift(-1)}
-                className="grid h-9 w-9 place-items-center rounded-btn hover:bg-surface-muted"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-              <div className="text-sm tracking-tight">
-                {capitalize(RU_MONTHS_NOM[view.month])} {view.year}
-              </div>
-              <button
-                type="button"
-                onClick={() => shift(1)}
-                className="grid h-9 w-9 place-items-center rounded-btn hover:bg-surface-muted"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </button>
+      {open ? (
+        <div
+          className="absolute z-40 mt-2 w-[320px] rounded-panel bg-white border border-hairline p-4 animate-dropdown-in"
+          style={{ boxShadow: "0 24px 60px -24px rgba(11,16,32,0.18)" }}
+        >
+          <div className="flex items-center justify-between px-1">
+            <button
+              type="button"
+              onClick={() => shift(-1)}
+              className="grid h-9 w-9 place-items-center rounded-btn hover:bg-surface-muted"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <div className="text-sm tracking-tight">
+              {capitalize(RU_MONTHS_NOM[view.month])} {view.year}
             </div>
-            <div className="mt-3 grid grid-cols-7 gap-1 text-center text-[11px] uppercase tracking-tight text-ink-subtle">
-              {["пн", "вт", "ср", "чт", "пт", "сб", "вс"].map((d) => (
-                <div key={d}>{d}</div>
-              ))}
-            </div>
-            <div className="mt-1 grid grid-cols-7 gap-1">
-              {days.map((d, i) => {
-                const isCurrentMonth = d.getMonth() === view.month;
-                const selected = value ? isSameMoscowDay(value, d) : false;
-                const isToday = isSameMoscowDay(today, d);
-                const disabledDay = isDisabled(d);
-                return (
-                  <button
-                    key={i}
-                    type="button"
-                    disabled={disabledDay}
-                    onClick={() => {
-                      onChange(d);
-                      setOpen(false);
-                    }}
-                    className={cn(
-                      "h-9 w-9 rounded-btn text-sm transition-colors duration-150",
-                      !isCurrentMonth && "text-ink-subtle/60",
-                      selected
-                        ? "bg-accent text-white"
-                        : isToday
-                          ? "bg-surface-muted text-ink"
-                          : "hover:bg-surface-muted",
-                      disabledDay && "opacity-30 cursor-not-allowed",
-                    )}
-                  >
-                    {d.getDate()}
-                  </button>
-                );
-              })}
-            </div>
-            <div className="mt-3 flex items-center justify-between text-xs text-ink-muted">
-              <button
-                type="button"
-                onClick={() => {
-                  onChange(today);
-                  setView({ year: today.getFullYear(), month: today.getMonth() });
-                  setOpen(false);
-                }}
-                className="rounded-btn px-3 py-1.5 hover:bg-surface-muted"
-              >
-                Сегодня
-              </button>
-              <span className="text-[11px]">{formatRuDate(value ?? today)}</span>
-            </div>
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
+            <button
+              type="button"
+              onClick={() => shift(1)}
+              className="grid h-9 w-9 place-items-center rounded-btn hover:bg-surface-muted"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="mt-3 grid grid-cols-7 gap-1 text-center text-[11px] uppercase tracking-tight text-ink-subtle">
+            {["пн", "вт", "ср", "чт", "пт", "сб", "вс"].map((d) => (
+              <div key={d}>{d}</div>
+            ))}
+          </div>
+          <div className="mt-1 grid grid-cols-7 gap-1">
+            {days.map((d, i) => {
+              const isCurrentMonth = d.getMonth() === view.month;
+              const selected = value ? isSameMoscowDay(value, d) : false;
+              const isToday = isSameMoscowDay(today, d);
+              const disabledDay = isDisabled(d);
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  disabled={disabledDay}
+                  onClick={() => {
+                    onChange(d);
+                    setOpen(false);
+                  }}
+                  className={cn(
+                    "h-9 w-9 rounded-btn text-sm transition-colors duration-150",
+                    !isCurrentMonth && "text-ink-subtle/60",
+                    selected
+                      ? "bg-accent text-white"
+                      : isToday
+                        ? "bg-surface-muted text-ink"
+                        : "hover:bg-surface-muted",
+                    disabledDay && "opacity-30 cursor-not-allowed",
+                  )}
+                >
+                  {d.getDate()}
+                </button>
+              );
+            })}
+          </div>
+          <div className="mt-3 flex items-center justify-between text-xs text-ink-muted">
+            <button
+              type="button"
+              onClick={() => {
+                onChange(today);
+                setView({ year: today.getFullYear(), month: today.getMonth() });
+                setOpen(false);
+              }}
+              className="rounded-btn px-3 py-1.5 hover:bg-surface-muted"
+            >
+              Сегодня
+            </button>
+            <span className="text-[11px]">{formatRuDate(value ?? today)}</span>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -190,7 +190,9 @@ function buildMonthGrid(year: number, month: number): Date[] {
   const start = new Date(year, month, 1 - offsetMonday);
   const days: Date[] = [];
   for (let i = 0; i < 42; i++) {
-    days.push(new Date(start.getFullYear(), start.getMonth(), start.getDate() + i));
+    days.push(
+      new Date(start.getFullYear(), start.getMonth(), start.getDate() + i),
+    );
   }
   return days;
 }

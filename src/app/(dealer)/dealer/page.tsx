@@ -197,7 +197,9 @@ export default async function DealerDashboard() {
                       <td className="px-4 py-3">
                         <StatusTag kind="license" status={l.status} />
                       </td>
-                      <td className="px-4 py-3 text-ink-muted">{formatRuDate(l.termEnd)}</td>
+                      <td className="px-4 py-3 text-ink-muted">
+                        {l.termEnd ? formatRuDate(l.termEnd) : "Бессрочная"}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

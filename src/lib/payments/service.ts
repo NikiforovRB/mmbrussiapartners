@@ -74,23 +74,26 @@ export async function createPayment(input: CreatePaymentInput) {
 export async function markPaymentPaid(paymentId: string, confirmedById?: string | null) {
   const payment = await db.payment.findUnique({ where: { id: paymentId } });
   if (!payment) throw new Error("Платёж не найден");
-  if (payment.status === "PAID") return payment;
 
-  await db.payment.update({
-    where: { id: paymentId },
-    data: {
-      status: "PAID",
-      paidAt: new Date(),
-      confirmedById: confirmedById ?? null,
-    },
+  // Условный апдейт вместо «прочитали — записали»: из двух одновременных
+  // подтверждений оплату проведёт только одно, второе получит count = 0
+  // и не уйдёт пробивать второй чек по тем же деньгам.
+  const claimed = await db.payment.updateMany({
+    where: { id: paymentId, status: { not: "PAID" } },
+    data: { status: "PAID", paidAt: new Date(), confirmedById: confirmedById ?? null },
   });
+  if (claimed.count === 0) {
+    return (await db.payment.findUnique({ where: { id: paymentId } })) ?? payment;
+  }
 
   return fiscalizePayment(paymentId);
 }
 
 /**
  * Регистрирует чек «Приход» в АТОЛ Онлайн.
- * Повторный вызов для уже пробитого чека ничего не делает.
+ *
+ * Пробитый чек повторно не отправляется, как и чек, который уже ушёл в кассу
+ * и ждёт ответа: обновить его статус можно через refreshReceipt.
  */
 export async function fiscalizePayment(paymentId: string) {
   const payment = await db.payment.findUnique({
@@ -99,7 +102,7 @@ export async function fiscalizePayment(paymentId: string) {
   });
   if (!payment) throw new Error("Платёж не найден");
   if (payment.status !== "PAID") throw new Error("Чек пробивается только по оплаченному платежу");
-  if (payment.receiptStatus === "done") return payment;
+  if (payment.receiptStatus === "done" || payment.receiptStatus === "wait") return payment;
 
   if (!isAtolConfigured()) {
     return db.payment.update({
@@ -111,19 +114,36 @@ export async function fiscalizePayment(paymentId: string) {
     });
   }
 
+  // Занимаем попытку до похода в кассу: параллельный вызов увидит "wait"
+  // и выйдет, не отправив второй документ.
+  const claimed = await db.payment.updateMany({
+    where: {
+      id: paymentId,
+      status: "PAID",
+      OR: [{ receiptStatus: null }, { receiptStatus: { notIn: ["done", "wait"] } }],
+    },
+    data: { receiptStatus: "wait", receiptAttempt: { increment: 1 }, receiptError: null },
+  });
+  if (claimed.count === 0) return payment;
+
+  const attempt = (
+    await db.payment.findUnique({ where: { id: paymentId }, select: { receiptAttempt: true } })
+  )?.receiptAttempt ?? payment.receiptAttempt + 1;
+
   const amount = Number(payment.amount);
   const name = payment.description ?? "Лицензия MMB RUSSIA";
 
   try {
     const { uuid } = await registerReceipt({
-      // external_id должен быть уникален в пределах группы ККТ:
-      // при повторной попытке нужен новый идентификатор.
-      externalId: `${payment.id}-${Date.now().toString(36)}`,
+      // Идентификатор документа стабилен в пределах попытки: повтор той же
+      // попытки АТОЛ распознает как дубль и вернёт исходный uuid. Новый
+      // номер появляется только после отказа кассы.
+      externalId: `${payment.id}-${attempt}`,
       items: [{ name, price: amount, quantity: 1, sum: amount }],
       total: amount,
       customerEmail: payment.dealer.email,
       customerPhone: payment.dealer.dealerProfile?.phone ?? null,
-      callbackUrl: `${siteOrigin()}/api/atol/webhook`,
+      callbackUrl: atolCallbackUrl(),
     });
 
     return await db.payment.update({
@@ -137,6 +157,21 @@ export async function fiscalizePayment(paymentId: string) {
       data: { receiptStatus: "fail", receiptError: message },
     });
   }
+}
+
+/**
+ * Колбэк АТОЛ приходит без подписи, поэтому подлинность подтверждает
+ * неугадываемый токен в самом адресе. Без ATOL_WEBHOOK_SECRET колбэк
+ * не запрашиваем вовсе — статус чека дотянет refreshReceipt.
+ */
+export function atolWebhookSecret(): string {
+  return process.env.ATOL_WEBHOOK_SECRET ?? "";
+}
+
+function atolCallbackUrl(): string | null {
+  const secret = atolWebhookSecret();
+  if (!secret) return null;
+  return `${siteOrigin()}/api/atol/webhook?token=${encodeURIComponent(secret)}`;
 }
 
 /** Записывает результат обработки чека (из колбэка или из report()). */

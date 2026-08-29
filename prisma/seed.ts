@@ -14,6 +14,7 @@ const ALL_PERMISSIONS = [
   "licenses.revoke",
   "licenses.delete",
   "licenses.restore",
+  "licenses.issueFree",
   "roles.manage",
   "users.manage",
   "reports.view",

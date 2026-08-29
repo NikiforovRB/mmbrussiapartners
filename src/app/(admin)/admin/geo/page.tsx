@@ -11,31 +11,38 @@ export default async function AdminGeoPage() {
   const session = await auth();
   if (!session?.user) return null;
 
-  const [me, dealersByRegion, dealersByCity, licensesByRegion] = await Promise.all([
-    db.user.findUnique({ where: { id: session.user.id }, include: { role: true } }),
-    db.dealerProfile.groupBy({
-      by: ["region"],
-      _count: { _all: true },
-      orderBy: { _count: { region: "desc" } },
-      take: 12,
-    }),
-    db.dealerProfile.groupBy({
-      by: ["city"],
-      _count: { _all: true },
-      orderBy: { _count: { city: "desc" } },
-      take: 12,
-    }),
-    db.license.groupBy({
-      by: ["region"],
-      _count: { _all: true },
-      orderBy: { _count: { region: "desc" } },
-      take: 12,
-      where: { deletedAt: null },
-    }),
-  ]);
+  // Группировки берём целиком: по ним считается число регионов, а верхушку
+  // из двенадцати строк отрезаем уже при выводе.
+  const [me, regionGroups, cityGroups, licenseRegionGroups, totalDealers, totalLicenses] =
+    await Promise.all([
+      db.user.findUnique({ where: { id: session.user.id }, include: { role: true } }),
+      db.dealerProfile.groupBy({
+        by: ["region"],
+        _count: { _all: true },
+        orderBy: { _count: { region: "desc" } },
+      }),
+      db.dealerProfile.groupBy({
+        by: ["city"],
+        _count: { _all: true },
+        orderBy: { _count: { city: "desc" } },
+        take: 12,
+      }),
+      db.license.groupBy({
+        by: ["region"],
+        _count: { _all: true },
+        orderBy: { _count: { region: "desc" } },
+        where: { deletedAt: null },
+      }),
+      db.dealerProfile.count(),
+      db.license.count({ where: { deletedAt: null } }),
+    ]);
 
-  const totalDealers = dealersByRegion.reduce((s, r) => s + r._count._all, 0);
-  const totalLicenses = licensesByRegion.reduce((s, r) => s + r._count._all, 0);
+  // Итоги — отдельным count: суммирование топ-12 занижало бы их на всех,
+  // кто не попал в верхушку списка.
+  const dealersByRegion = regionGroups.slice(0, 12);
+  const dealersByCity = cityGroups;
+  const licensesByRegion = licenseRegionGroups.slice(0, 12);
+  const regionCount = regionGroups.filter((r) => r.region).length;
 
   return (
     <>
@@ -53,9 +60,7 @@ export default async function AdminGeoPage() {
               <div className="flex items-center gap-2 text-white/70 text-xs">
                 <MapPinned className="h-4 w-4" /> Всего регионов
               </div>
-              <div className="mt-2 font-display text-4xl  tracking-tightest">
-                {dealersByRegion.length}
-              </div>
+              <div className="mt-2 font-display text-4xl  tracking-tightest">{regionCount}</div>
             </div>
             <div>
               <div className="flex items-center gap-2 text-white/70 text-xs">

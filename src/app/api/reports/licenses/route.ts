@@ -8,6 +8,7 @@ import { uploadObject, getDownloadUrl } from "@/lib/s3";
 import { fioFromParts } from "@/lib/utils";
 import { formatRuDate } from "@/lib/dates";
 import { statusLabel } from "@/lib/status-labels";
+import { forbidden, parseBody, route, unauthenticated } from "@/lib/api";
 
 export const runtime = "nodejs";
 
@@ -20,17 +21,17 @@ const schema = z.object({
   scope: z.enum(["dealer", "admin"]),
 });
 
-export async function POST(req: Request) {
+export const POST = route(async (req: Request) => {
   const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: "UNAUTHENTICATED" }, { status: 401 });
+  if (!session?.user) throw unauthenticated();
 
-  const body = await req.json().catch(() => ({}));
-  const parsed = schema.safeParse(body);
-  if (!parsed.success) return NextResponse.json({ error: "Некорректные параметры" }, { status: 400 });
-  const { from, to, status, type, platform, scope } = parsed.data;
+  const { from, to, status, type, platform, scope } = await parseBody(req, schema);
 
-  if (scope === "admin" && !hasPermission(session.user.permissions, "reports.export", session.user.isSuperAdmin)) {
-    return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
+  if (
+    scope === "admin" &&
+    !hasPermission(session.user.permissions, "reports.export", session.user.isSuperAdmin)
+  ) {
+    throw forbidden("Нет права экспортировать отчёты");
   }
 
   const where: Record<string, unknown> = {
@@ -88,7 +89,7 @@ export async function POST(req: Request) {
       issuedWithoutPayment: l.issuedWithoutPayment ? "Да" : "",
       status: statusLabel("license", l.status),
       createdAt: formatRuDate(l.createdAt),
-      termEnd: formatRuDate(l.termEnd),
+      termEnd: l.termEnd ? formatRuDate(l.termEnd) : "Бессрочная",
       dealer: fioFromParts({
         firstName: l.dealer.dealerProfile?.firstName,
         lastName: l.dealer.dealerProfile?.lastName,
@@ -113,4 +114,4 @@ export async function POST(req: Request) {
   );
   const url = await getDownloadUrl(upload.key, 300);
   return NextResponse.json({ url, count: licenses.length });
-}
+});

@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 
 export interface CheckboxProps {
@@ -44,31 +43,23 @@ export function Checkbox({
           checked ? "bg-accent" : "bg-white border border-hairline",
         )}
       >
-        <AnimatePresence>
-          {checked ? (
-            <motion.svg
-              key="check"
-              initial={{ scale: 0.4, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.4, opacity: 0 }}
-              transition={{ type: "spring", stiffness: 500, damping: 28 }}
-              viewBox="0 0 24 24"
-              fill="none"
-              className="h-3.5 w-3.5 text-white"
-            >
-              <motion.path
-                d="M5 12.5l4.5 4.5L19 7.5"
-                stroke="currentColor"
-                strokeWidth={3}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                initial={{ pathLength: 0 }}
-                animate={{ pathLength: 1 }}
-                transition={{ duration: 0.18 }}
-              />
-            </motion.svg>
-          ) : null}
-        </AnimatePresence>
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          aria-hidden
+          className={cn(
+            "h-3.5 w-3.5 text-white transition duration-150 ease-out",
+            checked ? "scale-100 opacity-100" : "scale-50 opacity-0",
+          )}
+        >
+          <path
+            d="M5 12.5l4.5 4.5L19 7.5"
+            stroke="currentColor"
+            strokeWidth={3}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
       </button>
       {(label || description) && (
         <span className="space-y-0.5">

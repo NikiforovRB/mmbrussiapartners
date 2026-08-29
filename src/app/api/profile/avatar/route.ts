@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { badRequest, notFound, route, unauthenticated } from "@/lib/api";
 import { uploadObject, getDownloadUrl, deleteObject } from "@/lib/s3";
 
 export const runtime = "nodejs";
@@ -8,96 +9,77 @@ export const runtime = "nodejs";
 const MAX_SIZE = 2 * 1024 * 1024;
 const ALLOWED = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 
-export async function GET() {
+export const GET = route(async () => {
   const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: "UNAUTHENTICATED" }, { status: 401 });
+  if (!session?.user) throw unauthenticated();
 
   const profile = await db.dealerProfile.findUnique({
     where: { userId: session.user.id },
     select: { avatarKey: true },
   });
+  if (!profile?.avatarKey) return NextResponse.json({ url: null });
 
-  if (!profile?.avatarKey) {
-    return NextResponse.json({ url: null });
-  }
+  return NextResponse.json({ url: await getDownloadUrl(profile.avatarKey, 3600) });
+});
 
-  const url = await getDownloadUrl(profile.avatarKey, 3600);
-  return NextResponse.json({ url });
-}
-
-export async function POST(req: Request) {
+export const POST = route(async (req: Request) => {
   const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: "UNAUTHENTICATED" }, { status: 401 });
+  if (!session?.user) throw unauthenticated();
 
   const form = await req.formData();
   const file = form.get("avatar");
-  if (!(file instanceof File)) {
-    return NextResponse.json({ error: "Файл не загружен" }, { status: 400 });
-  }
-
-  if (!ALLOWED.has(file.type)) {
-    return NextResponse.json({ error: "Допустимы JPG, PNG, WebP или GIF" }, { status: 400 });
-  }
-  if (file.size > MAX_SIZE) {
-    return NextResponse.json({ error: "Файл слишком большой (макс. 2 МБ)" }, { status: 400 });
-  }
+  if (!(file instanceof File)) throw badRequest("Файл не загружен");
+  if (!ALLOWED.has(file.type)) throw badRequest("Допустимы JPG, PNG, WebP или GIF");
+  if (file.size > MAX_SIZE) throw badRequest("Файл слишком большой (макс. 2 МБ)");
 
   const profile = await db.dealerProfile.findUnique({
     where: { userId: session.user.id },
     select: { avatarKey: true },
   });
-  if (!profile) {
-    return NextResponse.json({ error: "Профиль не найден" }, { status: 404 });
-  }
+  if (!profile) throw notFound("Профиль не найден");
 
   const buffer = Buffer.from(await file.arrayBuffer());
   const ext = file.type.split("/")[1]?.replace("jpeg", "jpg") ?? "jpg";
-  const upload = await uploadObject(
-    "avatars",
-    `${session.user.id}-avatar.${ext}`,
-    buffer,
-    file.type,
-  );
+  const upload = await uploadObject("avatars", `${session.user.id}-avatar.${ext}`, buffer, file.type);
 
-  if (profile.avatarKey && profile.avatarKey !== upload.key) {
-    try {
-      await deleteObject(profile.avatarKey);
-    } catch {
-      /* ignore stale object cleanup errors */
-    }
+  // Ссылку на новый файл записываем первой: если апдейт упадёт, старый аватар
+  // останется рабочим, а свежезалитый объект уберём, чтобы не висел сиротой.
+  try {
+    await db.dealerProfile.update({
+      where: { userId: session.user.id },
+      data: { avatarKey: upload.key },
+    });
+  } catch (err) {
+    await deleteObject(upload.key).catch(() => {});
+    throw err;
   }
 
-  await db.dealerProfile.update({
-    where: { userId: session.user.id },
-    data: { avatarKey: upload.key },
-  });
+  if (profile.avatarKey && profile.avatarKey !== upload.key) {
+    await deleteObject(profile.avatarKey).catch((err) =>
+      console.error("[avatar] не удалось удалить прежний файл", err),
+    );
+  }
 
-  const url = await getDownloadUrl(upload.key, 3600);
-  return NextResponse.json({ ok: true, url });
-}
+  return NextResponse.json({ ok: true, url: await getDownloadUrl(upload.key, 3600) });
+});
 
-export async function DELETE() {
+export const DELETE = route(async () => {
   const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: "UNAUTHENTICATED" }, { status: 401 });
+  if (!session?.user) throw unauthenticated();
 
   const profile = await db.dealerProfile.findUnique({
     where: { userId: session.user.id },
     select: { avatarKey: true },
   });
-  if (!profile?.avatarKey) {
-    return NextResponse.json({ ok: true });
-  }
-
-  try {
-    await deleteObject(profile.avatarKey);
-  } catch {
-    /* ignore */
-  }
+  if (!profile?.avatarKey) return NextResponse.json({ ok: true });
 
   await db.dealerProfile.update({
     where: { userId: session.user.id },
     data: { avatarKey: null },
   });
+  await deleteObject(profile.avatarKey).catch((err) =>
+    console.error("[avatar] не удалось удалить файл", err),
+  );
 
   return NextResponse.json({ ok: true });
-}
+});

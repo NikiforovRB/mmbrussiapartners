@@ -3,65 +3,62 @@ import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { hasPermission } from "@/lib/permissions";
+import { badRequest, forbidden, notFound, parseBody, route, unauthenticated } from "@/lib/api";
 import { notifyAdminsLicenseCancelled } from "@/lib/notifications";
+import { notifyUser } from "@/lib/app-notifications";
+import { syncLicenseSlots } from "@/lib/license-slots";
 
 export const runtime = "nodejs";
 
 const schema = z.object({ reason: z.string().min(10, "Минимум 10 символов") });
 
-export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+export const POST = route(async (req: Request, ctx: { params: Promise<{ id: string }> }) => {
   const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: "UNAUTHENTICATED" }, { status: 401 });
+  if (!session?.user) throw unauthenticated();
 
-  const { id } = await params;
-  const body = await req.json().catch(() => ({}));
-  const parsed = schema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.errors[0]?.message ?? "Укажите причину" }, { status: 400 });
-  }
+  const { id } = await ctx.params;
+  const { reason } = await parseBody(req, schema);
 
-  const license = await db.license.findUnique({
-    where: { id },
-    include: { dealer: true },
-  });
-  if (!license) return NextResponse.json({ error: "Лицензия не найдена" }, { status: 404 });
+  const license = await db.license.findUnique({ where: { id }, include: { dealer: true } });
+  if (!license) throw notFound("Лицензия не найдена");
 
   const isOwner = license.dealerId === session.user.id;
   const canCancel =
-    session.user.isSuperAdmin ||
-    hasPermission(session.user.permissions, "licenses.cancel", session.user.isSuperAdmin) ||
-    isOwner;
-  if (!canCancel) return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
+    hasPermission(session.user.permissions, "licenses.cancel", session.user.isSuperAdmin) || isOwner;
+  if (!canCancel) throw forbidden();
 
   if (license.status === "CANCELLED" || license.status === "REVOKED") {
-    return NextResponse.json({ error: "Лицензия уже неактивна" }, { status: 400 });
+    throw badRequest("Лицензия уже неактивна");
   }
 
   await db.$transaction([
     db.license.update({
       where: { id: license.id },
-      data: {
-        status: "CANCELLED",
-        cancelledAt: new Date(),
-        cancellationReason: parsed.data.reason,
-      },
+      data: { status: "CANCELLED", cancelledAt: new Date(), cancellationReason: reason },
     }),
     db.licenseAuditLog.create({
-      data: {
-        licenseId: license.id,
-        actorId: session.user.id,
-        action: "CANCELLED",
-        reason: parsed.data.reason,
-      },
+      data: { licenseId: license.id, actorId: session.user.id, action: "CANCELLED", reason },
     }),
   ]);
+
+  // Аннулированная лицензия освобождает слот лимита представителя.
+  await syncLicenseSlots(license.dealerId);
 
   await notifyAdminsLicenseCancelled({
     licenseNumber: license.number,
     dealerEmail: license.dealer.email,
-    reason: parsed.data.reason,
+    reason,
     by: session.user.email,
   });
 
+  if (!isOwner) {
+    await notifyUser(license.dealerId, {
+      type: "LICENSE_CANCELLED",
+      title: `Лицензия ${license.number} аннулирована`,
+      body: reason,
+      link: `/dealer/licenses/${license.id}`,
+    });
+  }
+
   return NextResponse.json({ ok: true });
-}
+});

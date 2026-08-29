@@ -3,27 +3,29 @@ import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { auth, hashPassword } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { badRequest, notFound, parseBody, route, unauthenticated } from "@/lib/api";
 
 export const runtime = "nodejs";
 
 const schema = z.object({
-  current: z.string().min(1),
-  next: z.string().min(8),
+  current: z.string().min(1, "Введите текущий пароль"),
+  next: z.string().min(8, "Новый пароль — минимум 8 символов"),
 });
 
-export async function PATCH(req: Request) {
+export const PATCH = route(async (req: Request) => {
   const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: "UNAUTHENTICATED" }, { status: 401 });
-  const body = await req.json().catch(() => ({}));
-  const parsed = schema.safeParse(body);
-  if (!parsed.success) return NextResponse.json({ error: "Минимум 8 символов" }, { status: 400 });
+  if (!session?.user) throw unauthenticated();
+
+  const data = await parseBody(req, schema);
 
   const user = await db.user.findUnique({ where: { id: session.user.id } });
-  if (!user) return NextResponse.json({ error: "Пользователь не найден" }, { status: 404 });
-  const ok = await bcrypt.compare(parsed.data.current, user.passwordHash);
-  if (!ok) return NextResponse.json({ error: "Неверный текущий пароль" }, { status: 400 });
+  if (!user) throw notFound("Пользователь не найден");
 
-  const passwordHash = await hashPassword(parsed.data.next);
+  const ok = await bcrypt.compare(data.current, user.passwordHash);
+  if (!ok) throw badRequest("Неверный текущий пароль");
+
+  const passwordHash = await hashPassword(data.next);
   await db.user.update({ where: { id: user.id }, data: { passwordHash } });
+
   return NextResponse.json({ ok: true });
-}
+});

@@ -2,7 +2,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { hasPermission } from "@/lib/permissions";
+import { hasPermission, type PermissionKey } from "@/lib/permissions";
+import { badRequest, forbidden, notFound, parseBody, route, unauthenticated } from "@/lib/api";
+import { recordAdminAction, changedFields } from "@/lib/admin-audit";
+import { notifyUser } from "@/lib/app-notifications";
 import { normalizePhone } from "@/lib/utils";
 
 export const runtime = "nodejs";
@@ -28,59 +31,145 @@ const schema = z.object({
   profile: profileSchema.optional(),
 });
 
-export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+/** Поля профиля, которые меняются обычным правом на редактирование. */
+const PLAIN_PROFILE_FIELDS = [
+  "firstName",
+  "lastName",
+  "middleName",
+  "phone",
+  "organization",
+  "inn",
+  "city",
+  "region",
+  "address",
+  "phoneVisibleOnSite",
+] as const;
+
+const STATUS_LABEL: Record<string, string> = {
+  PENDING: "на рассмотрении",
+  APPROVED: "одобрен",
+  REJECTED: "отклонён",
+  SUSPENDED: "заблокирован",
+};
+
+export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: string }> }) => {
   const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: "UNAUTHENTICATED" }, { status: 401 });
+  if (!session?.user) throw unauthenticated();
 
-  const isAdmin =
-    session.user.isSuperAdmin ||
-    hasPermission(session.user.permissions, "dealers.approve", session.user.isSuperAdmin) ||
-    hasPermission(session.user.permissions, "dealers.edit", session.user.isSuperAdmin);
-  if (!isAdmin) return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
+  const { id } = await ctx.params;
+  const d = await parseBody(req, schema);
 
-  const { id } = await params;
-  const body = await req.json().catch(() => ({}));
-  const parsed = schema.safeParse(body);
-  if (!parsed.success) return NextResponse.json({ error: "Некорректные данные" }, { status: 400 });
-  const d = parsed.data;
+  const can = (perm: PermissionKey) =>
+    hasPermission(session.user.permissions, perm, session.user.isSuperAdmin);
+
+  // Каждое поле закрыто своим правом: иначе одно лишь dealers.edit
+  // позволяло бы выдать себе любую роль и любой лимит.
+  const wantsStatus = d.status !== undefined;
+  const wantsRole = d.roleId !== undefined;
+  const wantsLimit = d.profile?.licenseLimit !== undefined;
+  const wantsPlainEdit =
+    d.profile !== undefined && PLAIN_PROFILE_FIELDS.some((f) => d.profile?.[f] !== undefined);
+
+  if (!wantsStatus && !wantsRole && !wantsLimit && !wantsPlainEdit) {
+    throw badRequest("Нечего сохранять");
+  }
+  if (wantsStatus) {
+    const perm: PermissionKey = d.status === "SUSPENDED" ? "dealers.suspend" : "dealers.approve";
+    if (!can(perm) && !can("dealers.approve")) throw forbidden("Нет права менять статус представителя");
+  }
+  if (wantsRole && !can("users.manage")) throw forbidden("Нет права менять роль пользователя");
+  if (wantsLimit && !can("dealers.setLimit")) throw forbidden("Нет права менять лимит лицензий");
+  if (wantsPlainEdit && !can("dealers.edit")) throw forbidden("Нет права редактировать профиль");
+
+  // Даже с полными правами администратор не меняет собственные роль и статус:
+  // это единственный способ случайно или намеренно запереть себя самого
+  // либо, наоборот, поднять себе привилегии.
+  if (id === session.user.id && (wantsRole || wantsStatus)) {
+    throw forbidden("Собственные роль и статус изменить нельзя");
+  }
 
   const target = await db.user.findUnique({ where: { id }, include: { dealerProfile: true } });
-  if (!target) return NextResponse.json({ error: "Не найдено" }, { status: 404 });
+  if (!target) throw notFound("Представитель не найден");
+  if (target.isSuperAdmin && wantsRole) {
+    throw forbidden("Роль суперадминистратора менять нельзя");
+  }
+
+  const profileUpdate: Record<string, unknown> = {};
+  if (d.profile) {
+    if (wantsPlainEdit) {
+      if (d.profile.firstName !== undefined) profileUpdate.firstName = d.profile.firstName;
+      if (d.profile.lastName !== undefined) profileUpdate.lastName = d.profile.lastName;
+      if (d.profile.middleName !== undefined) profileUpdate.middleName = d.profile.middleName || null;
+      if (d.profile.phone !== undefined) profileUpdate.phone = normalizePhone(d.profile.phone);
+      if (d.profile.organization !== undefined) profileUpdate.organization = d.profile.organization || null;
+      if (d.profile.inn !== undefined) profileUpdate.inn = d.profile.inn || null;
+      if (d.profile.city !== undefined) profileUpdate.city = d.profile.city || null;
+      if (d.profile.region !== undefined) profileUpdate.region = d.profile.region || null;
+      if (d.profile.address !== undefined) profileUpdate.address = d.profile.address || null;
+      if (d.profile.phoneVisibleOnSite !== undefined) {
+        profileUpdate.phoneVisibleOnSite = d.profile.phoneVisibleOnSite;
+      }
+    }
+    if (wantsLimit) profileUpdate.licenseLimit = d.profile.licenseLimit;
+  }
+  if (d.status === "APPROVED") {
+    profileUpdate.approvedById = session.user.id;
+    profileUpdate.approvedAt = new Date();
+    profileUpdate.rejectionReason = null;
+  }
+  if (d.status === "REJECTED" && d.rejectionReason !== undefined) {
+    profileUpdate.rejectionReason = d.rejectionReason;
+  }
 
   await db.user.update({
     where: { id },
     data: {
-      ...(d.status && { status: d.status }),
-      ...(d.roleId && { roleId: d.roleId }),
-      ...(d.profile && {
-        dealerProfile: {
-          update: {
-            ...(d.profile.firstName !== undefined && { firstName: d.profile.firstName }),
-            ...(d.profile.lastName !== undefined && { lastName: d.profile.lastName }),
-            ...(d.profile.middleName !== undefined && { middleName: d.profile.middleName || null }),
-            ...(d.profile.phone !== undefined && { phone: normalizePhone(d.profile.phone) }),
-            ...(d.profile.organization !== undefined && { organization: d.profile.organization || null }),
-            ...(d.profile.inn !== undefined && { inn: d.profile.inn || null }),
-            ...(d.profile.city !== undefined && { city: d.profile.city || null }),
-            ...(d.profile.region !== undefined && { region: d.profile.region || null }),
-            ...(d.profile.address !== undefined && { address: d.profile.address || null }),
-            ...(d.profile.licenseLimit !== undefined && { licenseLimit: d.profile.licenseLimit }),
-            ...(d.profile.phoneVisibleOnSite !== undefined && { phoneVisibleOnSite: d.profile.phoneVisibleOnSite }),
-            ...(d.status === "APPROVED" && { approvedById: session.user.id, approvedAt: new Date(), rejectionReason: null }),
-            ...(d.status === "REJECTED" && d.rejectionReason !== undefined && { rejectionReason: d.rejectionReason }),
-          },
-        },
-      }),
-      ...(d.status === "REJECTED" && d.rejectionReason !== undefined && !d.profile && {
-        dealerProfile: { update: { rejectionReason: d.rejectionReason } },
-      }),
-      ...(d.status === "APPROVED" && !d.profile && {
-        dealerProfile: {
-          update: { approvedById: session.user.id, approvedAt: new Date(), rejectionReason: null },
-        },
-      }),
+      ...(wantsStatus && { status: d.status }),
+      ...(wantsRole && { roleId: d.roleId }),
+      ...(Object.keys(profileUpdate).length > 0 &&
+        target.dealerProfile && { dealerProfile: { update: profileUpdate } }),
     },
   });
 
+  const diff = changedFields(
+    {
+      status: target.status,
+      roleId: target.roleId,
+      licenseLimit: target.dealerProfile?.licenseLimit,
+      ...Object.fromEntries(
+        PLAIN_PROFILE_FIELDS.map((f) => [f, target.dealerProfile?.[f] ?? null]),
+      ),
+    },
+    {
+      ...(wantsStatus && { status: d.status }),
+      ...(wantsRole && { roleId: d.roleId }),
+      ...profileUpdate,
+    },
+  );
+
+  await recordAdminAction({
+    actorId: session.user.id,
+    entity: "DEALER",
+    entityId: id,
+    action: wantsStatus ? `STATUS_${d.status}` : wantsRole ? "ROLE_CHANGED" : "PROFILE_UPDATED",
+    summary: target.email,
+    diff,
+  });
+
+  if (wantsStatus && d.status && d.status !== target.status) {
+    const type =
+      d.status === "APPROVED"
+        ? "DEALER_APPROVED"
+        : d.status === "REJECTED"
+          ? "DEALER_REJECTED"
+          : "DEALER_SUSPENDED";
+    await notifyUser(id, {
+      type,
+      title: `Ваша учётная запись: ${STATUS_LABEL[d.status]}`,
+      body: d.status === "REJECTED" ? (d.rejectionReason ?? null) : null,
+      link: "/dealer",
+    });
+  }
+
   return NextResponse.json({ ok: true });
-}
+});

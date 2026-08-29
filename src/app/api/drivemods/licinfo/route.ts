@@ -2,31 +2,29 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { validateDeviceIdFile } from "@/lib/license-engine";
 import { licInfo, productFullName, DriveModsError, isDriveModsConfigured } from "@/lib/drivemods";
+import { ApiError, badRequest, forbidden, route, unauthenticated } from "@/lib/api";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function POST(req: Request) {
+export const POST = route(async (req: Request) => {
   const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: "UNAUTHENTICATED" }, { status: 401 });
-  if (session.user.status !== "APPROVED") {
-    return NextResponse.json({ error: "Аккаунт не одобрен" }, { status: 403 });
-  }
+  if (!session?.user) throw unauthenticated();
+  if (session.user.status !== "APPROVED") throw forbidden("Аккаунт не одобрен");
   if (!isDriveModsConfigured()) {
-    return NextResponse.json(
-      { error: "Интеграция DRIVEMODS не настроена. Обратитесь к администратору." },
-      { status: 503 },
+    throw new ApiError(
+      "NOT_CONFIGURED",
+      "Интеграция DRIVEMODS не настроена. Обратитесь к администратору.",
     );
   }
 
   const form = await req.formData();
   const file = form.get("device");
-  if (!(file instanceof File)) {
-    return NextResponse.json({ error: "Не загружен файл device_id.bin" }, { status: 400 });
-  }
+  if (!(file instanceof File)) throw badRequest("Не загружен файл device_id.bin");
+
   const buf = Buffer.from(await file.arrayBuffer());
   const validation = validateDeviceIdFile(buf);
-  if (!validation.ok) return NextResponse.json({ error: validation.reason }, { status: 400 });
+  if (!validation.ok) throw badRequest(validation.reason);
 
   try {
     const info = await licInfo(buf.toString("base64"));
@@ -46,6 +44,6 @@ export async function POST(req: Request) {
   } catch (err) {
     const status = err instanceof DriveModsError ? err.status : 502;
     const message = err instanceof Error ? err.message : "Ошибка запроса к DRIVEMODS";
-    return NextResponse.json({ error: message }, { status });
+    throw new ApiError("UPSTREAM", message, status);
   }
-}
+});

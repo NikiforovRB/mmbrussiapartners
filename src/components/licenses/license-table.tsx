@@ -29,7 +29,8 @@ type License = {
   type: string;
   status: "ACTIVE" | "EXPIRED" | "CANCELLED" | "REVOKED" | "DRAFT";
   termStart: Date | string;
-  termEnd: Date | string;
+  /** null — бессрочная лицензия. */
+  termEnd: Date | string | null;
   product?: string | null;
   versionSoftware?: string | null;
   customerFio: string;

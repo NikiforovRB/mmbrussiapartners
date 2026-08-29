@@ -100,7 +100,7 @@ export function RegisterForm() {
       <Input
         label="Пароль *"
         name="password"
-        type="text"
+        type="password"
         required
         placeholder="Минимум 8 символов"
         icon={<Lock className="h-4 w-4" />}

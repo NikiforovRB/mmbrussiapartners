@@ -11,12 +11,7 @@ const nextConfig = {
     ],
   },
   experimental: {
-    optimizePackageImports: [
-      "lucide-react",
-      "framer-motion",
-      "@tanstack/react-table",
-      "@tanstack/react-query",
-    ],
+    optimizePackageImports: ["lucide-react"],
   },
   serverExternalPackages: ["@prisma/client", "bcryptjs", "exceljs"],
   async headers() {
