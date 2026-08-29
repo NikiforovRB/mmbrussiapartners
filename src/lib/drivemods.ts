@@ -94,6 +94,20 @@ export function isDriveModsConfigured(): boolean {
 
 let sessionCache: { token: string; ts: number } | null = null;
 
+/**
+ * DRIVEMODS декодирует did URL-безопасным алфавитом. Обычный base64 его
+ * генератор не разбирает и отвечает 502 «Неверный ответ генератора лицензий»,
+ * поэтому приводим к base64url любой вход: и серверный, и снятый в браузере
+ * через btoa.
+ */
+function toBase64Url(value: string): string {
+  return value
+    .replace(/\s+/g, "")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+}
+
 /** Тело ответа разбираем один раз: сырой текст нужен для лога. */
 async function readBody(res: Response): Promise<{ data: Record<string, unknown>; raw: string }> {
   const raw = await res.text().catch(() => "");
@@ -185,7 +199,7 @@ async function callAuthed(
  * Получение информации о лицензии по файлу device_id.bin (base64).
  */
 export async function licInfo(deviceIdBase64: string): Promise<LicInfoResponse> {
-  const data = await callAuthed("/licinfo", { did: deviceIdBase64 });
+  const data = await callAuthed("/licinfo", { did: toBase64Url(deviceIdBase64) });
   const rawItems = Array.isArray(data.items) ? (data.items as Record<string, unknown>[]) : [];
   return {
     recoverable: Boolean(data.recoverable),
@@ -215,8 +229,20 @@ export type CreateLicParams = {
  * Генерация лицензии.
  */
 export async function createLic(params: CreateLicParams): Promise<CreateLicResponse> {
+  // Пустые bundle и dealer_comment сервис считает отсутствующими параметрами
+  // и отвечает невнятным 400 — отсекаем заранее понятным текстом.
+  const missing = [
+    !params.product && "продукт",
+    !params.bundle && "комплектация (bundle)",
+    !params.dealerComment.trim() && "комментарий дилера",
+    !params.deviceId && "идентификатор устройства",
+  ].filter(Boolean);
+  if (missing.length > 0) {
+    throw new DriveModsError(`DRIVEMODS требует заполнить: ${missing.join(", ")}`, 400);
+  }
+
   const data = await callAuthed("/createlic", {
-    did: params.deviceIdBase64,
+    did: toBase64Url(params.deviceIdBase64),
     product: params.product,
     bundle: params.bundle,
     region: params.region,
