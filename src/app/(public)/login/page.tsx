@@ -19,25 +19,15 @@ export default async function LoginPage() {
           <div className="absolute -top-24 -right-24 h-80 w-80 rounded-full blob"
             style={{ background: "radial-gradient(closest-side, rgba(42,159,255,0.6), transparent)" }} />
           <div className="relative">
-            <div className="text-xs tracking-widest uppercase text-white/60">MMB · Кабинет</div>
+            <div className="text-xs tracking-widest uppercase text-white/60">MMB · Личный кабинет дилера</div>
             <h1 className="mt-3 font-display text-4xl  tracking-tightest leading-tight">
               Лицензии,
               <br /> аналитика
               <br /> и&nbsp;дилеры
             </h1>
             <p className="mt-6 text-white/70 max-w-sm">
-              Полный контроль над сетью представителей и выдачей лицензий по device-id ШГУ.
+              Удобный личный кабинет для генерации и управления лицензиями. Оперативная техподдержка и помощь на всех этапах.
             </p>
-            <div className="mt-10 grid grid-cols-2 gap-3">
-              <div className="rounded-panel surface-glass-dark p-4">
-                <div className="font-display text-2xl">ECO</div>
-                <div className="text-xs text-white/60 mt-1">Базовая лицензия</div>
-              </div>
-              <div className="rounded-panel surface-glass-dark p-4">
-                <div className="font-display text-2xl">FULL</div>
-                <div className="text-xs text-white/60 mt-1">Все опции</div>
-              </div>
-            </div>
           </div>
         </div>
       </div>

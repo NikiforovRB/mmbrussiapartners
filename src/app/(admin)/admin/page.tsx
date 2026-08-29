@@ -4,7 +4,6 @@ import {
   TrendingUp,
   CalendarClock,
   ShieldCheck,
-  Sparkles,
   ArrowUpRight,
 } from "lucide-react";
 import Link from "next/link";
@@ -70,12 +69,8 @@ export default async function AdminDashboard() {
             style={{ background: "radial-gradient(closest-side, rgba(42,159,255,0.6), transparent)" }} />
           <div className="relative grid sm:grid-cols-[1fr_auto] gap-6 items-end">
             <div>
-              <span className="inline-flex items-center gap-2 rounded-panel bg-white/10 px-3.5 py-1.5 text-xs">
-                <Sparkles className="h-3.5 w-3.5 text-bg-accent" /> Сегодня
-              </span>
-              <h2 className="mt-4 font-display text-3xl  tracking-tightest">
-                Управляйте сетью
-                <br /> представителей
+              <h2 className="font-display text-3xl  tracking-tightest">
+                Управление сетью дилеров
               </h2>
               <p className="mt-3 text-white/70 max-w-md">
                 Одобряйте дилеров, редактируйте лицензии, выгружайте отчёты и следите за гео-распределением сети.
