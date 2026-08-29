@@ -51,6 +51,7 @@ export function LicenseTable({
   initialQuery,
   initialStatus,
   initialType,
+  actions,
 }: {
   licenses: License[];
   basePath: string;
@@ -58,6 +59,8 @@ export function LicenseTable({
   initialQuery: string;
   initialStatus: string;
   initialType: string;
+  /** Кнопки страницы (например «Новая лицензия») — встают в один ряд с фильтрами. */
+  actions?: React.ReactNode;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -189,6 +192,7 @@ export function LicenseTable({
           >
             Фильтры
           </Button>
+          {actions}
         </div>
         {showFilters ? (
           <div className="grid md:grid-cols-3 gap-3 mt-3">

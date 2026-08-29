@@ -4,7 +4,6 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { hasPermission } from "@/lib/permissions";
 import { Topbar } from "@/components/cabinet/topbar";
-import { PageHeader } from "@/components/cabinet/page-header";
 import { Button } from "@/components/ui/button";
 import { LicenseTable } from "@/components/licenses/license-table";
 import { LICENSE_LIST_SELECT } from "@/lib/license-list";
@@ -53,17 +52,6 @@ export default async function AdminLicensesPage({
         }}
       />
       <div className="mt-6">
-        <PageHeader
-          title="Лицензии"
-          description="Глобальный список всех лицензий системы. Фильтрация и редактирование."
-          actions={
-            hasPermission(session.user.permissions, "licenses.create", session.user.isSuperAdmin) ? (
-              <Link href="/admin/licenses/new">
-                <Button icon={<Plus className="h-4 w-4" />}>Новая лицензия</Button>
-              </Link>
-            ) : null
-          }
-        />
         <LicenseTable
           licenses={licenses}
           basePath="/admin/licenses"
@@ -71,6 +59,13 @@ export default async function AdminLicensesPage({
           initialQuery={sp.q ?? ""}
           initialStatus={sp.status ?? ""}
           initialType={sp.type ?? ""}
+          actions={
+            hasPermission(session.user.permissions, "licenses.create", session.user.isSuperAdmin) ? (
+              <Link href="/admin/licenses/new">
+                <Button icon={<Plus className="h-4 w-4" />}>Новая лицензия</Button>
+              </Link>
+            ) : null
+          }
         />
         <Pagination
           page={page}

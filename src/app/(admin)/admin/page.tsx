@@ -72,7 +72,7 @@ export default async function AdminDashboard() {
               <h2 className="font-display text-3xl  tracking-tightest">
                 Управление сетью дилеров
               </h2>
-              <p className="mt-3 text-white/70 max-w-md">
+              <p className="mt-3 text-white/70">
                 Одобряйте дилеров, редактируйте лицензии, выгружайте отчёты и следите за гео-распределением сети.
               </p>
             </div>

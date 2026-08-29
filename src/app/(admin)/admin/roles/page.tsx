@@ -1,7 +1,6 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { Topbar } from "@/components/cabinet/topbar";
-import { PageHeader } from "@/components/cabinet/page-header";
 import { RolesManager } from "./roles-manager";
 
 export const dynamic = "force-dynamic";
@@ -26,10 +25,6 @@ export default async function AdminRolesPage() {
         }}
       />
       <div className="mt-6">
-        <PageHeader
-          title="Роли"
-          description="Системная роль 'Администратор' защищена и имеет все права. Создавайте кастомные роли для гибкого распределения доступа."
-        />
         <RolesManager roles={JSON.parse(JSON.stringify(roles))} />
       </div>
     </>

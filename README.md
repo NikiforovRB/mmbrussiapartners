@@ -71,7 +71,7 @@ src/
   components/
     ui/               базовые UI-примитивы (без border, без shadow)
     animations/       Framer Motion обёртки (FadeUp, ScrollReveal, Magnetic)
-    cabinet/          Sidebar, Topbar, PageHeader, CommandPalette
+    cabinet/          Sidebar, Topbar, Pagination, CommandPalette
     licenses/         таблица и редактор лицензий
     reports/          конструктор отчётов
   lib/

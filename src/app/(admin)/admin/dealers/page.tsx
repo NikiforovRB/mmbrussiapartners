@@ -2,7 +2,6 @@ import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { Topbar } from "@/components/cabinet/topbar";
-import { PageHeader } from "@/components/cabinet/page-header";
 import { Tag } from "@/components/ui/tag";
 import { StatusTag } from "@/components/ui/status-tag";
 import { Avatar } from "@/components/ui/avatar";
@@ -72,10 +71,6 @@ export default async function AdminDealersPage({
         }}
       />
       <div className="mt-6">
-        <PageHeader
-          title="Дилерская сеть"
-          description="Просматривайте, одобряйте и редактируйте профили представителей."
-        />
         <DealersFilters initialQuery={sp.q ?? ""} initialStatus={sp.status ?? ""} />
         <div className="mt-5 rounded-panel border border-hairline overflow-hidden">
           <div className="overflow-x-auto scrollbar-clean">
