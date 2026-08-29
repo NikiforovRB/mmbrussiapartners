@@ -104,7 +104,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   return (
     <MobileNavProvider items={items} footer={footer}>
-      <div className="min-h-screen flex bg-bg-default">
+      <div className="cabinet min-h-screen flex bg-bg-default">
         <Sidebar items={items} footer={footer} />
         <div className="flex-1 min-w-0 px-4 lg:px-6 pb-12">{children}</div>
         <CommandPalette />

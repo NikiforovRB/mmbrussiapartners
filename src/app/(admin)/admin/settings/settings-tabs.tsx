@@ -25,7 +25,7 @@ export function SettingsTabs({
           onClick={() => setTab("general")}
           className={cn(
             "rounded-btn px-4 h-10 text-sm transition-colors",
-            tab === "general" ? "bg-accent text-white" : "bg-card-light text-ink-muted hover:text-ink",
+            tab === "general" ? "bg-accent text-white" : "border border-hairline text-ink-muted hover:border-accent hover:text-accent",
           )}
         >
           Основные данные
@@ -35,7 +35,7 @@ export function SettingsTabs({
           onClick={() => setTab("homepage")}
           className={cn(
             "rounded-btn px-4 h-10 text-sm transition-colors",
-            tab === "homepage" ? "bg-accent text-white" : "bg-card-light text-ink-muted hover:text-ink",
+            tab === "homepage" ? "bg-accent text-white" : "border border-hairline text-ink-muted hover:border-accent hover:text-accent",
           )}
         >
           Редактор главной страницы

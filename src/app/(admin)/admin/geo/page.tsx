@@ -74,11 +74,11 @@ export default async function AdminGeoPage() {
 
         <Card>
           <div className="font-display  tracking-tight mb-3">Топ регионов (дилеры)</div>
-          <ul className="space-y-2">
+          <ul className="divide-y divide-hairline border-t border-hairline">
             {dealersByRegion.map((r) => (
-              <li key={r.region ?? "?"} className="flex items-center justify-between rounded-panel bg-white p-3">
+              <li key={r.region ?? "?"} className="flex items-center justify-between py-3">
                 <div className="flex items-center gap-3">
-                  <span className="grid h-8 w-8 place-items-center rounded-panel bg-card-light text-accent">
+                  <span className="grid h-8 w-8 place-items-center rounded-panel bg-surface-muted text-accent">
                     <MapPinned className="h-4 w-4" />
                   </span>
                   <span className="">{r.region ?? "Не указано"}</span>
@@ -90,9 +90,9 @@ export default async function AdminGeoPage() {
         </Card>
         <Card>
           <div className="font-display  tracking-tight mb-3">Топ городов (дилеры)</div>
-          <ul className="space-y-2">
+          <ul className="divide-y divide-hairline border-t border-hairline">
             {dealersByCity.map((r) => (
-              <li key={r.city ?? "?"} className="flex items-center justify-between rounded-panel bg-white p-3">
+              <li key={r.city ?? "?"} className="flex items-center justify-between py-3">
                 <span className="">{r.city ?? "Не указано"}</span>
                 <Tag tone="muted">{r._count._all}</Tag>
               </li>
@@ -101,9 +101,9 @@ export default async function AdminGeoPage() {
         </Card>
         <Card>
           <div className="font-display  tracking-tight mb-3">Топ регионов (лицензии)</div>
-          <ul className="space-y-2">
+          <ul className="divide-y divide-hairline border-t border-hairline">
             {licensesByRegion.map((r) => (
-              <li key={r.region ?? "?"} className="flex items-center justify-between rounded-panel bg-white p-3">
+              <li key={r.region ?? "?"} className="flex items-center justify-between py-3">
                 <span className="">{r.region ?? "Не указано"}</span>
                 <Tag tone="success">{r._count._all}</Tag>
               </li>

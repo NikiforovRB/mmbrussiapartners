@@ -75,15 +75,15 @@ export default async function DealerPaymentsPage() {
             </div>
           </div>
         </Card>
-        <Card>
-          <div className="flex items-center gap-2 mb-4">
+        <div className="rounded-panel border border-hairline overflow-hidden">
+          <div className="flex items-center gap-2 px-5 py-4 border-b border-hairline">
             <CreditCard className="h-4 w-4 text-accent" />
             <div className="font-display  tracking-tight">История платежей</div>
           </div>
           {payments.length === 0 ? (
             <div className="text-sm text-ink-muted py-10 text-center">Пока платежей нет</div>
           ) : (
-            <div className="overflow-x-auto scrollbar-clean rounded-panel bg-white">
+            <div className="overflow-x-auto scrollbar-clean">
               <table className="w-full min-w-[720px] text-sm">
                 <thead>
                   <tr className="text-left text-[11.5px] uppercase tracking-tight text-ink-subtle">
@@ -96,8 +96,8 @@ export default async function DealerPaymentsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {payments.map((p, i) => (
-                    <tr key={p.id} style={i > 0 ? { boxShadow: "inset 0 1px 0 #c1cbe1" } : undefined}>
+                  {payments.map((p) => (
+                    <tr key={p.id} className="transition-colors hover:bg-surface-muted">
                       <td className="px-4 py-3">{formatRuDate(p.createdAt)}</td>
                       <td className="px-4 py-3">{p.description ?? "—"}</td>
                       <td className="px-4 py-3 ">{formatCurrency(Number(p.amount))}</td>
@@ -131,7 +131,7 @@ export default async function DealerPaymentsPage() {
               </table>
             </div>
           )}
-        </Card>
+        </div>
       </div>
     </>
   );

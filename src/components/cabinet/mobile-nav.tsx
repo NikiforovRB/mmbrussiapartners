@@ -76,13 +76,13 @@ export function MobileNavProvider({
               transition={{ type: "spring", stiffness: 420, damping: 38 }}
               className="absolute inset-y-0 left-0 w-[82%] max-w-xs p-3"
             >
-              <div className="flex h-full flex-col rounded-panel bg-card-light p-5">
+              <div className="flex h-full flex-col rounded-panel bg-white border border-hairline p-5">
                 <div className="mb-6 flex items-center justify-between">
                   <Logo height={28} href={undefined} />
                   <button
                     onClick={() => setOpen(false)}
                     aria-label="Закрыть меню"
-                    className="grid h-9 w-9 place-items-center rounded-btn bg-white text-ink-muted hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+                    className="grid h-9 w-9 place-items-center rounded-btn border border-hairline text-ink-muted hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
                   >
                     <X className="h-4 w-4" />
                   </button>
@@ -100,8 +100,8 @@ export function MobileNavProvider({
                         className={cn(
                           "flex items-center gap-3 rounded-panel px-3 py-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2",
                           active
-                            ? "bg-white text-ink"
-                            : "text-ink-muted hover:bg-white/60 hover:text-ink",
+                            ? "bg-surface-muted text-ink"
+                            : "text-ink-muted hover:bg-surface-muted hover:text-ink",
                         )}
                       >
                         <span className="inline-flex w-5 items-center justify-center">{item.icon}</span>
@@ -112,7 +112,7 @@ export function MobileNavProvider({
                   })}
                 </nav>
 
-                {footer ? <div className="mt-4 pt-4">{footer}</div> : null}
+                {footer ? <div className="mt-4 pt-4 border-t border-hairline">{footer}</div> : null}
               </div>
             </motion.aside>
           </div>
@@ -131,7 +131,7 @@ export function MobileNavTrigger({ className }: { className?: string }) {
       onClick={() => setOpen(true)}
       aria-label="Открыть меню"
       className={cn(
-        "grid h-10 w-10 shrink-0 place-items-center rounded-btn bg-card-light text-ink-muted hover:text-ink lg:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2",
+        "grid h-10 w-10 shrink-0 place-items-center rounded-btn border border-hairline text-ink-muted hover:text-ink lg:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2",
         className,
       )}
     >

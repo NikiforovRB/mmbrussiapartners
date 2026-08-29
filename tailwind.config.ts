@@ -20,6 +20,10 @@ const config: Config = {
           dark: "#ffffff",
         },
         line: "#c1cbe1",
+        hairline: "#dddcdb",
+        surface: {
+          muted: "#f7f7f6",
+        },
         accent: {
           DEFAULT: "#2a9fff",
           dark: "#0a78d8",

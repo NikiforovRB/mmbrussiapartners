@@ -61,9 +61,9 @@ export function DayActivity() {
           В этот день действий не было
         </div>
       ) : (
-        <ul className="space-y-2.5">
+        <ul className="divide-y divide-hairline border-t border-hairline">
           {items.map((it) => (
-            <li key={it.id} className="rounded-panel bg-white p-3.5">
+            <li key={it.id} className="py-3">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2 flex-wrap">
                   <Tag tone={actionTone(it.action)}>{actionLabel(it.action)}</Tag>

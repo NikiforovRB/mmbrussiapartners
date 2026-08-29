@@ -157,8 +157,8 @@ export default async function DealerDashboard() {
       </div>
 
       <ScrollReveal>
-        <Card className="mt-6">
-          <div className="flex items-center justify-between mb-5">
+        <div className="mt-6 rounded-panel border border-hairline overflow-hidden">
+          <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-hairline">
             <div>
               <div className="font-display text-lg  tracking-tight">Последние лицензии</div>
               <div className="text-xs text-ink-muted">Самые свежие записи</div>
@@ -175,7 +175,7 @@ export default async function DealerDashboard() {
               <div className="mt-2">Здесь появятся ваши лицензии</div>
             </div>
           ) : (
-            <div className="overflow-hidden rounded-panel bg-white">
+            <div className="overflow-x-auto scrollbar-clean">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-left text-[12px] uppercase tracking-tight text-ink-subtle">
@@ -187,8 +187,8 @@ export default async function DealerDashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {recent.map((l, i) => (
-                    <tr key={l.id} className={i > 0 ? "border-t border-line/0" : ""}>
+                  {recent.map((l) => (
+                    <tr key={l.id} className="transition-colors hover:bg-surface-muted">
                       <td className="px-4 py-3 ">{l.number}</td>
                       <td className="px-4 py-3">
                         <Tag tone={l.type === "Генерация" ? "accent" : "neutral"}>{l.type}</Tag>
@@ -204,7 +204,7 @@ export default async function DealerDashboard() {
               </table>
             </div>
           )}
-        </Card>
+        </div>
       </ScrollReveal>
 
       <div className="grid lg:grid-cols-2 gap-4 mt-6">
@@ -224,7 +224,7 @@ export default async function DealerDashboard() {
                       <span className="text-ink-muted">{s.label}</span>
                       <span className="tracking-tight">{s.count}</span>
                     </div>
-                    <div className="h-2 rounded-full bg-card-light overflow-hidden">
+                    <div className="h-2 rounded-full bg-surface-muted overflow-hidden">
                       <div
                         className="h-full rounded-full bg-accent"
                         style={{ width: `${Math.round((s.count / totalForBars) * 100)}%` }}
@@ -255,9 +255,9 @@ export default async function DealerDashboard() {
 
 function KpiCard({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return (
-    <div className="rounded-panel bg-card-light p-5 hover-lift">
+    <div className="rounded-panel border border-hairline p-5 transition-colors hover:border-accent/40">
       <div className="flex items-center gap-2.5 text-ink-muted">
-        <span className="grid h-9 w-9 place-items-center rounded-panel bg-white text-accent">{icon}</span>
+        <span className="grid h-9 w-9 place-items-center rounded-panel bg-surface-muted text-accent">{icon}</span>
         <div className="text-xs">{label}</div>
       </div>
       <div className="mt-3 font-display text-2xl  tracking-tight">{value}</div>

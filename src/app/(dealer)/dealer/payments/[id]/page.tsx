@@ -83,7 +83,7 @@ export default async function DealerPaymentPage({
                   <Button icon={<ExternalLink className="h-4 w-4" />}>Перейти к оплате</Button>
                 </a>
               ) : (
-                <div className="rounded-panel bg-white p-4 text-sm">
+                <div className="rounded-panel border border-hairline p-4 text-sm">
                   <div className="font-display tracking-tight mb-2">Как оплатить</div>
                   <p className="text-ink-muted">
                     Переведите сумму по реквизитам MMB RUSSIA, указав в назначении платежа номер счёта{" "}

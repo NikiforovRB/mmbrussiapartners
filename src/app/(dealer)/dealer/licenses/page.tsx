@@ -7,6 +7,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { fioFromParts } from "@/lib/utils";
 import { LicenseTable } from "@/components/licenses/license-table";
+import { LICENSE_LIST_SELECT } from "@/lib/license-list";
 import { Pagination, parsePage } from "@/components/cabinet/pagination";
 import { LICENSE_TYPES } from "@/lib/license-options";
 
@@ -35,6 +36,7 @@ export default async function DealerLicensesPage({
     db.license.count({ where }),
     db.license.findMany({
       where,
+      select: LICENSE_LIST_SELECT,
       orderBy: { createdAt: "desc" },
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,

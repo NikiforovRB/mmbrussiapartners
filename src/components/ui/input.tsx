@@ -26,11 +26,11 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(function Inp
       ) : null}
       <div
         className={cn(
-          "field-control group relative flex items-center gap-2 rounded-panel px-4 h-12 transition-colors",
-          "focus-within:ring-2 focus-within:ring-accent focus-within:ring-offset-2 focus-within:ring-offset-white",
-          tone === "light" ? "bg-card-light" : "bg-white/10 text-white",
-          error && "bg-[#fde7e7]",
-          props.disabled && "opacity-60 cursor-not-allowed",
+          "field-control group relative flex items-center gap-2 rounded-panel px-4 h-12 border transition-colors",
+          "focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/20",
+          tone === "light" ? "bg-white border-hairline" : "bg-white/10 border-white/20 text-white",
+          error && "border-danger",
+          props.disabled && "bg-surface-muted text-ink-muted cursor-not-allowed",
         )}
       >
         {icon ? <span className="text-ink-subtle">{icon}</span> : null}

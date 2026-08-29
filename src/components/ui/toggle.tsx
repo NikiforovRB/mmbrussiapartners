@@ -30,7 +30,7 @@ export function Toggle({ checked, onChange, disabled, label, description, classN
         onClick={() => onChange(!checked)}
         className={cn(
           "relative h-7 w-12 shrink-0 rounded-full transition-colors duration-300",
-          checked ? "bg-accent" : "bg-[#cfd5e6]",
+          checked ? "bg-accent" : "bg-hairline",
         )}
       >
         <motion.span

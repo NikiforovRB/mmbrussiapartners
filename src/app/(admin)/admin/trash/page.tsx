@@ -43,11 +43,11 @@ export default async function AdminTrashPage({
         user={{ name: me?.email ?? "Admin", email: me?.email ?? "", role: me?.role.name ?? "Admin" }}
       />
       <div className="mt-6">
-        <Card>
+        <div className="rounded-panel border border-hairline overflow-hidden">
           {deleted.length === 0 ? (
             <div className="text-sm text-ink-muted py-10 text-center">Корзина пуста</div>
           ) : (
-            <div className="overflow-x-auto scrollbar-clean rounded-panel bg-white">
+            <div className="overflow-x-auto scrollbar-clean">
               <table className="w-full min-w-[640px] text-sm">
                 <thead>
                   <tr className="text-left text-[11.5px] uppercase tracking-tight text-ink-subtle">
@@ -59,8 +59,8 @@ export default async function AdminTrashPage({
                   </tr>
                 </thead>
                 <tbody>
-                  {deleted.map((l, i) => (
-                    <tr key={l.id} style={i > 0 ? { boxShadow: "inset 0 1px 0 #c1cbe1" } : undefined}>
+                  {deleted.map((l) => (
+                    <tr key={l.id} className="transition-colors hover:bg-surface-muted">
                       <td className="px-4 py-3 ">{l.number}</td>
                       <td className="px-4 py-3">
                         <Tag tone="muted">{l.type}</Tag>
@@ -78,8 +78,8 @@ export default async function AdminTrashPage({
               </table>
             </div>
           )}
-          <Pagination page={page} pageSize={PAGE_SIZE} total={total} basePath="/admin/trash" />
-        </Card>
+        </div>
+        <Pagination page={page} pageSize={PAGE_SIZE} total={total} basePath="/admin/trash" />
       </div>
     </>
   );

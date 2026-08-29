@@ -4,12 +4,12 @@ import { cn } from "@/lib/utils";
 type Tone = "neutral" | "accent" | "success" | "warning" | "danger" | "muted" | "dark";
 
 const toneMap: Record<Tone, string> = {
-  neutral: "bg-card-light text-ink",
+  neutral: "border border-hairline text-ink",
   accent: "bg-[#dcefff] text-[#0a78d8]",
   success: "bg-[#dcfce7] text-[#16803d]",
   warning: "bg-[#fef3c7] text-[#a16207]",
   danger: "bg-[#fee2e2] text-[#991b1b]",
-  muted: "bg-[#eaeef6] text-ink-muted",
+  muted: "bg-surface-muted text-ink-muted",
   dark: "bg-bg-dark text-white",
 };
 
