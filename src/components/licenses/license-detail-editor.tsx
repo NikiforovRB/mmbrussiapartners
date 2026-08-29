@@ -24,8 +24,6 @@ import { Tag } from "@/components/ui/tag";
 import { Modal } from "@/components/ui/modal";
 import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
-import { DatePicker } from "@/components/ui/date-picker";
 import { formatRuDateTime, formatRuDate } from "@/lib/dates";
 import { usePermissions } from "@/hooks/use-permissions";
 import { LICENSE_PLATFORM_OPTIONS } from "@/lib/license-options";
@@ -68,16 +66,6 @@ type CancellationRequestInfo = {
   reason: string;
   reviewNote: string | null;
   createdAt: string | Date;
-};
-
-const FEATURE_LABELS: Record<string, string> = {
-  carplay: "CarPlay",
-  android_auto: "Android Auto",
-  navi: "Навигация",
-  voice: "Голосовое управление",
-  hidden_menu: "Скрытые функции",
-  dvr: "Видеорегистратор",
-  hud: "HUD",
 };
 
 export function LicenseDetailEditor({
@@ -324,7 +312,7 @@ export function LicenseDetailEditor({
         </Card>
 
         <Card>
-          <div className="font-display text-lg  tracking-tight mb-4">Тип и срок</div>
+          <div className="font-display text-lg  tracking-tight mb-4">Тип лицензии</div>
           <div className="grid sm:grid-cols-3 gap-3">
             <Select
               label="Тип"
@@ -336,18 +324,6 @@ export function LicenseDetailEditor({
                 { value: "FULL", label: "FULL" },
                 { value: "CUSTOM", label: "CUSTOM" },
               ]}
-            />
-            <DatePicker
-              label="Начало"
-              disabled={!canEdit}
-              value={data.termStart ? new Date(data.termStart) : null}
-              onChange={(d) => d && setData({ ...data, termStart: d })}
-            />
-            <DatePicker
-              label="Окончание"
-              disabled={!canEdit}
-              value={data.termEnd ? new Date(data.termEnd) : null}
-              onChange={(d) => d && setData({ ...data, termEnd: d })}
             />
             <Select
               label="Тип платформы"
@@ -365,26 +341,10 @@ export function LicenseDetailEditor({
                 onChange={(v) => setData({ ...data, status: v as LicenseShape["status"] })}
                 options={[
                   { value: "ACTIVE", label: "Активна" },
-                  { value: "EXPIRED", label: "Истекла" },
                   { value: "CANCELLED", label: "Аннулирована" },
-                  { value: "REVOKED", label: "Отозвана" },
-                  { value: "DRAFT", label: "Черновик" },
                 ]}
               />
             ) : null}
-          </div>
-          <div className="divider my-5" />
-          <div className="font-display  tracking-tight mb-3">Включённые функции</div>
-          <div className="grid sm:grid-cols-2 gap-3">
-            {Object.keys(FEATURE_LABELS).map((k) => (
-              <Checkbox
-                key={k}
-                checked={!!data.features[k]}
-                disabled={!canEdit}
-                onChange={(v) => setData({ ...data, features: { ...data.features, [k]: v } })}
-                label={FEATURE_LABELS[k]}
-              />
-            ))}
           </div>
         </Card>
 
