@@ -5,7 +5,6 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { hasPermission } from "@/lib/permissions";
 import { Topbar } from "@/components/cabinet/topbar";
-import { PageHeader } from "@/components/cabinet/page-header";
 import { Card } from "@/components/ui/card";
 import { Tag } from "@/components/ui/tag";
 import { StatusTag } from "@/components/ui/status-tag";
@@ -73,11 +72,6 @@ export default async function CancellationRequestsPage({
         user={{ name: me?.email ?? "Admin", email: me?.email ?? "", role: me?.role.name ?? "Admin" }}
       />
       <div className="mt-6">
-        <PageHeader
-          title="Заявки на аннулирование"
-          description="Одобрите или отклоните запросы представителей. Одобрение аннулирует лицензию."
-        />
-
         <div className="mb-5 flex flex-wrap gap-2">
           {tabs.map((t) => (
             <Link

@@ -1,5 +1,4 @@
 import { Topbar } from "@/components/cabinet/topbar";
-import { PageHeader } from "@/components/cabinet/page-header";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import Link from "next/link";
@@ -57,15 +56,6 @@ export default async function DealerLicensesPage({
         user={{ name: fio || user.email, email: user.email, role: user.role.name }}
       />
       <div className="mt-6">
-        <PageHeader
-          title="Лицензии"
-          description="Создавайте, редактируйте, аннулируйте и скачивайте лицензии."
-          actions={
-            <Link href="/dealer/licenses/new">
-              <Button icon={<Plus className="h-4 w-4" />}>Новая лицензия</Button>
-            </Link>
-          }
-        />
         <LicenseTable
           licenses={licenses}
           basePath="/dealer/licenses"
@@ -73,6 +63,11 @@ export default async function DealerLicensesPage({
           initialQuery={sp.q ?? ""}
           initialStatus={sp.status ?? ""}
           initialType={sp.type ?? ""}
+          actions={
+            <Link href="/dealer/licenses/new">
+              <Button icon={<Plus className="h-4 w-4" />}>Новая лицензия</Button>
+            </Link>
+          }
         />
         <Pagination
           page={page}
