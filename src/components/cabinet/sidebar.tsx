@@ -23,7 +23,7 @@ export function Sidebar({
 }) {
   const pathname = usePathname();
   return (
-    <aside className="hidden lg:flex flex-col w-64 shrink-0 sticky top-0 h-screen border-r border-hairline">
+    <aside className="hidden lg:flex flex-col w-64 shrink-0 sticky top-0 h-screen bg-card-light">
       <div className="flex flex-col flex-1 px-4 py-5">
         <div className="px-2 mb-6">
           <Logo height={30} />
@@ -39,14 +39,14 @@ export function Sidebar({
                 aria-current={active ? "page" : undefined}
                 className={cn(
                   "relative flex items-center gap-3 rounded-panel px-3 py-2.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2",
-                  active ? "text-ink" : "text-ink-muted hover:bg-surface-muted hover:text-ink",
+                  active ? "text-ink" : "text-ink-muted hover:bg-white/60 hover:text-ink",
                 )}
               >
                 {active ? (
                   <motion.span
                     layoutId="sidebar-active"
                     transition={{ type: "spring", stiffness: 460, damping: 30 }}
-                    className="absolute inset-0 rounded-panel bg-surface-muted"
+                    className="absolute inset-0 rounded-panel bg-white"
                     style={{ zIndex: 0 }}
                   />
                 ) : null}
@@ -58,7 +58,7 @@ export function Sidebar({
           })}
         </nav>
 
-        {footer ? <div className="mt-4 pt-4 border-t border-hairline">{footer}</div> : null}
+        {footer ? <div className="mt-4 pt-4">{footer}</div> : null}
       </div>
     </aside>
   );
