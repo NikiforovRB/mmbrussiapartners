@@ -3,10 +3,13 @@ import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { hasPermission } from "@/lib/permissions";
+import { badRequest, forbidden, notFound, parseBody, route, unauthenticated } from "@/lib/api";
 import {
   notifyAdminsLicenseCancelled,
   notifyDealerCancellationReviewed,
 } from "@/lib/notifications";
+import { notifyUser } from "@/lib/app-notifications";
+import { syncLicenseSlots } from "@/lib/license-slots";
 
 export const runtime = "nodejs";
 
@@ -15,94 +18,77 @@ const schema = z.object({
   note: z.string().optional().nullable(),
 });
 
-export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+export const POST = route(async (req: Request, ctx: { params: Promise<{ id: string }> }) => {
   const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: "UNAUTHENTICATED" }, { status: 401 });
+  if (!session?.user) throw unauthenticated();
+  if (!hasPermission(session.user.permissions, "licenses.cancel", session.user.isSuperAdmin)) {
+    throw forbidden();
+  }
 
-  const canReview =
-    session.user.isSuperAdmin ||
-    hasPermission(session.user.permissions, "licenses.cancel", session.user.isSuperAdmin);
-  if (!canReview) return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
-
-  const { id } = await params;
-  const body = await req.json().catch(() => ({}));
-  const parsed = schema.safeParse(body);
-  if (!parsed.success) return NextResponse.json({ error: "Некорректные данные" }, { status: 400 });
-  const { action, note } = parsed.data;
+  const { id } = await ctx.params;
+  const { action, note } = await parseBody(req, schema);
 
   const request = await db.cancellationRequest.findUnique({
     where: { id },
     include: { license: { include: { dealer: true } } },
   });
-  if (!request) return NextResponse.json({ error: "Заявка не найдена" }, { status: 404 });
-  if (request.status !== "PENDING") {
-    return NextResponse.json({ error: "Заявка уже рассмотрена" }, { status: 400 });
-  }
+  if (!request) throw notFound("Заявка не найдена");
+  if (request.status !== "PENDING") throw badRequest("Заявка уже рассмотрена");
 
-  if (action === "reject") {
-    await db.cancellationRequest.update({
-      where: { id },
-      data: {
-        status: "REJECTED",
-        reviewedById: session.user.id,
-        reviewNote: note || null,
-        reviewedAt: new Date(),
-      },
+  const approved = action === "approve";
+  const review = {
+    status: approved ? ("APPROVED" as const) : ("REJECTED" as const),
+    reviewedById: session.user.id,
+    reviewNote: note || null,
+    reviewedAt: new Date(),
+  };
+
+  if (approved) {
+    await db.$transaction(async (tx) => {
+      await tx.cancellationRequest.update({ where: { id }, data: review });
+      if (request.license.status === "ACTIVE") {
+        await tx.license.update({
+          where: { id: request.licenseId },
+          data: {
+            status: "CANCELLED",
+            cancelledAt: new Date(),
+            cancellationReason: request.reason,
+          },
+        });
+        await tx.licenseAuditLog.create({
+          data: {
+            licenseId: request.licenseId,
+            actorId: session.user.id,
+            action: "CANCELLED",
+            reason: request.reason,
+          },
+        });
+      }
     });
-    await notifyDealerCancellationReviewed({
+    await syncLicenseSlots(request.license.dealerId);
+    await notifyAdminsLicenseCancelled({
       licenseNumber: request.license.number,
       dealerEmail: request.license.dealer.email,
-      approved: false,
-      note: note || null,
-      userId: request.license.dealerId,
+      reason: request.reason,
+      by: session.user.email,
     });
-    return NextResponse.json({ ok: true });
+  } else {
+    await db.cancellationRequest.update({ where: { id }, data: review });
   }
 
-  // approve → cancel the license
-  await db.$transaction(async (tx) => {
-    await tx.cancellationRequest.update({
-      where: { id },
-      data: {
-        status: "APPROVED",
-        reviewedById: session.user.id,
-        reviewNote: note || null,
-        reviewedAt: new Date(),
-      },
-    });
-    if (request.license.status === "ACTIVE") {
-      await tx.license.update({
-        where: { id: request.licenseId },
-        data: {
-          status: "CANCELLED",
-          cancelledAt: new Date(),
-          cancellationReason: request.reason,
-        },
-      });
-      await tx.licenseAuditLog.create({
-        data: {
-          licenseId: request.licenseId,
-          actorId: session.user.id,
-          action: "CANCELLED",
-          reason: request.reason,
-        },
-      });
-    }
-  });
-
-  await notifyAdminsLicenseCancelled({
-    licenseNumber: request.license.number,
-    dealerEmail: request.license.dealer.email,
-    reason: request.reason,
-    by: session.user.email,
-  });
   await notifyDealerCancellationReviewed({
     licenseNumber: request.license.number,
     dealerEmail: request.license.dealer.email,
-    approved: true,
+    approved,
     note: note || null,
     userId: request.license.dealerId,
   });
+  await notifyUser(request.requestedById, {
+    type: "CANCELLATION_REVIEWED",
+    title: `Заявка по лицензии ${request.license.number} ${approved ? "одобрена" : "отклонена"}`,
+    body: note || null,
+    link: `/dealer/licenses/${request.licenseId}`,
+  });
 
   return NextResponse.json({ ok: true });
-}
+});

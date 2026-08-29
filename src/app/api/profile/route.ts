@@ -2,15 +2,16 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { parseBody, route, unauthenticated } from "@/lib/api";
 import { normalizePhone } from "@/lib/utils";
 
 export const runtime = "nodejs";
 
 const schema = z.object({
-  firstName: z.string().min(1).optional(),
-  lastName: z.string().min(1).optional(),
+  firstName: z.string().min(1, "Укажите имя").optional(),
+  lastName: z.string().min(1, "Укажите фамилию").optional(),
   middleName: z.string().nullable().optional(),
-  phone: z.string().min(6).optional(),
+  phone: z.string().min(6, "Укажите телефон").optional(),
   organization: z.string().nullable().optional(),
   inn: z.string().nullable().optional(),
   city: z.string().nullable().optional(),
@@ -22,14 +23,11 @@ const schema = z.object({
   telegramChatId: z.string().nullable().optional(),
 });
 
-export async function PATCH(req: Request) {
+export const PATCH = route(async (req: Request) => {
   const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: "UNAUTHENTICATED" }, { status: 401 });
+  if (!session?.user) throw unauthenticated();
 
-  const body = await req.json().catch(() => ({}));
-  const parsed = schema.safeParse(body);
-  if (!parsed.success) return NextResponse.json({ error: "Некорректные данные" }, { status: 400 });
-  const d = parsed.data;
+  const d = await parseBody(req, schema);
 
   await db.user.update({
     where: { id: session.user.id },
@@ -55,4 +53,4 @@ export async function PATCH(req: Request) {
   });
 
   return NextResponse.json({ ok: true });
-}
+});

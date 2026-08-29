@@ -11,8 +11,11 @@ import { Logo } from "@/components/brand/logo";
 import { Sidebar, type SidebarItem } from "@/components/cabinet/sidebar";
 import { MobileNavProvider } from "@/components/cabinet/mobile-nav";
 import { CommandPalette } from "@/components/cabinet/command-palette";
+import { CabinetUserProvider } from "@/components/cabinet/cabinet-user";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { fioFromParts } from "@/lib/utils";
+import { getUserAvatarUrl } from "@/lib/user-avatar";
 
 export default async function DealerLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
@@ -57,14 +60,37 @@ export default async function DealerLayout({ children }: { children: React.React
     </div>
   );
 
+  const [avatarUrl, unreadCount] = await Promise.all([
+    getUserAvatarUrl(user.id),
+    db.appNotification.count({ where: { userId: user.id, readAt: null } }),
+  ]);
+
   return (
-    <MobileNavProvider items={items} footer={footer}>
-      <div className="cabinet min-h-screen flex bg-bg-default">
-        <Sidebar items={items} footer={footer} />
-        <div className="flex-1 min-w-0 px-4 lg:px-6 pb-12">{children}</div>
-        <CommandPalette />
-      </div>
-    </MobileNavProvider>
+    <CabinetUserProvider
+      value={{
+        name:
+          fioFromParts({
+            firstName: user.dealerProfile?.firstName,
+            lastName: user.dealerProfile?.lastName,
+            middleName: user.dealerProfile?.middleName,
+          }) || user.email,
+        email: user.email,
+        role: user.role.name,
+        avatarUrl,
+        basePath: "/dealer",
+        unreadCount,
+        permissions: user.role.permissions,
+        isSuperAdmin: user.isSuperAdmin,
+      }}
+    >
+      <MobileNavProvider items={items} footer={footer}>
+        <div className="cabinet min-h-screen flex bg-bg-default">
+          <Sidebar items={items} footer={footer} />
+          <div className="flex-1 min-w-0 px-4 lg:px-6 pb-12">{children}</div>
+          <CommandPalette />
+        </div>
+      </MobileNavProvider>
+    </CabinetUserProvider>
   );
 }
 

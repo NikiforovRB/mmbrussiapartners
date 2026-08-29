@@ -22,18 +22,25 @@ export default async function DealerPaymentsPage() {
   });
   if (!user) redirect("/login");
 
-  const payments = await db.payment.findMany({
-    where: { dealerId: user.id },
-    orderBy: { createdAt: "desc" },
-    take: 100,
-  });
+  // Итоги считает база: складывать первые 100 строк списка — значит показать
+  // неверную сумму, как только платежей станет больше.
+  const [payments, totals] = await Promise.all([
+    db.payment.findMany({
+      where: { dealerId: user.id },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+    }),
+    db.payment.groupBy({
+      by: ["status"],
+      where: { dealerId: user.id, status: { in: ["PAID", "PENDING"] } },
+      _sum: { amount: true },
+    }),
+  ]);
 
-  const paid = payments
-    .filter((p) => p.status === "PAID")
-    .reduce((sum, p) => sum + Number(p.amount), 0);
-  const awaiting = payments
-    .filter((p) => p.status === "PENDING")
-    .reduce((sum, p) => sum + Number(p.amount), 0);
+  const sumFor = (status: "PAID" | "PENDING") =>
+    Number(totals.find((t) => t.status === status)?._sum.amount ?? 0);
+  const paid = sumFor("PAID");
+  const awaiting = sumFor("PENDING");
 
   const provider = getPaymentProvider();
 

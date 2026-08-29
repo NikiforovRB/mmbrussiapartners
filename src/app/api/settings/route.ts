@@ -3,39 +3,42 @@ import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { hasPermission } from "@/lib/permissions";
+import { forbidden, parseBody, route, unauthenticated } from "@/lib/api";
+import { recordAdminAction, changedFields } from "@/lib/admin-audit";
 
 export const runtime = "nodejs";
 
 const schema = z.object({
-  phone: z.string().min(3),
-  email: z.string().email(),
+  phone: z.string().min(3, "Укажите телефон"),
+  email: z.string().email("Некорректный email"),
   address: z.string().nullable().optional(),
 });
 
-export async function PATCH(req: Request) {
+export const PATCH = route(async (req: Request) => {
   const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: "UNAUTHENTICATED" }, { status: 401 });
+  if (!session?.user) throw unauthenticated();
   if (!hasPermission(session.user.permissions, "settings.edit", session.user.isSuperAdmin)) {
-    return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
+    throw forbidden();
   }
-  const body = await req.json().catch(() => ({}));
-  const parsed = schema.safeParse(body);
-  if (!parsed.success) return NextResponse.json({ error: "Некорректные данные" }, { status: 400 });
+
+  const data = await parseBody(req, schema);
+  const before = await db.companySettings.findUnique({ where: { id: "singleton" } });
+  const next = { phone: data.phone, email: data.email, address: data.address ?? null };
 
   await db.companySettings.upsert({
     where: { id: "singleton" },
-    update: {
-      phone: parsed.data.phone,
-      email: parsed.data.email,
-      address: parsed.data.address ?? null,
-    },
-    create: {
-      id: "singleton",
-      phone: parsed.data.phone,
-      email: parsed.data.email,
-      address: parsed.data.address ?? null,
-      publicPhones: [],
-    },
+    update: next,
+    create: { id: "singleton", ...next, publicPhones: [] },
   });
+
+  await recordAdminAction({
+    actorId: session.user.id,
+    entity: "SETTINGS",
+    entityId: "company",
+    action: "UPDATED",
+    summary: "Контакты компании",
+    diff: before ? changedFields(before, next) : { ...next },
+  });
+
   return NextResponse.json({ ok: true });
-}
+});

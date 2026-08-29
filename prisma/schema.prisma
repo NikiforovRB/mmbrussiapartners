@@ -44,6 +44,30 @@ enum NotificationStatus {
   FAILED
 }
 
+/** Тип события в колокольчике кабинета. */
+enum AppNotificationType {
+  DEALER_REGISTERED
+  DEALER_APPROVED
+  DEALER_REJECTED
+  DEALER_SUSPENDED
+  LICENSE_ISSUED
+  LICENSE_CANCELLED
+  LICENSE_REVOKED
+  CANCELLATION_REQUESTED
+  CANCELLATION_REVIEWED
+  PAYMENT_CREATED
+  PAYMENT_PAID
+  RECEIPT_FAILED
+}
+
+/** Область, к которой относится действие в журнале аудита. */
+enum AuditEntity {
+  DEALER
+  ROLE
+  PAYMENT
+  SETTINGS
+}
+
 enum PaymentStatus {
   PENDING
   PAID
@@ -97,6 +121,8 @@ model User {
   confirmedPayments     Payment[]      @relation("ConfirmedPayments")
   uploadedFiles         FileObject[]
   notifications         NotificationLog[]
+  appNotifications      AppNotification[]
+  adminAuditActions     AdminAuditLog[]  @relation("AdminAuditActor")
   sessions              Session[]
   requestedCancellations CancellationRequest[] @relation("RequestedCancellations")
   reviewedCancellations  CancellationRequest[] @relation("ReviewedCancellations")
@@ -164,7 +190,8 @@ model License {
   status                LicenseStatus @default(DRAFT)
   features              Json          @default("{}")
   termStart             DateTime
-  termEnd               DateTime
+  /** null — бессрочная лицензия; крон истечения такие не трогает. */
+  termEnd               DateTime?
   deviceId              String
   deviceIdKey           String?
   licenseKey            String?
@@ -203,6 +230,10 @@ model License {
   @@index([customerPhone])
   @@index([region])
   @@index([deletedAt])
+  // Списки лицензий всегда сортируются по createdAt: в админке в пределах
+  // «не удалённых», в кабинете дилера — в пределах своего dealerId.
+  @@index([deletedAt, createdAt])
+  @@index([dealerId, createdAt])
 }
 
 model LicenseAuditLog {
@@ -220,6 +251,8 @@ model LicenseAuditLog {
   @@index([licenseId])
   @@index([actorId])
   @@index([action])
+  @@index([createdAt])
+  @@index([actorId, createdAt])
 }
 
 model Payment {
@@ -243,6 +276,12 @@ model Payment {
   receiptUrl       String?
   fiscalDocNumber  String?
   receiptError     String?
+  /**
+   * Номер попытки пробития. Входит в external_id, поэтому у повторной
+   * отправки после отказа кассы будет новый идентификатор документа,
+   * а у параллельных вызовов одной попытки — общий, и АТОЛ отсечёт дубль.
+   */
+  receiptAttempt   Int           @default(0)
 
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
@@ -254,6 +293,8 @@ model Payment {
   @@index([dealerId])
   @@index([status])
   @@index([receiptStatus])
+  @@index([createdAt])
+  @@index([dealerId, createdAt])
 }
 
 model CancellationRequest {
@@ -275,6 +316,7 @@ model CancellationRequest {
   @@index([status])
   @@index([licenseId])
   @@index([requestedById])
+  @@index([status, createdAt])
 }
 
 model NotificationLog {
@@ -293,6 +335,51 @@ model NotificationLog {
   @@index([status])
   @@index([userId])
   @@index([channel])
+}
+
+/**
+ * Событие для колокольчика в кабинете.
+ *
+ * Отдельно от NotificationLog: тот хранит попытки доставки писем и телеграма,
+ * а здесь лежит то, что пользователь видит внутри портала, вместе с признаком
+ * прочтения.
+ */
+model AppNotification {
+  id        String              @id @default(cuid())
+  userId    String
+  type      AppNotificationType
+  title     String
+  body      String?
+  /** Куда вести по клику, например /admin/dealers/<id>. */
+  link      String?
+  readAt    DateTime?
+  createdAt DateTime            @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([userId, readAt])
+}
+
+/**
+ * Журнал действий администратора вне карточки лицензии: представители,
+ * роли, платежи, настройки. По лицензиям история пишется в LicenseAuditLog.
+ */
+model AdminAuditLog {
+  id         String      @id @default(cuid())
+  actorId    String
+  entity     AuditEntity
+  entityId   String
+  action     String
+  summary    String?
+  diff       Json?
+  createdAt  DateTime    @default(now())
+
+  actor User @relation("AdminAuditActor", fields: [actorId], references: [id])
+
+  @@index([entity, entityId])
+  @@index([actorId, createdAt])
+  @@index([createdAt])
 }
 
 model EmailTemplate {

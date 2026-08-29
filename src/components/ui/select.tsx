@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { motion, AnimatePresence } from "framer-motion";
 import { Check, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -61,46 +60,43 @@ export function Select<T extends string = string>({
           )}
         >
           <span className="truncate">{current?.label ?? placeholder}</span>
-          <motion.span animate={{ rotate: open ? 180 : 0 }} transition={{ duration: 0.2 }}>
-            <ChevronDown className="h-4 w-4 text-ink-subtle" />
-          </motion.span>
+          <ChevronDown
+            className={cn(
+              "h-4 w-4 text-ink-subtle transition-transform duration-200",
+              open && "rotate-180",
+            )}
+          />
         </button>
-        <AnimatePresence>
-          {open ? (
-            <motion.div
-              initial={{ opacity: 0, y: -6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              transition={{ duration: 0.18 }}
-              className="absolute z-30 mt-2 w-full rounded-panel bg-white border border-hairline p-2 max-h-72 overflow-auto scrollbar-clean"
-              style={{ boxShadow: "0 24px 60px -24px rgba(11,16,32,0.18)" }}
-            >
-              {options.map((opt) => {
-                const active = opt.value === value;
-                return (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => {
-                      onChange(opt.value);
-                      setOpen(false);
-                    }}
-                    className={cn(
-                      "w-full flex items-center justify-between gap-3 rounded-panel px-3 py-2.5 text-sm text-left transition-colors",
-                      active ? "bg-surface-muted" : "hover:bg-surface-muted",
-                    )}
-                  >
-                    <span className="flex-1">
-                      <span className="block">{opt.label}</span>
-                      {opt.hint ? <span className="block text-xs text-ink-subtle">{opt.hint}</span> : null}
-                    </span>
-                    {active ? <Check className="h-4 w-4 text-accent" /> : null}
-                  </button>
-                );
-              })}
-            </motion.div>
-          ) : null}
-        </AnimatePresence>
+        {open ? (
+          <div
+            className="absolute z-30 mt-2 w-full rounded-panel bg-white border border-hairline p-2 max-h-72 overflow-auto scrollbar-clean animate-dropdown-in"
+            style={{ boxShadow: "0 24px 60px -24px rgba(11,16,32,0.18)" }}
+          >
+            {options.map((opt) => {
+              const active = opt.value === value;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => {
+                    onChange(opt.value);
+                    setOpen(false);
+                  }}
+                  className={cn(
+                    "w-full flex items-center justify-between gap-3 rounded-panel px-3 py-2.5 text-sm text-left transition-colors",
+                    active ? "bg-surface-muted" : "hover:bg-surface-muted",
+                  )}
+                >
+                  <span className="flex-1">
+                    <span className="block">{opt.label}</span>
+                    {opt.hint ? <span className="block text-xs text-ink-subtle">{opt.hint}</span> : null}
+                  </span>
+                  {active ? <Check className="h-4 w-4 text-accent" /> : null}
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
       </div>
     </div>
   );

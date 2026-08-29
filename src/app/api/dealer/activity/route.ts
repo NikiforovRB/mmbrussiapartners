@@ -1,20 +1,19 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { badRequest, route, unauthenticated } from "@/lib/api";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET(req: Request) {
+export const GET = route(async (req: Request) => {
   const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: "UNAUTHENTICATED" }, { status: 401 });
+  if (!session?.user) throw unauthenticated();
 
   const { searchParams } = new URL(req.url);
   const dateStr = searchParams.get("date");
   const base = dateStr ? new Date(`${dateStr}T00:00:00`) : new Date();
-  if (Number.isNaN(base.getTime())) {
-    return NextResponse.json({ error: "Некорректная дата" }, { status: 400 });
-  }
+  if (Number.isNaN(base.getTime())) throw badRequest("Некорректная дата");
   const start = new Date(base.getFullYear(), base.getMonth(), base.getDate());
   const end = new Date(start);
   end.setDate(end.getDate() + 1);
@@ -41,4 +40,4 @@ export async function GET(req: Request) {
       licenseNumber: l.license?.number ?? null,
     })),
   });
-}
+});

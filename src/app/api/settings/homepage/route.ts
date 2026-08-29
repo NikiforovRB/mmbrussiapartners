@@ -3,21 +3,20 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { homepageContentSchema } from "@/lib/homepage-content";
 import { hasPermission } from "@/lib/permissions";
+import { badRequest, forbidden, route, unauthenticated } from "@/lib/api";
+import { recordAdminAction } from "@/lib/admin-audit";
 
 export const runtime = "nodejs";
 
-export async function PATCH(req: Request) {
+export const PATCH = route(async (req: Request) => {
   const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: "UNAUTHENTICATED" }, { status: 401 });
+  if (!session?.user) throw unauthenticated();
   if (!hasPermission(session.user.permissions, "settings.edit", session.user.isSuperAdmin)) {
-    return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
+    throw forbidden();
   }
 
-  const body = await req.json().catch(() => ({}));
-  const parsed = homepageContentSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: "Некорректные данные главной страницы" }, { status: 400 });
-  }
+  const parsed = homepageContentSchema.safeParse(await req.json().catch(() => ({})));
+  if (!parsed.success) throw badRequest("Некорректные данные главной страницы");
 
   await db.companySettings.upsert({
     where: { id: "singleton" },
@@ -31,5 +30,13 @@ export async function PATCH(req: Request) {
     },
   });
 
+  await recordAdminAction({
+    actorId: session.user.id,
+    entity: "SETTINGS",
+    entityId: "homepage",
+    action: "UPDATED",
+    summary: "Содержимое главной страницы",
+  });
+
   return NextResponse.json({ ok: true });
-}
+});

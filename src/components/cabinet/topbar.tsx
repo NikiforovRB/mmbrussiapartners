@@ -1,13 +1,14 @@
 "use client";
 
 import * as React from "react";
-import { signOut, useSession } from "next-auth/react";
-import { getCabinetPath } from "@/lib/cabinet-path";
-import { Bell, LogOut, Search, User as UserIcon } from "lucide-react";
-import { Avatar } from "@/components/ui/avatar";
-import { motion, AnimatePresence } from "framer-motion";
+import { signOut } from "next-auth/react";
+import { LogOut, Search, User as UserIcon } from "lucide-react";
 import Link from "next/link";
+import { Avatar } from "@/components/ui/avatar";
 import { MobileNavTrigger } from "@/components/cabinet/mobile-nav";
+import { NotificationPanel } from "@/components/cabinet/notification-panel";
+import { useCabinetUser } from "@/components/cabinet/cabinet-user";
+import { cn } from "@/lib/utils";
 
 export function Topbar({
   title,
@@ -24,30 +25,25 @@ export function Topbar({
   onSearch?: (q: string) => void;
   profileHref?: string;
 }) {
-  const { data: session } = useSession();
-  const resolvedProfileHref =
-    profileHref ??
-    (session?.user && getCabinetPath(session.user) === "/admin" ? "/admin/profile" : "/dealer/profile");
+  const cabinet = useCabinetUser();
+  const resolvedProfileHref = profileHref ?? `${cabinet?.basePath ?? "/dealer"}/profile`;
 
   const [open, setOpen] = React.useState(false);
-  const [avatarUrl, setAvatarUrl] = React.useState<string | null>(null);
+  // Стартовое значение приходит с сервера; перезапрашиваем только после
+  // загрузки нового аватара, а не на каждом заходе на страницу.
+  const [avatarUrl, setAvatarUrl] = React.useState<string | null>(cabinet?.avatarUrl ?? null);
   const ref = React.useRef<HTMLDivElement | null>(null);
 
-  const loadAvatar = React.useCallback(() => {
-    fetch("/api/profile/avatar")
-      .then((res) => (res.ok ? res.json() : { url: null }))
-      .then((data: { url?: string | null }) => setAvatarUrl(data.url ?? null))
-      .catch(() => {});
-  }, []);
-
   React.useEffect(() => {
-    loadAvatar();
     function onAvatarUpdated() {
-      loadAvatar();
+      fetch("/api/profile/avatar")
+        .then((res) => (res.ok ? res.json() : { url: null }))
+        .then((data: { url?: string | null }) => setAvatarUrl(data.url ?? null))
+        .catch(() => {});
     }
     window.addEventListener("avatar-updated", onAvatarUpdated);
     return () => window.removeEventListener("avatar-updated", onAvatarUpdated);
-  }, [loadAvatar]);
+  }, []);
 
   React.useEffect(() => {
     function onDoc(e: MouseEvent) {
@@ -76,9 +72,7 @@ export function Topbar({
           </div>
         ) : null}
         {rightSlot}
-        <button className="relative grid h-10 w-10 place-items-center rounded-btn text-ink-muted transition-colors hover:bg-surface-muted hover:text-ink">
-          <Bell className="h-4 w-4" />
-        </button>
+        <NotificationPanel initialUnread={cabinet?.unreadCount ?? 0} />
         <div ref={ref} className="relative">
           <button
             onClick={() => setOpen((v) => !v)}
@@ -90,32 +84,27 @@ export function Topbar({
               <div className="text-[11px] text-ink-muted">{user.role}</div>
             </div>
           </button>
-          <AnimatePresence>
-            {open ? (
-              <motion.div
-                initial={{ opacity: 0, y: -6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -6 }}
-                transition={{ duration: 0.16 }}
-                className="absolute right-0 top-12 w-60 rounded-panel bg-white border border-hairline p-2"
-                style={{ boxShadow: "0 24px 60px -24px rgba(11,16,32,0.18)" }}
-              >
-                <div className="px-3 py-2 text-xs text-ink-muted">{user.email}</div>
-                <Link
-                  href={resolvedProfileHref}
-                  className="flex items-center gap-2.5 rounded-panel px-3 py-2 text-sm hover:bg-surface-muted"
-                >
-                  <UserIcon className="h-4 w-4" /> Профиль
-                </Link>
-                <button
-                  onClick={() => signOut({ callbackUrl: "/" })}
-                  className="w-full flex items-center gap-2.5 rounded-panel px-3 py-2 text-sm text-danger hover:bg-surface-muted"
-                >
-                  <LogOut className="h-4 w-4" /> Выйти
-                </button>
-              </motion.div>
-            ) : null}
-          </AnimatePresence>
+          <div
+            className={cn(
+              "absolute right-0 top-12 w-60 origin-top-right rounded-panel bg-white border border-hairline p-2 transition duration-150 ease-out",
+              open ? "opacity-100 translate-y-0" : "pointer-events-none opacity-0 -translate-y-1.5",
+            )}
+            style={{ boxShadow: "0 24px 60px -24px rgba(11,16,32,0.18)" }}
+          >
+            <div className="px-3 py-2 text-xs text-ink-muted">{user.email}</div>
+            <Link
+              href={resolvedProfileHref}
+              className="flex items-center gap-2.5 rounded-panel px-3 py-2 text-sm hover:bg-surface-muted"
+            >
+              <UserIcon className="h-4 w-4" /> Профиль
+            </Link>
+            <button
+              onClick={() => signOut({ callbackUrl: "/" })}
+              className="w-full flex items-center gap-2.5 rounded-panel px-3 py-2 text-sm text-danger hover:bg-surface-muted"
+            >
+              <LogOut className="h-4 w-4" /> Выйти
+            </button>
+          </div>
         </div>
       </div>
     </header>

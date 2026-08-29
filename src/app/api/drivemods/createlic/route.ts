@@ -3,23 +3,30 @@ import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { hasPermission } from "@/lib/permissions";
-import { uploadObject, getDownloadUrl } from "@/lib/s3";
+import { ApiError, badRequest, forbidden, parseBody, route, unauthenticated } from "@/lib/api";
+import { uploadObject, getDownloadUrl, deleteObject } from "@/lib/s3";
 import { createLic, DriveModsError, isDriveModsConfigured } from "@/lib/drivemods";
 import { generateLicenseNumber, normalizePhone, fioFromParts } from "@/lib/utils";
-import { isLicenseType } from "@/lib/license-options";
+import { isLicenseType, isLicenseTerm, termEndFromMonths } from "@/lib/license-options";
 import { defaultLicensePrice } from "@/lib/payments/provider";
 import { createPayment } from "@/lib/payments/service";
+import { notifyAdmins } from "@/lib/app-notifications";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+/** Потолок на device_id.bin — такой же, как в /licinfo. */
+const MAX_DEVICE_BYTES = 5 * 1024 * 1024;
+const MAX_DEVICE_BASE64 = Math.ceil((MAX_DEVICE_BYTES * 4) / 3) + 64;
+
 const schema = z.object({
-  deviceBase64: z.string().min(1),
+  deviceBase64: z.string().min(1).max(MAX_DEVICE_BASE64, "Файл device_id.bin слишком большой"),
   deviceId: z.string().optional().or(z.literal("")),
   type: z.string().min(1),
   product: z.string().min(1),
   bundle: z.string().nullable().optional(),
   region: z.string().nullable().optional(),
+  termMonths: z.number().int().optional(),
   versionSoftware: z.string().optional().or(z.literal("")),
   versionCustom: z.string().optional().or(z.literal("")),
   dealerComment: z.string().optional().or(z.literal("")),
@@ -32,175 +39,216 @@ const schema = z.object({
   issuedWithoutPayment: z.boolean().optional(),
 });
 
-export async function POST(req: Request) {
+export const POST = route(async (req: Request) => {
   const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: "UNAUTHENTICATED" }, { status: 401 });
-  if (session.user.status !== "APPROVED") {
-    return NextResponse.json({ error: "Аккаунт не одобрен" }, { status: 403 });
-  }
+  if (!session?.user) throw unauthenticated();
+  if (session.user.status !== "APPROVED") throw forbidden("Аккаунт не одобрен");
   if (!isDriveModsConfigured()) {
-    return NextResponse.json(
-      { error: "Интеграция DRIVEMODS не настроена. Обратитесь к администратору." },
-      { status: 503 },
+    throw new ApiError(
+      "NOT_CONFIGURED",
+      "Интеграция DRIVEMODS не настроена. Обратитесь к администратору.",
     );
   }
 
-  const body = await req.json().catch(() => ({}));
-  const parsed = schema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.errors[0]?.message ?? "Неверные параметры" }, { status: 400 });
-  }
-  const p = parsed.data;
-  if (!isLicenseType(p.type)) {
-    return NextResponse.json({ error: "Неверный тип лицензии" }, { status: 400 });
-  }
+  const p = await parseBody(req, schema);
+  if (!isLicenseType(p.type)) throw badRequest("Неверный тип лицензии");
 
-  const dealer = await db.user.findUnique({
+  const termMonths = p.termMonths ?? 0;
+  if (!isLicenseTerm(termMonths)) throw badRequest("Неверный срок лицензии");
+
+  const actor = await db.user.findUnique({
     where: { id: session.user.id },
     include: { dealerProfile: true },
   });
-  if (!dealer || !dealer.dealerProfile) {
-    return NextResponse.json({ error: "Профиль не найден" }, { status: 400 });
-  }
-  const remaining = dealer.dealerProfile.licenseLimit - dealer.dealerProfile.licensesUsed;
-  if (remaining <= 0) {
-    return NextResponse.json({ error: "Лимит лицензий исчерпан" }, { status: 403 });
-  }
+  if (!actor) throw unauthenticated();
 
-  let deviceBuffer: Buffer;
-  try {
-    deviceBuffer = Buffer.from(p.deviceBase64, "base64");
-  } catch {
-    return NextResponse.json({ error: "Некорректный файл device_id.bin" }, { status: 400 });
-  }
-
-  const dealerName =
-    fioFromParts({
-      firstName: dealer.dealerProfile.firstName,
-      lastName: dealer.dealerProfile.lastName,
-      middleName: dealer.dealerProfile.middleName,
-    }) || dealer.email;
-  const dealerComment = (p.dealerComment || dealerName).trim();
-
+  // Администратор выпускает лицензии от своего имени и лимитом дилера
+  // не ограничен; для представителя лимит обязателен.
   const isAdminActor =
     session.user.isSuperAdmin ||
-    hasPermission(session.user.permissions, "dealers.view", session.user.isSuperAdmin);
-  const issuedWithoutPayment = isAdminActor && p.issuedWithoutPayment === true;
+    hasPermission(session.user.permissions, "licenses.create", session.user.isSuperAdmin);
+  if (!isAdminActor && !actor.dealerProfile) throw badRequest("Профиль не найден");
 
-  const licenseNumber = await uniqueLicenseNumber();
-
-  const deviceIdUpload = await uploadObject(
-    "deviceIds",
-    `${licenseNumber}-device-id.bin`,
-    deviceBuffer,
-    "application/octet-stream",
+  const canIssueFree = hasPermission(
+    session.user.permissions,
+    "licenses.issueFree",
+    session.user.isSuperAdmin,
   );
+  const issuedWithoutPayment = canIssueFree && p.issuedWithoutPayment === true;
 
-  let generated;
-  try {
-    generated = await createLic({
-      deviceIdBase64: p.deviceBase64,
-      product: p.product,
-      bundle: p.bundle || null,
-      region: p.region || null,
-      versionSoftware: p.versionSoftware || "",
-      versionCustom: p.versionCustom || "",
-      dealerComment,
-      deviceId: p.deviceId || "",
-    });
-  } catch (err) {
-    const status = err instanceof DriveModsError ? err.status : 502;
-    const message = err instanceof Error ? err.message : "Ошибка генерации лицензии";
-    return NextResponse.json({ error: message }, { status });
-  }
-
-  const licenseBuffer = Buffer.from(generated.lic_file, "base64");
-  const licenseUpload = await uploadObject(
-    "licenses",
-    generated.lic_filename || `${licenseNumber}-device-license.bin`,
-    licenseBuffer,
-    "application/octet-stream",
-  );
-
-  const termStart = new Date();
-  const termEnd = new Date(termStart);
-  termEnd.setFullYear(termEnd.getFullYear() + 100); // лицензия бессрочная
-
-  const price = issuedWithoutPayment ? 0 : defaultLicensePrice();
-
-  const license = await db.$transaction(async (tx) => {
-    const created = await tx.license.create({
-      data: {
-        number: licenseNumber,
-        dealerId: dealer.id,
-        type: p.type,
-        status: "ACTIVE",
-        price: price || null,
-        features: {},
-        termStart,
-        termEnd,
-        deviceId: generated.device_id || p.deviceId || "",
-        deviceIdKey: deviceIdUpload.key,
-        licenseKey: licenseUpload.key,
-        product: p.product,
-        bundle: p.bundle || null,
-        productRegion: p.region || null,
-        versionSoftware: p.versionSoftware || null,
-        versionCustom: p.versionCustom || null,
-        dealerComment,
-        issuedWithoutPayment,
-        customerFio: (p.customerFio || dealerComment).trim(),
-        customerOrganization: p.customerOrganization || null,
-        customerEmail: p.customerEmail || null,
-        customerPhone: p.customerPhone ? normalizePhone(p.customerPhone) : null,
-        region: p.customerRegion || null,
-        city: p.customerCity || null,
-      },
-    });
-    await tx.dealerProfile.update({
-      where: { userId: dealer.id },
+  // Слот занимаем до похода во внешний API: между проверкой остатка и
+  // инкрементом лежат две загрузки в S3 и генерация, и без резервирования
+  // два параллельных запроса пробили бы лимит.
+  const limited = Boolean(actor.dealerProfile) && !isAdminActor;
+  if (limited) {
+    const reserved = await db.dealerProfile.updateMany({
+      where: { userId: actor.id, licensesUsed: { lt: actor.dealerProfile!.licenseLimit } },
       data: { licensesUsed: { increment: 1 } },
     });
-    await tx.licenseAuditLog.create({
-      data: {
-        licenseId: created.id,
-        actorId: dealer.id,
-        action: "CREATED",
-        reason: `${p.type}: ${p.product}`,
-      },
-    });
-    return created;
-  });
-
-  const downloadUrl = await getDownloadUrl(licenseUpload.key, 300);
-
-  // Счёт выставляем после генерации: файл уже у дилера, а оплата и чек
-  // идут своим циклом. Сбой биллинга не должен терять выданную лицензию.
-  let payment: { id: string; amount: number; payUrl: string | null } | null = null;
-  if (price > 0) {
-    try {
-      const created = await createPayment({
-        dealerId: dealer.id,
-        licenseId: license.id,
-        amount: price,
-        description: `Лицензия ${license.number} · ${p.product}`,
-        email: dealer.email,
-        phone: dealer.dealerProfile.phone,
-      });
-      payment = { id: created.id, amount: Number(created.amount), payUrl: created.payUrl };
-    } catch {
-      payment = null;
-    }
+    if (reserved.count === 0) throw forbidden("Лимит лицензий исчерпан");
   }
 
-  return NextResponse.json({
-    licenseId: license.id,
-    number: license.number,
-    filename: generated.lic_filename,
-    downloadUrl,
-    payment,
-  });
-}
+  const releaseSlot = async () => {
+    if (!limited) return;
+    await db.dealerProfile
+      .update({ where: { userId: actor.id }, data: { licensesUsed: { decrement: 1 } } })
+      .catch((err) => console.error("[createlic] не удалось вернуть слот лимита", err));
+  };
+
+  // Всё, что уже легло в S3: при срыве удаляем, чтобы не копить файлы
+  // без записей в базе.
+  const uploadedKeys: string[] = [];
+  const cleanupUploads = async () => {
+    await Promise.allSettled(uploadedKeys.map((key) => deleteObject(key)));
+  };
+
+  try {
+    const deviceBuffer = Buffer.from(p.deviceBase64, "base64");
+    if (deviceBuffer.length === 0) throw badRequest("Некорректный файл device_id.bin");
+    if (deviceBuffer.length > MAX_DEVICE_BYTES) {
+      throw badRequest("Файл device_id.bin больше 5 МБ");
+    }
+
+    const dealerName =
+      fioFromParts({
+        firstName: actor.dealerProfile?.firstName,
+        lastName: actor.dealerProfile?.lastName,
+        middleName: actor.dealerProfile?.middleName,
+      }) || actor.email;
+    const dealerComment = (p.dealerComment || dealerName).trim();
+
+    const licenseNumber = await uniqueLicenseNumber();
+
+    const deviceIdUpload = await uploadObject(
+      "deviceIds",
+      `${licenseNumber}-device-id.bin`,
+      deviceBuffer,
+      "application/octet-stream",
+    );
+    uploadedKeys.push(deviceIdUpload.key);
+
+    let generated;
+    try {
+      generated = await createLic({
+        deviceIdBase64: p.deviceBase64,
+        product: p.product,
+        bundle: p.bundle || null,
+        region: p.region || null,
+        versionSoftware: p.versionSoftware || "",
+        versionCustom: p.versionCustom || "",
+        dealerComment,
+        deviceId: p.deviceId || "",
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Ошибка генерации лицензии";
+      throw new ApiError("UPSTREAM", message, err instanceof DriveModsError ? err.status : 502);
+    }
+
+    const licenseUpload = await uploadObject(
+      "licenses",
+      generated.lic_filename || `${licenseNumber}-device-license.bin`,
+      Buffer.from(generated.lic_file, "base64"),
+      "application/octet-stream",
+    );
+    uploadedKeys.push(licenseUpload.key);
+
+    const termStart = new Date();
+    const termEnd = termEndFromMonths(termStart, termMonths);
+    const price = issuedWithoutPayment ? 0 : defaultLicensePrice();
+
+    const license = await db.$transaction(async (tx) => {
+      const created = await tx.license.create({
+        data: {
+          number: licenseNumber,
+          dealerId: actor.id,
+          type: p.type,
+          status: "ACTIVE",
+          price: price || null,
+          features: {},
+          termStart,
+          termEnd,
+          deviceId: generated.device_id || p.deviceId || "",
+          deviceIdKey: deviceIdUpload.key,
+          licenseKey: licenseUpload.key,
+          product: p.product,
+          bundle: p.bundle || null,
+          productRegion: p.region || null,
+          versionSoftware: p.versionSoftware || null,
+          versionCustom: p.versionCustom || null,
+          dealerComment,
+          issuedWithoutPayment,
+          customerFio: (p.customerFio || dealerComment).trim(),
+          customerOrganization: p.customerOrganization || null,
+          customerEmail: p.customerEmail || null,
+          customerPhone: p.customerPhone ? normalizePhone(p.customerPhone) : null,
+          region: p.customerRegion || null,
+          city: p.customerCity || null,
+        },
+      });
+      await tx.licenseAuditLog.create({
+        data: {
+          licenseId: created.id,
+          actorId: actor.id,
+          action: "CREATED",
+          reason: `${p.type}: ${p.product}`,
+        },
+      });
+      return created;
+    });
+
+    const downloadUrl = await getDownloadUrl(licenseUpload.key, 300);
+
+    // Счёт выставляем после генерации: файл уже у дилера, а оплата и чек
+    // идут своим циклом. Сбой биллинга не должен терять выданную лицензию.
+    let payment: { id: string; amount: number; payUrl: string | null } | null = null;
+    if (price > 0) {
+      try {
+        const created = await createPayment({
+          dealerId: actor.id,
+          licenseId: license.id,
+          amount: price,
+          description: `Лицензия ${license.number} · ${p.product}`,
+          email: actor.email,
+          phone: actor.dealerProfile?.phone,
+        });
+        payment = { id: created.id, amount: Number(created.amount), payUrl: created.payUrl };
+        await notifyAdmins(["payments.manage"], {
+          type: "PAYMENT_CREATED",
+          title: `Новый счёт на ${Number(created.amount).toLocaleString("ru-RU")} ₽`,
+          body: `Лицензия ${license.number}, представитель ${actor.email}`,
+          link: `/admin/payments`,
+        });
+      } catch (err) {
+        // Лицензия уже выдана — счёт выставим вручную, но след обязателен.
+        console.error(
+          `[createlic] не удалось создать счёт по лицензии ${license.number}`,
+          err,
+        );
+        payment = null;
+      }
+    }
+
+    if (issuedWithoutPayment) {
+      await notifyAdmins(["payments.manage"], {
+        type: "LICENSE_ISSUED",
+        title: `Лицензия ${license.number} выдана без оплаты`,
+        body: `Выдал ${actor.email}`,
+        link: `/admin/licenses/${license.id}`,
+      });
+    }
+
+    return NextResponse.json({
+      licenseId: license.id,
+      number: license.number,
+      filename: generated.lic_filename,
+      downloadUrl,
+      payment,
+    });
+  } catch (err) {
+    await Promise.allSettled([releaseSlot(), cleanupUploads()]);
+    throw err;
+  }
+});
 
 async function uniqueLicenseNumber(): Promise<string> {
   for (let i = 0; i < 6; i++) {
@@ -208,5 +256,5 @@ async function uniqueLicenseNumber(): Promise<string> {
     const exists = await db.license.findUnique({ where: { number: candidate } });
     if (!exists) return candidate;
   }
-  throw new Error("Не удалось сгенерировать уникальный номер лицензии");
+  throw new ApiError("INTERNAL", "Не удалось сгенерировать уникальный номер лицензии");
 }

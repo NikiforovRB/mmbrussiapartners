@@ -25,6 +25,7 @@ import { StatusTag } from "@/components/ui/status-tag";
 import { Modal } from "@/components/ui/modal";
 import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
+import { DatePicker } from "@/components/ui/date-picker";
 import { formatRuDateTime, formatRuDate } from "@/lib/dates";
 import { usePermissions } from "@/hooks/use-permissions";
 import { LICENSE_PLATFORM_OPTIONS, LICENSE_TYPE_OPTIONS } from "@/lib/license-options";
@@ -43,7 +44,8 @@ type LicenseShape = {
   status: "ACTIVE" | "EXPIRED" | "CANCELLED" | "REVOKED" | "DRAFT";
   features: Record<string, boolean | string>;
   termStart: string | Date;
-  termEnd: string | Date;
+  /** null — бессрочная лицензия. */
+  termEnd: string | Date | null;
   customerFio: string;
   customerOrganization: string | null;
   customerEmail: string | null;
@@ -89,6 +91,9 @@ export function LicenseDetailEditor({
   const { can } = usePermissions();
   const isAdmin = context === "admin";
   const canEdit = !isAdmin || can("licenses.edit");
+  // Тип, срок, статус и набор функций — коммерческие условия лицензии;
+  // владелец правит только карточку клиента и данные установки.
+  const canEditTerms = can("licenses.edit");
   const canDownload = !isAdmin || can("licenses.view");
   const canCancel = !isAdmin || can("licenses.cancel");
   const canRevoke = isAdmin && can("licenses.revoke");
@@ -134,10 +139,13 @@ export function LicenseDetailEditor({
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        type: data.type,
-        features: data.features,
-        termStart: new Date(data.termStart).toISOString(),
-        termEnd: new Date(data.termEnd).toISOString(),
+        ...(canEditTerms && {
+          type: data.type,
+          features: data.features,
+          termStart: new Date(data.termStart).toISOString(),
+          termEnd: data.termEnd ? new Date(data.termEnd).toISOString() : null,
+          ...(data.status ? { status: data.status } : {}),
+        }),
         customerFio: data.customerFio,
         customerOrganization: data.customerOrganization || null,
         customerEmail: data.customerEmail || null,
@@ -147,7 +155,6 @@ export function LicenseDetailEditor({
         vehicleVin: data.vehicleVin || null,
         vehicleModel: data.vehicleModel || null,
         platform: data.platform || null,
-        ...(context === "admin" && data.status ? { status: data.status } : {}),
       }),
     });
     setSaving(false);
@@ -310,7 +317,7 @@ export function LicenseDetailEditor({
           <div className="grid sm:grid-cols-3 gap-3">
             <Select
               label="Тип лицензии"
-              disabled={!canEdit}
+              disabled={!canEditTerms}
               value={data.type}
               onChange={(v) => setData({ ...data, type: v })}
               options={LICENSE_TYPE_OPTIONS}
@@ -323,10 +330,9 @@ export function LicenseDetailEditor({
               placeholder="Не указана"
               options={[{ value: "", label: "Не указана" }, ...LICENSE_PLATFORM_OPTIONS]}
             />
-            {isAdmin ? (
+            {canEditTerms ? (
               <Select
                 label="Статус"
-                disabled={!canEdit}
                 value={data.status}
                 onChange={(v) => setData({ ...data, status: v as LicenseShape["status"] })}
                 options={[
@@ -334,8 +340,35 @@ export function LicenseDetailEditor({
                   { value: "CANCELLED", label: "Аннулирована" },
                 ]}
               />
-            ) : null}
+            ) : (
+              <ReadonlyField label="Срок действия" value={termLabel(data.termEnd)} />
+            )}
           </div>
+          {canEditTerms ? (
+            <div className="mt-3 grid sm:grid-cols-3 gap-3">
+              <Select
+                label="Срок действия"
+                value={data.termEnd ? "fixed" : "perpetual"}
+                onChange={(v) =>
+                  setData({
+                    ...data,
+                    termEnd: v === "perpetual" ? null : (data.termEnd ?? defaultFixedTerm()),
+                  })
+                }
+                options={[
+                  { value: "perpetual", label: "Бессрочная" },
+                  { value: "fixed", label: "До даты" },
+                ]}
+              />
+              {data.termEnd ? (
+                <DatePicker
+                  label="Действует до"
+                  value={new Date(data.termEnd)}
+                  onChange={(d) => setData({ ...data, termEnd: d })}
+                />
+              ) : null}
+            </div>
+          ) : null}
           <div className="divider my-5" />
           <div className="grid sm:grid-cols-2 gap-3">
             <ReadonlyField label="Продукт" value={data.product} />
@@ -507,6 +540,17 @@ export function LicenseDetailEditor({
       </Modal>
     </div>
   );
+}
+
+function termLabel(termEnd: string | Date | null): string {
+  return termEnd ? `до ${formatRuDate(termEnd)}` : "Бессрочная";
+}
+
+/** По умолчанию срочная лицензия предлагается на год вперёд. */
+function defaultFixedTerm(): Date {
+  const d = new Date();
+  d.setFullYear(d.getFullYear() + 1);
+  return d;
 }
 
 function ReadonlyField({ label, value }: { label: string; value: string | null }) {

@@ -5,6 +5,7 @@ import { headers } from "next/headers";
 import { db } from "@/lib/db";
 import { hashPassword } from "@/lib/auth";
 import { normalizePhone } from "@/lib/utils";
+import { notifyAdmins } from "@/lib/app-notifications";
 
 async function lookupSignupGeo(): Promise<{ ip: string | null; country: string | null; city: string | null }> {
   try {
@@ -57,7 +58,7 @@ export async function registerDealerAction(formData: FormData) {
   const passwordHash = await hashPassword(data.password);
   const geo = await lookupSignupGeo();
 
-  await db.user.create({
+  const created = await db.user.create({
     data: {
       email,
       passwordHash,
@@ -80,6 +81,13 @@ export async function registerDealerAction(formData: FormData) {
         },
       },
     },
+  });
+
+  await notifyAdmins(["dealers.approve"], {
+    type: "DEALER_REGISTERED",
+    title: "Новая заявка на регистрацию",
+    body: `${data.lastName.trim()} ${data.firstName.trim()} · ${email}`,
+    link: `/admin/dealers/${created.id}`,
   });
 
   return { ok: true as const };

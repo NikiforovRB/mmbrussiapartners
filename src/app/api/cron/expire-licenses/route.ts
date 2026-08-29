@@ -1,17 +1,20 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { route } from "@/lib/api";
+import { assertCronRequest } from "@/lib/cron-auth";
 
 export const runtime = "nodejs";
 
-export async function GET(req: Request) {
-  const auth = req.headers.get("authorization");
-  if (process.env.CRON_SECRET && auth !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
-  }
-  const now = new Date();
+/**
+ * Ежедневный перевод просроченных лицензий в EXPIRED.
+ * Бессрочные (termEnd = null) под условие не попадают.
+ */
+export const GET = route(async (req: Request) => {
+  assertCronRequest(req);
+
   const expired = await db.license.updateMany({
-    where: { status: "ACTIVE", deletedAt: null, termEnd: { lt: now } },
+    where: { status: "ACTIVE", deletedAt: null, termEnd: { not: null, lt: new Date() } },
     data: { status: "EXPIRED" },
   });
   return NextResponse.json({ expired: expired.count });
-}
+});

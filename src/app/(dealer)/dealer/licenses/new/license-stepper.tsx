@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
 import {
   Upload,
   CheckCircle2,
@@ -26,7 +25,12 @@ import { Select } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card } from "@/components/ui/card";
 import { Tag } from "@/components/ui/tag";
-import { LICENSE_TYPE_OPTIONS } from "@/lib/license-options";
+import { usePermissions } from "@/hooks/use-permissions";
+import {
+  LICENSE_TYPE_OPTIONS,
+  LICENSE_TERM_OPTIONS,
+  LICENSE_TERMS,
+} from "@/lib/license-options";
 
 type Step = 1 | 2 | 3 | 4;
 
@@ -69,7 +73,10 @@ export function LicenseStepper({
   dealerName?: string;
 }) {
   const router = useRouter();
+  const { can } = usePermissions();
   const isAdmin = context === "admin";
+  // Выдача без оплаты — отдельное право, а не «любой, кто попал в админку».
+  const canIssueFree = can("licenses.issueFree");
   const basePath = isAdmin ? "/admin/licenses" : "/dealer/licenses";
   const remaining = Math.max(0, limit - used);
   const [step, setStep] = React.useState<Step>(1);
@@ -82,7 +89,8 @@ export function LicenseStepper({
   const [type, setType] = React.useState<string>("Генерация");
   const [productIndex, setProductIndex] = React.useState<string>("");
   const [dealerComment, setDealerComment] = React.useState<string>(dealerName);
-  const [withoutPayment, setWithoutPayment] = React.useState<boolean>(isAdmin);
+  const [termMonths, setTermMonths] = React.useState<string>("0");
+  const [withoutPayment, setWithoutPayment] = React.useState<boolean>(false);
   const [customer, setCustomer] = React.useState({
     fio: "",
     organization: "",
@@ -101,7 +109,8 @@ export function LicenseStepper({
     payment?: { id: string; amount: number; payUrl: string | null } | null;
   } | null>(null);
 
-  const selectedItem = info?.items.find((i) => String(i.index) === productIndex) ?? null;
+  const selectedItem =
+    info?.items.find((i) => String(i.index) === productIndex) ?? null;
 
   async function checkLicense() {
     if (!file) {
@@ -163,13 +172,14 @@ export function LicenseStepper({
         versionSoftware: info.versionSoftware,
         versionCustom: info.versionCustom,
         dealerComment: dealerComment.trim(),
+        termMonths: Number(termMonths),
         customerFio: customer.fio,
         customerOrganization: customer.organization,
         customerEmail: customer.email,
         customerPhone: customer.phone,
         customerRegion: customer.region,
         customerCity: customer.city,
-        ...(isAdmin ? { issuedWithoutPayment: withoutPayment } : {}),
+        ...(canIssueFree ? { issuedWithoutPayment: withoutPayment } : {}),
       }),
     });
     setSubmitting(false);
@@ -193,7 +203,9 @@ export function LicenseStepper({
   return (
     <div className="grid lg:grid-cols-[280px_1fr] gap-6">
       <Card className="h-fit">
-        <div className="text-xs uppercase tracking-widest text-ink-muted">Шаги</div>
+        <div className="text-xs uppercase tracking-widest text-ink-muted">
+          Шаги
+        </div>
         <ol className="mt-4 space-y-1.5">
           {[
             { id: 1, label: "Загрузка device_id.bin" },
@@ -230,40 +242,58 @@ export function LicenseStepper({
         <div className="text-xs text-ink-muted">Доступно лицензий</div>
         <div className="mt-1 font-display text-2xl  tracking-tight">
           {remaining}
-          <span className="text-ink-subtle text-sm font-normal"> / {limit}</span>
+          <span className="text-ink-subtle text-sm font-normal">
+            {" "}
+            / {limit}
+          </span>
         </div>
       </Card>
 
       <div className="min-h-[480px]">
-        <AnimatePresence mode="wait">
+        <div key={step} className="animate-fade-up">
           {step === 1 ? (
-            <motion.div key="s1" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }}>
+            <div>
               <Card>
                 <div className="flex items-center gap-3 mb-2">
                   <Sparkles className="h-5 w-5 text-accent" />
-                  <div className="font-display text-lg  tracking-tight">Загрузите файл device_id.bin</div>
+                  <div className="font-display text-lg  tracking-tight">
+                    Загрузите файл device_id.bin
+                  </div>
                 </div>
                 <p className="text-sm text-ink-muted mb-5">
-                  Файл создаётся ШГУ автоматически. Мы отправим его в сервис DRIVEMODS и покажем доступные продукты.
+                  Файл создаётся ШГУ автоматически. Мы отправим его в сервис
+                  DRIVEMODS и покажем доступные продукты.
                 </p>
                 <DropZone file={file} onChange={setFile} />
                 <div className="mt-6 flex justify-end gap-2">
-                  <Button loading={loadingInfo} onClick={checkLicense} icon={<ArrowRight className="h-4 w-4" />}>
+                  <Button
+                    loading={loadingInfo}
+                    onClick={checkLicense}
+                    icon={<ArrowRight className="h-4 w-4" />}
+                  >
                     Проверить лицензию
                   </Button>
                 </div>
               </Card>
-            </motion.div>
+            </div>
           ) : null}
 
           {step === 2 && info ? (
-            <motion.div key="s2" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }}>
+            <div>
               <div className="grid gap-5">
                 <Card>
-                  <div className="font-display text-lg  tracking-tight mb-4">Данные ШГУ</div>
+                  <div className="font-display text-lg  tracking-tight mb-4">
+                    Данные ШГУ
+                  </div>
                   <div className="grid sm:grid-cols-3 gap-3">
-                    <Info label="Версия ПО" value={info.versionSoftware || "—"} />
-                    <Info label="Версия кастома" value={info.versionCustom || "—"} />
+                    <Info
+                      label="Версия ПО"
+                      value={info.versionSoftware || "—"}
+                    />
+                    <Info
+                      label="Версия кастома"
+                      value={info.versionCustom || "—"}
+                    />
                     <Info label="ID устройства" value={info.deviceId || "—"} />
                   </div>
                   <div className="mt-3">
@@ -276,7 +306,9 @@ export function LicenseStepper({
                 </Card>
 
                 <Card>
-                  <div className="font-display text-lg  tracking-tight mb-4">Продукт и тип</div>
+                  <div className="font-display text-lg  tracking-tight mb-4">
+                    Продукт и тип
+                  </div>
                   <div className="grid sm:grid-cols-2 gap-3">
                     <Select
                       label="Тип лицензии"
@@ -289,12 +321,22 @@ export function LicenseStepper({
                       value={productIndex}
                       onChange={setProductIndex}
                       placeholder="Выберите продукт"
-                      options={info.items.map((it) => ({ value: String(it.index), label: it.fullName }))}
+                      options={info.items.map((it) => ({
+                        value: String(it.index),
+                        label: it.fullName,
+                      }))}
+                    />
+                    <Select
+                      label="Срок действия"
+                      value={termMonths}
+                      onChange={setTermMonths}
+                      options={LICENSE_TERM_OPTIONS}
                     />
                   </div>
                   {info.items.length === 0 ? (
                     <p className="mt-3 text-sm text-danger">
-                      Для этого устройства нет доступных продуктов для генерации.
+                      Для этого устройства нет доступных продуктов для
+                      генерации.
                     </p>
                   ) : null}
                   <div className="mt-3">
@@ -309,74 +351,123 @@ export function LicenseStepper({
                 </Card>
 
                 <Card>
-                  <div className="font-display text-lg  tracking-tight mb-1">Данные клиента</div>
-                  <p className="text-xs text-ink-muted mb-4">Необязательно, для вашего учёта.</p>
+                  <div className="font-display text-lg  tracking-tight mb-1">
+                    Данные клиента
+                  </div>
+                  <p className="text-xs text-ink-muted mb-4">
+                    Необязательно, для вашего учёта.
+                  </p>
                   <div className="grid sm:grid-cols-2 gap-3">
                     <Input
                       label="ФИО"
                       icon={<UserIcon className="h-4 w-4" />}
                       value={customer.fio}
-                      onChange={(e) => setCustomer({ ...customer, fio: e.target.value })}
+                      onChange={(e) =>
+                        setCustomer({ ...customer, fio: e.target.value })
+                      }
                     />
                     <Input
                       label="Организация"
                       icon={<Building2 className="h-4 w-4" />}
                       value={customer.organization}
-                      onChange={(e) => setCustomer({ ...customer, organization: e.target.value })}
+                      onChange={(e) =>
+                        setCustomer({
+                          ...customer,
+                          organization: e.target.value,
+                        })
+                      }
                     />
                     <Input
                       label="Email"
                       icon={<Mail className="h-4 w-4" />}
                       value={customer.email}
-                      onChange={(e) => setCustomer({ ...customer, email: e.target.value })}
+                      onChange={(e) =>
+                        setCustomer({ ...customer, email: e.target.value })
+                      }
                     />
                     <Input
                       label="Телефон"
                       icon={<Phone className="h-4 w-4" />}
                       value={customer.phone}
-                      onChange={(e) => setCustomer({ ...customer, phone: e.target.value })}
+                      onChange={(e) =>
+                        setCustomer({ ...customer, phone: e.target.value })
+                      }
                     />
                     <Input
                       label="Регион"
                       value={customer.region}
-                      onChange={(e) => setCustomer({ ...customer, region: e.target.value })}
+                      onChange={(e) =>
+                        setCustomer({ ...customer, region: e.target.value })
+                      }
                     />
                     <Input
                       label="Город"
                       value={customer.city}
-                      onChange={(e) => setCustomer({ ...customer, city: e.target.value })}
+                      onChange={(e) =>
+                        setCustomer({ ...customer, city: e.target.value })
+                      }
                     />
                   </div>
                 </Card>
 
                 <div className="flex justify-between gap-2">
-                  <Button variant="ghost" onClick={() => setStep(1)} icon={<ArrowLeft className="h-4 w-4" />}>
+                  <Button
+                    variant="ghost"
+                    onClick={() => setStep(1)}
+                    icon={<ArrowLeft className="h-4 w-4" />}
+                  >
                     Назад
                   </Button>
-                  <Button onClick={toStep3} iconRight={<ArrowRight className="h-4 w-4" />}>
+                  <Button
+                    onClick={toStep3}
+                    iconRight={<ArrowRight className="h-4 w-4" />}
+                  >
                     Подтверждение
                   </Button>
                 </div>
               </div>
-            </motion.div>
+            </div>
           ) : null}
 
           {step === 3 && info ? (
-            <motion.div key="s3" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }}>
+            <div>
               <Card>
-                <div className="font-display text-lg  tracking-tight mb-4">Подтверждение</div>
+                <div className="font-display text-lg  tracking-tight mb-4">
+                  Подтверждение
+                </div>
                 <div className="grid sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
-                  <Row label="Тип лицензии" value={<Tag tone="accent">{type}</Tag>} />
+                  <Row
+                    label="Тип лицензии"
+                    value={<Tag tone="accent">{type}</Tag>}
+                  />
                   <Row label="Продукт" value={selectedItem?.fullName ?? "—"} />
+                  <Row
+                    label="Срок действия"
+                    value={
+                      LICENSE_TERMS.find((t) => String(t.value) === termMonths)
+                        ?.label ?? "Бессрочная"
+                    }
+                  />
                   <Row label="Версия ПО" value={info.versionSoftware || "—"} />
-                  <Row label="Версия кастома" value={info.versionCustom || "—"} />
+                  <Row
+                    label="Версия кастома"
+                    value={info.versionCustom || "—"}
+                  />
                   <Row label="ID устройства" value={info.deviceId || "—"} />
-                  <Row label="Комментарий дилера" value={dealerComment || "—"} />
-                  <Row label="Файл device_id.bin" value={file ? `${file.name} · ${formatBytes(file.size)}` : "—"} />
+                  <Row
+                    label="Комментарий дилера"
+                    value={dealerComment || "—"}
+                  />
+                  <Row
+                    label="Файл device_id.bin"
+                    value={
+                      file ? `${file.name} · ${formatBytes(file.size)}` : "—"
+                    }
+                  />
                   <Row label="Клиент" value={customer.fio || "—"} />
                 </div>
 
-                {isAdmin ? (
+                {canIssueFree ? (
                   <>
                     <div className="divider my-5" />
                     <div className="rounded-panel border border-hairline p-4">
@@ -391,36 +482,65 @@ export function LicenseStepper({
                 ) : null}
 
                 <div className="mt-6 flex justify-between gap-2">
-                  <Button variant="ghost" onClick={() => setStep(2)} icon={<ArrowLeft className="h-4 w-4" />}>
+                  <Button
+                    variant="ghost"
+                    onClick={() => setStep(2)}
+                    icon={<ArrowLeft className="h-4 w-4" />}
+                  >
                     Назад
                   </Button>
-                  <Button loading={submitting} onClick={submit} icon={<KeyRound className="h-4 w-4" />}>
+                  <Button
+                    loading={submitting}
+                    onClick={submit}
+                    icon={<KeyRound className="h-4 w-4" />}
+                  >
                     Сгенерировать лицензию
                   </Button>
                 </div>
               </Card>
-            </motion.div>
+            </div>
           ) : null}
 
           {step === 4 && result ? (
-            <motion.div key="s4" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }}>
+            <div>
               <Card tone="dark" className="relative overflow-hidden">
-                <div className="absolute -top-32 -right-20 h-80 w-80 rounded-full blob"
-                  style={{ background: "radial-gradient(closest-side, rgba(42,159,255,0.6), transparent)" }} />
+                <div
+                  className="absolute -top-32 -right-20 h-80 w-80 rounded-full blob"
+                  style={{
+                    background:
+                      "radial-gradient(closest-side, rgba(42,159,255,0.6), transparent)",
+                  }}
+                />
                 <div className="relative">
                   <div className="inline-flex items-center gap-2 rounded-panel bg-white/10 px-3.5 py-1.5 text-xs">
-                    <CheckCircle2 className="h-4 w-4 text-bg-accent" /> Лицензия сгенерирована
+                    <CheckCircle2 className="h-4 w-4 text-bg-accent" /> Лицензия
+                    сгенерирована
                   </div>
-                  <h2 className="mt-4 font-display text-3xl  tracking-tightest">{result.number}</h2>
+                  <h2 className="mt-4 font-display text-3xl  tracking-tightest">
+                    {result.number}
+                  </h2>
                   <p className="mt-2 text-white/70">
-                    Файл {result.filename ?? "device-license.bin"} готов к скачиванию. Передайте его клиенту.
+                    Файл {result.filename ?? "device-license.bin"} готов к
+                    скачиванию. Передайте его клиенту.
                   </p>
                   <div className="mt-6 flex flex-wrap gap-2">
-                    <a href={result.downloadUrl} download={result.filename ?? "device-license.bin"}>
-                      <Button variant="primary" icon={<Download className="h-4 w-4" />}>Скачать лицензию</Button>
+                    <a
+                      href={result.downloadUrl}
+                      download={result.filename ?? "device-license.bin"}
+                    >
+                      <Button
+                        variant="primary"
+                        icon={<Download className="h-4 w-4" />}
+                      >
+                        Скачать лицензию
+                      </Button>
                     </a>
                     <a href={`${basePath}/${result.licenseId}`}>
-                      <Button variant="ghost" className="text-white hover:bg-white/10" icon={<FileBox className="h-4 w-4" />}>
+                      <Button
+                        variant="ghost"
+                        className="text-white hover:bg-white/10"
+                        icon={<FileBox className="h-4 w-4" />}
+                      >
                         Открыть карточку
                       </Button>
                     </a>
@@ -433,22 +553,29 @@ export function LicenseStepper({
                     <div>
                       <div className="flex items-center gap-2">
                         <CreditCard className="h-4 w-4 text-accent" />
-                        <div className="font-display tracking-tight">Счёт на оплату</div>
+                        <div className="font-display tracking-tight">
+                          Счёт на оплату
+                        </div>
                       </div>
                       <p className="mt-1 text-sm text-ink-muted">
-                        К оплате {result.payment.amount.toLocaleString("ru-RU")} ₽. Фискальный чек
-                        придёт после подтверждения оплаты.
+                        К оплате {result.payment.amount.toLocaleString("ru-RU")}{" "}
+                        ₽. Фискальный чек придёт после подтверждения оплаты.
                       </p>
                     </div>
-                    <a href={result.payment.payUrl ?? `/dealer/payments/${result.payment.id}`}>
+                    <a
+                      href={
+                        result.payment.payUrl ??
+                        `/dealer/payments/${result.payment.id}`
+                      }
+                    >
                       <Button variant="secondary">Перейти к оплате</Button>
                     </a>
                   </div>
                 </Card>
               ) : null}
-            </motion.div>
+            </div>
           ) : null}
-        </AnimatePresence>
+        </div>
       </div>
     </div>
   );
@@ -457,7 +584,9 @@ export function LicenseStepper({
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div>
-      <div className="text-[11px] uppercase tracking-tight text-ink-subtle">{label}</div>
+      <div className="text-[11px] uppercase tracking-tight text-ink-subtle">
+        {label}
+      </div>
       <div className="mt-0.5">{value}</div>
     </div>
   );
@@ -466,13 +595,21 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
 function Info({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-panel border border-hairline p-3">
-      <div className="text-[11px] uppercase tracking-tight text-ink-subtle">{label}</div>
+      <div className="text-[11px] uppercase tracking-tight text-ink-subtle">
+        {label}
+      </div>
       <div className="mt-1 text-sm break-all">{value}</div>
     </div>
   );
 }
 
-function DropZone({ file, onChange }: { file: File | null; onChange: (f: File | null) => void }) {
+function DropZone({
+  file,
+  onChange,
+}: {
+  file: File | null;
+  onChange: (f: File | null) => void;
+}) {
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const [drag, setDrag] = React.useState(false);
 
@@ -499,7 +636,9 @@ function DropZone({ file, onChange }: { file: File | null; onChange: (f: File | 
       }}
       onClick={() => inputRef.current?.click()}
       className={`relative cursor-pointer rounded-panel border border-dashed p-10 text-center transition-colors ${
-        drag ? "border-accent bg-accent/5" : "border-hairline hover:border-accent"
+        drag
+          ? "border-accent bg-accent/5"
+          : "border-hairline hover:border-accent"
       }`}
     >
       <input
@@ -519,7 +658,9 @@ function DropZone({ file, onChange }: { file: File | null; onChange: (f: File | 
           </div>
           <div className="text-left">
             <div className="">{file.name}</div>
-            <div className="text-xs text-ink-muted">{formatBytes(file.size)}</div>
+            <div className="text-xs text-ink-muted">
+              {formatBytes(file.size)}
+            </div>
           </div>
         </div>
       ) : (
@@ -528,7 +669,9 @@ function DropZone({ file, onChange }: { file: File | null; onChange: (f: File | 
             <Upload className="h-7 w-7" />
           </div>
           <div className="mt-4 ">Перетащите файл или нажмите для выбора</div>
-          <div className="text-xs text-ink-muted mt-1">Только .bin, до 5 МБ</div>
+          <div className="text-xs text-ink-muted mt-1">
+            Только .bin, до 5 МБ
+          </div>
         </>
       )}
     </div>

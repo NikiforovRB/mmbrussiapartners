@@ -255,7 +255,12 @@ async function main() {
         const plan = plans[i];
         const created = atTime(daysAgo(plan.createdDaysAgo), 10 + (i % 8), (i * 7) % 60);
         const termStart = created;
-        const termEnd = new Date(created.getFullYear() + 100, created.getMonth(), created.getDate());
+        // Каждая четвёртая лицензия срочная — чтобы в демо были видны
+        // и бессрочные записи, и напоминания об истечении.
+        const termEnd =
+          i % 4 === 3
+            ? new Date(created.getFullYear() + 1, created.getMonth(), created.getDate())
+            : null;
         const [region, city] = pick(REGIONS, i + Number(key.length));
         const number = licenseNumber(seq++);
         const dealerCityComment = `${dealers[key].email.split("@")[0]}, ${city}`;
