@@ -19,7 +19,7 @@ import { CabinetUserProvider } from "@/components/cabinet/cabinet-user";
 import { Avatar } from "@/components/ui/avatar";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { hasPermission, requireAny } from "@/lib/permissions";
+import { hasPermission, hasAdminScope } from "@/lib/permissions";
 import { fioFromParts } from "@/lib/utils";
 import { getUserAvatarUrl } from "@/lib/user-avatar";
 
@@ -41,26 +41,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       middleName: user.dealerProfile?.middleName,
     }) || user.email;
 
-  const isAdmin =
-    user.isSuperAdmin ||
-    requireAny(
-      user.role.permissions,
-      [
-        "dealers.view",
-        "licenses.view",
-        "roles.manage",
-        "reports.view",
-        "reports.export",
-        "stats.view",
-        "geo.view",
-        "payments.view",
-        "settings.edit",
-        "auditLog.view",
-        "licenses.restore",
-      ],
-      user.isSuperAdmin,
-    );
-  if (!isAdmin) redirect("/dealer");
+  // Права вида licenses.view есть и у представителя — по ним админку
+  // открывал бы любой дилер. Пускает только выход за пределы своего кабинета.
+  if (!hasAdminScope(user.role.permissions, user.isSuperAdmin)) redirect("/dealer");
 
   const items: SidebarItem[] = [];
   items.push({ href: "/admin", label: "Дашборд", icon: <LayoutDashboard className="h-4 w-4" /> });

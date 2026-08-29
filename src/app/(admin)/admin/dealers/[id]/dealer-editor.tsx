@@ -137,7 +137,7 @@ export function DealerEditor({ dealer }: { dealer: Dealer }) {
                     Одобрить
                   </Button>
                   <Button
-                    variant="ghost"
+                    variant="ghostDanger"
                     disabled={!canApprove}
                     title={canApprove ? undefined : "Нет права на отклонение заявок"}
                     onClick={() => setRejectOpen(true)}

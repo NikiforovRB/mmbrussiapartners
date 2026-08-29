@@ -16,7 +16,6 @@ import {
   Mail,
   Phone,
   CreditCard,
-  ShieldCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -538,7 +537,7 @@ export function LicenseStepper({
                     <a href={`${basePath}/${result.licenseId}`}>
                       <Button
                         variant="ghost"
-                        className="text-white hover:bg-white/10"
+                        className="text-white hover:bg-white/10 hover:text-white"
                         icon={<FileBox className="h-4 w-4" />}
                       >
                         Открыть карточку
@@ -683,5 +682,3 @@ function formatBytes(n: number) {
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
   return `${(n / 1024 / 1024).toFixed(2)} MB`;
 }
-
-void ShieldCheck;

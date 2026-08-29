@@ -324,7 +324,7 @@ export function LicenseTable({
                       {isAdmin ? (
                         <Button
                           size="sm"
-                          variant="ghost"
+                          variant="ghostDanger"
                           disabled={!canDelete}
                           title={canDelete ? undefined : "Нет права на удаление"}
                           icon={<Trash2 className="h-4 w-4" />}

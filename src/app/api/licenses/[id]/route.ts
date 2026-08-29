@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { hasPermission } from "@/lib/permissions";
+import { hasAdminScope, hasPermission } from "@/lib/permissions";
 import { forbidden, notFound, parseBody, route, unauthenticated } from "@/lib/api";
 import { syncLicenseSlots } from "@/lib/license-slots";
 
@@ -26,11 +26,11 @@ const patchSchema = z.object({
 });
 
 /**
- * Что владелец лицензии правит без права licenses.edit: карточку клиента
- * и данные установки. Статус, срок и набор функций — это коммерческие
- * условия, их меняет только администратор.
+ * Коммерческие условия лицензии. Право licenses.edit для них не годится:
+ * оно есть и у представителя — иначе он не отредактировал бы карточку
+ * клиента. Разграничивает доступ отдельное licenses.manageTerms.
  */
-const ADMIN_ONLY_FIELDS = ["status", "termStart", "termEnd", "features", "type"] as const;
+const TERM_FIELDS = ["status", "termStart", "termEnd", "features", "type"] as const;
 
 export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: string }> }) => {
   const session = await auth();
@@ -40,18 +40,26 @@ export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: str
   const license = await db.license.findUnique({ where: { id } });
   if (!license) throw notFound("Лицензия не найдена");
 
+  // Чужую лицензию правит только администратор: licenses.edit есть и у
+  // представителя, поэтому одного этого права для доступа недостаточно.
   const isOwner = license.dealerId === session.user.id;
-  const canEditAny = hasPermission(
+  const isAdmin = hasAdminScope(session.user.permissions, session.user.isSuperAdmin);
+  const canEdit = hasPermission(
     session.user.permissions,
     "licenses.edit",
     session.user.isSuperAdmin,
   );
-  if (!canEditAny && !isOwner) throw forbidden();
+  const canManageTerms = hasPermission(
+    session.user.permissions,
+    "licenses.manageTerms",
+    session.user.isSuperAdmin,
+  );
+  if (!isOwner && !(isAdmin && canEdit)) throw forbidden();
 
   const data = await parseBody(req, patchSchema);
 
-  if (!canEditAny) {
-    const attempted = ADMIN_ONLY_FIELDS.filter((f) => data[f] !== undefined);
+  if (!canManageTerms) {
+    const attempted = TERM_FIELDS.filter((f) => data[f] !== undefined);
     if (attempted.length > 0) {
       throw forbidden("Статус, срок, тип и набор функций лицензии меняет администратор");
     }

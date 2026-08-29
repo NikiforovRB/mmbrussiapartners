@@ -185,7 +185,7 @@ export function ProfileForm({
               </Button>
               {avatarUrl ? (
                 <Button
-                  variant="ghost"
+                  variant="ghostDanger"
                   size="sm"
                   loading={uploadingAvatar}
                   icon={<Trash2 className="h-4 w-4" />}

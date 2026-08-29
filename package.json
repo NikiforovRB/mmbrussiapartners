@@ -16,6 +16,8 @@
     "db:studio": "prisma studio",
     "test:integrations": "tsx --env-file=.env scripts/test-integrations.ts",
     "test:payments": "tsx --conditions=react-server --env-file=.env scripts/test-payments.ts",
+    "test:e2e": "tsx --conditions=react-server --env-file=.env scripts/test-e2e.ts",
+    "mock:drivemods": "tsx scripts/mock-drivemods.ts",
     "db:local:init": "tsx scripts/dev-db.ts init",
     "db:local:start": "tsx scripts/dev-db.ts start",
     "vercel-build": "prisma generate && prisma migrate deploy && next build"
