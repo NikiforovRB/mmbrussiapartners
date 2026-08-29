@@ -14,7 +14,7 @@ const DM_TOKEN = process.env.DRIVEMODS_CLIENT_TOKEN ?? "";
 const DM_USER = process.env.DRIVEMODS_USERNAME ?? "";
 const DM_PASS = process.env.DRIVEMODS_PASSWORD ?? "";
 
-const ATOL_BASE = process.env.ATOL_BASE_URL ?? "https://online.atol.ru/possystem/v5";
+const ATOL_BASE = process.env.ATOL_BASE_URL ?? "https://online.atol.ru/possystem/v4";
 const ATOL_LOGIN = process.env.ATOL_LOGIN ?? "";
 const ATOL_PASSWORD = process.env.ATOL_PASSWORD ?? "";
 const ATOL_GROUP = process.env.ATOL_GROUP ?? "";

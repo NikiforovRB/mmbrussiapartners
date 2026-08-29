@@ -48,7 +48,7 @@ export default async function DealerLayout({ children }: { children: React.React
   const limit = user.dealerProfile?.licenseLimit ?? 0;
 
   const footer = (
-    <div className="rounded-panel border border-hairline p-3.5">
+    <div className="rounded-panel bg-white p-3.5">
       <div className="text-xs text-ink-muted">Лимит лицензий</div>
       <div className="mt-1 flex items-end gap-1">
         <div className="font-display text-2xl  tracking-tight">{Math.max(0, remaining)}</div>

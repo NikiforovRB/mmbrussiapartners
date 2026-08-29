@@ -1,7 +1,7 @@
 import "server-only";
 
 /**
- * АТОЛ Онлайн — облачная касса, API v5 (54-ФЗ, ФФД 1.2).
+ * АТОЛ Онлайн — облачная касса (54-ФЗ).
  *
  * Сервис НЕ принимает деньги: он только регистрирует фискальные чеки.
  * Приём оплаты — задача эквайринга (см. ./provider.ts).
@@ -9,13 +9,20 @@ import "server-only";
  * Учётные данные берутся из «файла настроек интеграции» в личном кабинете
  * АТОЛ Онлайн, а не из логина/пароля самого кабинета.
  *
- * Спецификация: https://atol.online/api_v5
+ * Поддерживаются обе версии протокола: код группы ККТ привязан к одной из них,
+ * и обращение «не своей» версией отклоняется с ошибкой 21. Версия берётся из
+ * ATOL_BASE_URL, от неё же зависит схема позиции чека:
+ *   v4 (ФФД 1.05) — payment_object строкой, единица измерения measurement_unit;
+ *   v5 (ФФД 1.2)  — payment_object числом, обязательное числовое measure.
+ *
+ * Спецификации: https://atol.online/api_v4, https://atol.online/api_v5
  */
 
-const BASE_URL = (process.env.ATOL_BASE_URL ?? "https://online.atol.ru/possystem/v5").replace(/\/+$/, "");
+const BASE_URL = (process.env.ATOL_BASE_URL ?? "https://online.atol.ru/possystem/v4").replace(/\/+$/, "");
 const LOGIN = process.env.ATOL_LOGIN ?? "";
 const PASSWORD = process.env.ATOL_PASSWORD ?? "";
 const GROUP = process.env.ATOL_GROUP ?? "";
+const IS_V5 = /\/v5$/.test(BASE_URL);
 
 /** Токен живёт 24 часа; обновляем заранее, чтобы не ловить 401 на границе. */
 const TOKEN_TTL_MS = 20 * 60 * 60 * 1000;
@@ -133,16 +140,21 @@ function money(value: number): number {
 
 function buildReceipt(input: AtolRegisterInput) {
   const vatType = process.env.ATOL_VAT_TYPE || "none";
-  // Признак предмета расчёта по ФФД: 4 — услуга (право использования ПО).
-  const paymentObject = Number(process.env.ATOL_PAYMENT_OBJECT ?? 4);
+  // Признак предмета расчёта: услуга (право использования ПО).
+  // В v5 это числовой код ФФД 1.2, в v4 — строковый enum.
+  const paymentObject = process.env.ATOL_PAYMENT_OBJECT ?? (IS_V5 ? "4" : "service");
 
-  const customer: Record<string, string> = {};
-  if (input.customerEmail) customer.email = input.customerEmail;
-  if (input.customerPhone) customer.phone = input.customerPhone;
-  if (input.customerName) customer.name = input.customerName;
+  // Тег 1008: ОФД отправляет чек покупателю, поэтому нужен email или телефон.
+  const client: Record<string, string> = {};
+  if (input.customerEmail) client.email = input.customerEmail;
+  if (input.customerPhone) client.phone = input.customerPhone;
+  if (input.customerName) client.name = input.customerName;
+  if (!client.email && !client.phone) {
+    throw new AtolError("Для чека нужен email или телефон покупателя (тег 1008).");
+  }
 
   return {
-    customer,
+    client,
     company: {
       email: process.env.ATOL_COMPANY_EMAIL ?? "",
       sno: process.env.ATOL_COMPANY_SNO ?? "usn_income",
@@ -154,9 +166,9 @@ function buildReceipt(input: AtolRegisterInput) {
       price: money(item.price),
       quantity: item.quantity,
       sum: money(item.sum),
-      measure: 0,
+      ...(IS_V5 ? { measure: 0 } : { measurement_unit: "шт" }),
       payment_method: "full_payment",
-      payment_object: paymentObject,
+      payment_object: IS_V5 ? Number(paymentObject) : paymentObject,
       vat: { type: vatType },
     })),
     payments: [{ type: 1, sum: money(input.total) }],
