@@ -17,7 +17,6 @@ const schema = z.object({
   to: z.string().datetime(),
   status: z.string().nullable().optional(),
   type: z.string().nullable().optional(),
-  platform: z.string().nullable().optional(),
   scope: z.enum(["dealer", "admin"]),
 });
 
@@ -25,7 +24,7 @@ export const POST = route(async (req: Request) => {
   const session = await auth();
   if (!session?.user) throw unauthenticated();
 
-  const { from, to, status, type, platform, scope } = await parseBody(req, schema);
+  const { from, to, status, type, scope } = await parseBody(req, schema);
 
   if (
     scope === "admin" &&
@@ -41,7 +40,6 @@ export const POST = route(async (req: Request) => {
   if (scope === "dealer") where.dealerId = session.user.id;
   if (status) where.status = status;
   if (type) where.type = type;
-  if (platform) where.platform = platform;
 
   const licenses = await db.license.findMany({
     where,
@@ -62,7 +60,6 @@ export const POST = route(async (req: Request) => {
     { header: "Продукт", key: "product", width: 26 },
     { header: "Версия ПО", key: "versionSoftware", width: 30 },
     { header: "Версия кастома", key: "versionCustom", width: 16 },
-    { header: "Платформа", key: "platform", width: 16 },
     { header: "Без оплаты", key: "issuedWithoutPayment", width: 12 },
     { header: "Статус", key: "status", width: 14 },
     { header: "Создана", key: "createdAt", width: 18 },
@@ -85,7 +82,6 @@ export const POST = route(async (req: Request) => {
       product: l.product ?? "",
       versionSoftware: l.versionSoftware ?? "",
       versionCustom: l.versionCustom ?? "",
-      platform: l.platform ?? "",
       issuedWithoutPayment: l.issuedWithoutPayment ? "Да" : "",
       status: statusLabel("license", l.status),
       createdAt: formatRuDate(l.createdAt),

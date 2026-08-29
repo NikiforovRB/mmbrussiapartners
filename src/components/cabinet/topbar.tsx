@@ -8,6 +8,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { MobileNavTrigger } from "@/components/cabinet/mobile-nav";
 import { NotificationPanel } from "@/components/cabinet/notification-panel";
 import { useCabinetUser } from "@/components/cabinet/cabinet-user";
+import { cabinetUrl } from "@/lib/cabinet-origin";
 import { cn } from "@/lib/utils";
 
 export function Topbar({
@@ -52,6 +53,13 @@ export function Topbar({
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
   }, []);
+
+  // Редирект делаем сами: NextAuth отбрасывает callbackUrl на чужой origin
+  // и молча возвращает на текущий домен.
+  async function logout() {
+    await signOut({ redirect: false });
+    window.location.assign(cabinetUrl("/"));
+  }
 
   return (
     <header className="sticky top-0 z-20 -mx-4 lg:-mx-6 border-b border-hairline bg-white/80 backdrop-blur-xl">
@@ -99,7 +107,7 @@ export function Topbar({
               <UserIcon className="h-4 w-4" /> Профиль
             </Link>
             <button
-              onClick={() => signOut({ callbackUrl: "/" })}
+              onClick={logout}
               className="w-full flex items-center gap-2.5 rounded-panel px-3 py-2 text-sm text-danger hover:bg-surface-muted"
             >
               <LogOut className="h-4 w-4" /> Выйти

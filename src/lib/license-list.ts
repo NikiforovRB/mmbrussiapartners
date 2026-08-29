@@ -23,6 +23,5 @@ export const LICENSE_LIST_SELECT = {
   licenseKey: true,
   deletedAt: true,
   dealerId: true,
-  platform: true,
   issuedWithoutPayment: true,
 } satisfies Prisma.LicenseSelect;

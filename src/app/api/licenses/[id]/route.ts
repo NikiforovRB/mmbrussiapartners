@@ -21,7 +21,6 @@ const patchSchema = z.object({
   city: z.string().nullable().optional(),
   vehicleVin: z.string().nullable().optional(),
   vehicleModel: z.string().nullable().optional(),
-  platform: z.string().nullable().optional(),
   status: z.enum(["ACTIVE", "EXPIRED", "CANCELLED", "REVOKED", "DRAFT"]).optional(),
 });
 
@@ -85,7 +84,6 @@ export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: str
       ...(data.city !== undefined && { city: data.city }),
       ...(data.vehicleVin !== undefined && { vehicleVin: data.vehicleVin }),
       ...(data.vehicleModel !== undefined && { vehicleModel: data.vehicleModel }),
-      ...(data.platform !== undefined && { platform: data.platform || null }),
       ...(data.status !== undefined && { status: data.status }),
     },
   });

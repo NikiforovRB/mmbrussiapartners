@@ -12,6 +12,7 @@ import { Sidebar, type SidebarItem } from "@/components/cabinet/sidebar";
 import { MobileNavProvider } from "@/components/cabinet/mobile-nav";
 import { CommandPalette } from "@/components/cabinet/command-palette";
 import { CabinetUserProvider } from "@/components/cabinet/cabinet-user";
+import { SignOutButton } from "@/components/cabinet/sign-out-button";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { fioFromParts } from "@/lib/utils";
@@ -115,22 +116,9 @@ function PendingScreen({ email }: { email: string }) {
           >
             Связаться с MMB
           </a>
-          <SignOutForm />
+          <SignOutButton className="rounded-btn bg-bg-dark text-white px-5 h-11 inline-flex items-center text-sm disabled:opacity-50" />
         </div>
       </div>
     </div>
-  );
-}
-
-function SignOutForm() {
-  return (
-    <form action="/api/auth/signout" method="post">
-      <button
-        type="submit"
-        className="rounded-btn bg-bg-dark text-white px-5 h-11 inline-flex items-center text-sm"
-      >
-        Выйти
-      </button>
-    </form>
   );
 }

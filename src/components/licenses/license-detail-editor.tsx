@@ -28,7 +28,7 @@ import { Select } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/date-picker";
 import { formatRuDateTime, formatRuDate } from "@/lib/dates";
 import { usePermissions } from "@/hooks/use-permissions";
-import { LICENSE_PLATFORM_OPTIONS, LICENSE_TYPE_OPTIONS } from "@/lib/license-options";
+import { LICENSE_TYPE_OPTIONS } from "@/lib/license-options";
 
 type AuditEntry = {
   id: string;
@@ -58,7 +58,6 @@ type LicenseShape = {
   cancelledAt: string | Date | null;
   licenseKey: string | null;
   deviceId: string | null;
-  platform: string | null;
   issuedWithoutPayment: boolean;
   product: string | null;
   bundle: string | null;
@@ -154,7 +153,6 @@ export function LicenseDetailEditor({
         city: data.city || null,
         vehicleVin: data.vehicleVin || null,
         vehicleModel: data.vehicleModel || null,
-        platform: data.platform || null,
       }),
     });
     setSaving(false);
@@ -237,7 +235,6 @@ export function LicenseDetailEditor({
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <StatusTag kind="license" status={data.status} />
                 <Tag tone={data.type === "Генерация" ? "accent" : "neutral"}>{data.type}</Tag>
-                {data.platform ? <Tag tone="neutral">{data.platform}</Tag> : null}
                 {data.issuedWithoutPayment ? <Tag tone="warning">Без оплаты</Tag> : null}
               </div>
             </div>
@@ -321,14 +318,6 @@ export function LicenseDetailEditor({
               value={data.type}
               onChange={(v) => setData({ ...data, type: v })}
               options={LICENSE_TYPE_OPTIONS}
-            />
-            <Select
-              label="Тип платформы"
-              disabled={!canEdit}
-              value={data.platform ?? ""}
-              onChange={(v) => setData({ ...data, platform: v || null })}
-              placeholder="Не указана"
-              options={[{ value: "", label: "Не указана" }, ...LICENSE_PLATFORM_OPTIONS]}
             />
             {canEditTerms ? (
               <Select
