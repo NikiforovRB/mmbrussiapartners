@@ -91,6 +91,10 @@ const config: Config = {
           "0%": { transform: "translateX(-100%)" },
           "100%": { transform: "translateX(0)" },
         },
+        "panel-in": {
+          "0%": { transform: "translateX(100%)" },
+          "100%": { transform: "translateX(0)" },
+        },
       },
       animation: {
         "fade-up": "fade-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) both",
@@ -98,6 +102,7 @@ const config: Config = {
         "dropdown-in": "dropdown-in 0.18s ease-out both",
         "modal-in": "modal-in 0.2s cubic-bezier(0.22, 1, 0.36, 1) both",
         "drawer-in": "drawer-in 0.26s cubic-bezier(0.22, 1, 0.36, 1) both",
+        "panel-in": "panel-in 0.26s cubic-bezier(0.22, 1, 0.36, 1) both",
         shimmer: "shimmer 1.6s infinite",
         float: "float 6s ease-in-out infinite",
         "gradient-pan": "gradient-pan 8s ease infinite",

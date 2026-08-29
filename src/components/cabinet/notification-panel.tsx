@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import {
   Bell,
@@ -50,6 +51,12 @@ export function NotificationPanel({ initialUnread }: { initialUnread: number }) 
   const [unread, setUnread] = React.useState(initialUnread);
   const [items, setItems] = React.useState<Notification[] | null>(null);
   const [loading, setLoading] = React.useState(false);
+  const [mounted, setMounted] = React.useState(false);
+
+  // Панель живёт в body: у шапки backdrop-filter, а он делает элемент точкой
+  // отсчёта для position: fixed — внутри неё панель схлопывалась в полоску
+  // и оставалась под содержимым страницы.
+  React.useEffect(() => setMounted(true), []);
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -83,12 +90,18 @@ export function NotificationPanel({ initialUnread }: { initialUnread: number }) 
   }, [open, items, load]);
 
   React.useEffect(() => {
+    if (!open) return;
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") setOpen(false);
     }
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, []);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
 
   async function markAll() {
     setUnread(0);
@@ -136,104 +149,107 @@ export function NotificationPanel({ initialUnread }: { initialUnread: number }) 
         ) : null}
       </button>
 
-      <div
-        onClick={() => setOpen(false)}
-        aria-hidden
-        className={cn(
-          "fixed inset-0 z-40 bg-ink/20 backdrop-blur-[2px] transition-opacity duration-200",
-          open ? "opacity-100" : "pointer-events-none opacity-0",
-        )}
-      />
-
-      <aside
-        role="dialog"
-        aria-label="Уведомления"
-        className={cn(
-          "fixed inset-y-0 right-0 z-50 flex w-full max-w-[400px] flex-col bg-white transition-transform duration-300 ease-out",
-          open ? "translate-x-0" : "translate-x-full",
-        )}
-        style={{ boxShadow: "-24px 0 60px -24px rgba(11,16,32,0.22)" }}
-      >
-        <header className="flex items-center justify-between gap-3 border-b border-hairline px-5 py-4">
-          <div>
-            <div className="font-display text-lg tracking-tight">Уведомления</div>
-            <div className="text-xs text-ink-muted">
-              {unread > 0 ? `${unread} непрочитанных` : "Всё прочитано"}
-            </div>
-          </div>
-          <div className="flex items-center gap-1">
-            {unread > 0 ? (
-              <button
-                type="button"
-                onClick={markAll}
-                title="Отметить все прочитанными"
-                className="grid h-9 w-9 place-items-center rounded-btn text-ink-muted transition-colors hover:bg-surface-muted hover:text-ink"
+      {mounted && open
+        ? createPortal(
+            <div className="fixed inset-0 z-[60]">
+              <div
+                onClick={() => setOpen(false)}
+                aria-hidden
+                className="absolute inset-0 bg-[#06121f]/55 animate-fade-in"
+              />
+              <aside
+                role="dialog"
+                aria-modal="true"
+                aria-label="Уведомления"
+                className="absolute inset-y-0 right-0 flex w-full max-w-[400px] flex-col border-l border-hairline bg-white animate-panel-in"
+                style={{ boxShadow: "-24px 0 60px -24px rgba(11,16,32,0.28)" }}
               >
-                <CheckCheck className="h-4 w-4" />
-              </button>
-            ) : null}
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              aria-label="Закрыть"
-              className="grid h-9 w-9 place-items-center rounded-btn text-ink-muted transition-colors hover:bg-surface-muted hover:text-ink"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-        </header>
-
-        <div className="flex-1 overflow-y-auto">
-          {loading && items === null ? (
-            <div className="px-5 py-10 text-center text-sm text-ink-muted">Загружаем…</div>
-          ) : items && items.length > 0 ? (
-            <ul className="divide-y divide-hairline">
-              {items.map((n) => (
-                <li key={n.id}>
-                  <button
-                    type="button"
-                    onClick={() => openItem(n)}
-                    className={cn(
-                      "flex w-full items-start gap-3 px-5 py-4 text-left transition-colors hover:bg-surface-muted",
-                      !n.readAt && "bg-card-light",
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        "mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-panel",
-                        n.readAt ? "bg-surface-muted text-ink-subtle" : "bg-white text-accent",
-                      )}
-                    >
-                      {ICONS[n.type] ?? <Bell className="h-4 w-4" />}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-sm leading-snug">{n.title}</span>
-                      {n.body ? (
-                        <span className="mt-1 block text-xs leading-relaxed text-ink-muted">
-                          {n.body}
-                        </span>
-                      ) : null}
-                      <span className="mt-1.5 block text-[11px] text-ink-subtle">
-                        {formatRuDateTime(n.createdAt)}
-                      </span>
-                    </span>
-                    {!n.readAt ? (
-                      <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
+                <header className="flex items-center justify-between gap-3 border-b border-hairline px-5 py-4">
+                  <div>
+                    <div className="font-display text-lg tracking-tight">Уведомления</div>
+                    <div className="text-xs text-ink-muted">
+                      {unread > 0 ? `${unread} непрочитанных` : "Всё прочитано"}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {unread > 0 ? (
+                      <button
+                        type="button"
+                        onClick={markAll}
+                        title="Отметить все прочитанными"
+                        className="grid h-9 w-9 place-items-center rounded-btn text-ink-muted transition-colors hover:bg-surface-muted hover:text-ink"
+                      >
+                        <CheckCheck className="h-4 w-4" />
+                      </button>
                     ) : null}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <div className="px-5 py-16 text-center">
-              <div className="mx-auto grid h-12 w-12 place-items-center rounded-panel bg-surface-muted text-ink-subtle">
-                <Bell className="h-5 w-5" />
-              </div>
-              <div className="mt-3 text-sm text-ink-muted">Пока нет уведомлений</div>
-            </div>
-          )}
-        </div>
-      </aside>
+                    <button
+                      type="button"
+                      onClick={() => setOpen(false)}
+                      aria-label="Закрыть"
+                      className="grid h-9 w-9 place-items-center rounded-btn text-ink-muted transition-colors hover:bg-surface-muted hover:text-ink"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                </header>
+
+                <div className="flex-1 overflow-y-auto scrollbar-clean">
+                  {loading && items === null ? (
+                    <div className="px-5 py-10 text-center text-sm text-ink-muted">Загружаем…</div>
+                  ) : items && items.length > 0 ? (
+                    <ul className="divide-y divide-hairline">
+                      {items.map((n) => (
+                        <li key={n.id}>
+                          <button
+                            type="button"
+                            onClick={() => openItem(n)}
+                            className={cn(
+                              "flex w-full items-start gap-3 px-5 py-4 text-left transition-colors hover:bg-surface-muted",
+                              !n.readAt && "bg-card-light",
+                            )}
+                          >
+                            <span
+                              className={cn(
+                                "mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-panel",
+                                n.readAt
+                                  ? "bg-surface-muted text-ink-subtle"
+                                  : "bg-white text-accent",
+                              )}
+                            >
+                              {ICONS[n.type] ?? <Bell className="h-4 w-4" />}
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block text-sm leading-snug">{n.title}</span>
+                              {n.body ? (
+                                <span className="mt-1 block text-xs leading-relaxed text-ink-muted">
+                                  {n.body}
+                                </span>
+                              ) : null}
+                              <span className="mt-1.5 block text-[11px] text-ink-subtle">
+                                {formatRuDateTime(n.createdAt)}
+                              </span>
+                            </span>
+                            {!n.readAt ? (
+                              <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
+                            ) : null}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div className="px-5 py-16 text-center">
+                      <div className="mx-auto grid h-12 w-12 place-items-center rounded-panel bg-surface-muted text-ink-subtle">
+                        <Bell className="h-5 w-5" />
+                      </div>
+                      <div className="mt-3 text-sm text-ink-muted">Пока нет уведомлений</div>
+                    </div>
+                  )}
+                </div>
+              </aside>
+            </div>,
+            document.body,
+          )
+        : null}
     </>
   );
 }

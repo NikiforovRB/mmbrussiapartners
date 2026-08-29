@@ -65,7 +65,7 @@ export function MobileNavProvider({
           aria-label="Навигация"
         >
           <div
-            className="absolute inset-0 bg-[#06121f]/55 backdrop-blur-sm animate-fade-in"
+            className="absolute inset-0 bg-[#06121f]/55 animate-fade-in"
             onClick={() => setOpen(false)}
           />
           <aside className="absolute inset-y-0 left-0 w-[82%] max-w-xs p-3 animate-drawer-in">

@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -25,6 +26,13 @@ export function Modal({
   size = "md",
   className,
 }: ModalProps) {
+  const [mounted, setMounted] = React.useState(false);
+
+  // Окно живёт в body: любой предок с transform, filter или backdrop-filter
+  // становится точкой отсчёта для position: fixed — и окно съезжает внутрь
+  // него. Такой предок оставляет после себя даже animate-fade-up.
+  React.useEffect(() => setMounted(true), []);
+
   React.useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
@@ -48,22 +56,24 @@ export function Modal({
     lg: "max-w-2xl",
   } as const;
 
-  if (!open) return null;
+  if (!open || !mounted) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 grid place-items-center p-4 animate-fade-in">
+  return createPortal(
+    <div className="fixed inset-0 z-[60] grid place-items-center p-4 animate-fade-in">
       <div
-        className="absolute inset-0 bg-[#06121f]/55 backdrop-blur-sm"
+        className="absolute inset-0 bg-[#06121f]/55"
         onClick={onClose}
       />
       <div
         role="dialog"
         aria-modal="true"
         className={cn(
-          "relative w-full bg-white border border-hairline rounded-panel p-6 animate-modal-in",
+          "relative w-full max-h-[calc(100vh-2rem)] overflow-y-auto scrollbar-clean",
+          "bg-white border border-hairline rounded-panel p-6 animate-modal-in",
           sizeMap[size],
           className,
         )}
+        style={{ boxShadow: "0 32px 80px -24px rgba(11,16,32,0.35)" }}
       >
         {title || description ? (
           <div className="mb-5 pr-10">
@@ -88,6 +98,7 @@ export function Modal({
           <div className="mt-6 flex flex-wrap justify-end gap-2">{footer}</div>
         ) : null}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

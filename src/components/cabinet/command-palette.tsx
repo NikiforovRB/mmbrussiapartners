@@ -188,7 +188,7 @@ export function CommandPalette() {
   return (
     <div className="fixed inset-0 z-50 grid place-items-start pt-[18vh] px-4 animate-fade-in">
       <div
-        className="absolute inset-0 bg-[#06121f]/55 backdrop-blur-sm"
+        className="absolute inset-0 bg-[#06121f]/55"
         onClick={() => setOpen(false)}
       />
       <div className="relative w-full max-w-xl rounded-panel bg-white border border-hairline p-3 animate-modal-in">
