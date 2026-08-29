@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { hasPermission } from "@/lib/permissions";
 import { ApiError, badRequest, forbidden, parseBody, route, unauthenticated } from "@/lib/api";
 import { createPayment } from "@/lib/payments/service";
-import { defaultLicensePrice, getPaymentProvider } from "@/lib/payments/provider";
+import { getPaymentProvider, licensePrice } from "@/lib/payments/provider";
 import { notifyAdmins } from "@/lib/app-notifications";
 
 export const runtime = "nodejs";
@@ -29,18 +29,18 @@ export const POST = route(async (req: Request) => {
     session.user.isSuperAdmin,
   );
 
-  // Сумму берём из прайса на сервере. Клиентское значение принимается только
-  // от администратора — иначе счёт можно было бы выставить себе на рубль.
-  const amount = canSetAmount && body.amount ? body.amount : defaultLicensePrice();
-  if (!amount) {
-    throw badRequest("Не задана стоимость. Укажите переменную PAYMENT_LICENSE_PRICE.");
-  }
-
   let licenseId: string | null = null;
+  let bundle: string | null = null;
   if (body.licenseId) {
     const license = await db.license.findUnique({
       where: { id: body.licenseId },
-      select: { id: true, number: true, dealerId: true, payment: { select: { id: true } } },
+      select: {
+        id: true,
+        number: true,
+        dealerId: true,
+        bundle: true,
+        payment: { select: { id: true } },
+      },
     });
     if (!license) throw badRequest("Лицензия не найдена");
     if (license.dealerId !== session.user.id && !canSetAmount) {
@@ -48,6 +48,15 @@ export const POST = route(async (req: Request) => {
     }
     if (license.payment) throw badRequest("По этой лицензии счёт уже выставлен");
     licenseId = license.id;
+    bundle = license.bundle;
+  }
+
+  // Сумму берём из прайса на сервере по комплектации лицензии. Клиентское
+  // значение принимается только от администратора — иначе счёт можно было бы
+  // выставить себе на рубль.
+  const amount = canSetAmount && body.amount ? body.amount : licensePrice(bundle);
+  if (!amount) {
+    throw badRequest("Не задана стоимость. Укажите переменную PAYMENT_LICENSE_PRICE.");
   }
 
   const profile = await db.dealerProfile.findUnique({ where: { userId: session.user.id } });

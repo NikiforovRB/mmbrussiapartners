@@ -113,8 +113,39 @@ export function getPaymentProvider(): PaymentProvider {
   return provider;
 }
 
-/** Цена генерации одной лицензии по умолчанию. */
+/** Цена генерации одной лицензии, когда комплектация неизвестна. */
 export function defaultLicensePrice(): number {
   const raw = Number(process.env.PAYMENT_LICENSE_PRICE ?? 0);
   return Number.isFinite(raw) && raw > 0 ? raw : 0;
+}
+
+/**
+ * Прайс по комплектациям: у одного продукта FULL и ECO стоят по-разному.
+ * Переопределяется PAYMENT_BUNDLE_PRICES в виде {"FULL":10000,"ECO":6000}.
+ */
+const DEFAULT_BUNDLE_PRICES: Record<string, number> = { FULL: 10000, ECO: 6000 };
+
+function bundlePrices(): Record<string, number> {
+  const raw = process.env.PAYMENT_BUNDLE_PRICES;
+  if (!raw) return DEFAULT_BUNDLE_PRICES;
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const map: Record<string, number> = {};
+    for (const [key, value] of Object.entries(parsed)) {
+      const price = Number(value);
+      if (Number.isFinite(price) && price >= 0) map[key.trim().toUpperCase()] = price;
+    }
+    return Object.keys(map).length > 0 ? map : DEFAULT_BUNDLE_PRICES;
+  } catch {
+    console.error("[payments] PAYMENT_BUNDLE_PRICES не разобран, взят прайс по умолчанию");
+    return DEFAULT_BUNDLE_PRICES;
+  }
+}
+
+/** Цена лицензии для комплектации; для неизвестной — общая цена. */
+export function licensePrice(bundle?: string | null): number {
+  const key = (bundle ?? "").trim().toUpperCase();
+  if (!key) return defaultLicensePrice();
+  const price = bundlePrices()[key];
+  return price === undefined ? defaultLicensePrice() : price;
 }
