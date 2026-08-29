@@ -22,6 +22,7 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { deleteObject } from "../src/lib/s3";
+import { licensePrice } from "../src/lib/payments/provider";
 import { startMockDriveMods } from "./mock-drivemods";
 
 const BASE = (process.env.E2E_BASE_URL ?? "http://localhost:3000").replace(/\/+$/, "");
@@ -258,14 +259,14 @@ async function testAuthGate() {
 async function testGeneration(dealer: Session, dealerId: string) {
   section("Выдача лицензий: все типы");
 
-  for (const [type, termMonths, termLabel] of [
-    ["Генерация", 0, "бессрочная"],
-    ["Обновление", 12, "1 год"],
-    ["Восстановление", 36, "3 года"],
+  for (const [type, termMonths, termLabel, bundle] of [
+    ["Генерация", 0, "бессрочная", "FULL"],
+    ["Обновление", 12, "1 год", "ECO"],
+    ["Восстановление", 36, "3 года", "FULL"],
   ] as const) {
     const res = await dealer.post(
       "/api/drivemods/createlic",
-      licensePayload(type, { termMonths }),
+      licensePayload(type, { termMonths, bundle }),
     );
     const body = res.body as { licenseId?: string; number?: string; payment?: { amount: number } | null; error?: string };
     if (res.status !== 200 || !body.licenseId) {
@@ -284,6 +285,13 @@ async function testGeneration(dealer: Session, dealerId: string) {
       `Тип «${type}» (${termLabel})`,
       lic?.type === type && lic?.status === "ACTIVE" && termOk && audit === 1,
       `${body.number}, срок ${lic?.termEnd ? lic.termEnd.toISOString().slice(0, 10) : "бессрочно"}, счёт ${body.payment?.amount ?? "—"} ₽`,
+    );
+
+    const expected = licensePrice(bundle);
+    check(
+      `Цена комплектации ${bundle}`,
+      Number(lic?.price ?? 0) === expected && body.payment?.amount === expected,
+      `лицензия ${lic?.price ?? "—"} ₽, счёт ${body.payment?.amount ?? "—"} ₽, прайс ${expected} ₽`,
     );
   }
 
@@ -468,11 +476,12 @@ async function testPayments(dealer: Session, admin: Session, dealerId: string) {
   const p1 = b1.paymentId
     ? await prisma.payment.findUnique({ where: { id: b1.paymentId } })
     : null;
-  const expectedPrice = Number(process.env.PAYMENT_LICENSE_PRICE ?? 0);
+  // Прайс сервер берёт по комплектации лицензии, а без лицензии — общий.
+  const expectedPrice = licensePrice(priced?.bundle ?? null);
   check(
     "Сумма счёта берётся с сервера, а не от клиента",
     p1 != null && Number(p1.amount) === expectedPrice,
-    `запрошен 1 ₽, выставлено ${p1 ? Number(p1.amount) : "—"} ₽`,
+    `запрошен 1 ₽, выставлено ${p1 ? Number(p1.amount) : "—"} ₽ (прайс ${expectedPrice} ₽)`,
   );
 
   const foreign = await prisma.license.findFirst({

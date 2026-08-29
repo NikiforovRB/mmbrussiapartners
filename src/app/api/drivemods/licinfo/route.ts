@@ -8,6 +8,7 @@ import {
   isDriveModsConfigured,
 } from "@/lib/drivemods";
 import { ApiError, badRequest, forbidden, route, unauthenticated } from "@/lib/api";
+import { licensePrice } from "@/lib/payments/provider";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -50,6 +51,9 @@ export const POST = route(async (req: Request) => {
         bundle: it.bundle,
         region: it.region,
         fullName: productFullName(it),
+        // Цену считает сервер: она же будет применена при генерации,
+        // что бы ни прислал браузер.
+        price: licensePrice(it.bundle),
       })),
     });
   } catch (err) {

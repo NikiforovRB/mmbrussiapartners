@@ -12,9 +12,6 @@ import {
   KeyRound,
   Download,
   User as UserIcon,
-  Building2,
-  Mail,
-  Phone,
   CreditCard,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -25,11 +22,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Card } from "@/components/ui/card";
 import { Tag } from "@/components/ui/tag";
 import { usePermissions } from "@/hooks/use-permissions";
-import {
-  LICENSE_TYPE_OPTIONS,
-  LICENSE_TERM_OPTIONS,
-  LICENSE_TERMS,
-} from "@/lib/license-options";
+import { LICENSE_TYPE_OPTIONS } from "@/lib/license-options";
 
 type Step = 1 | 2 | 3 | 4;
 
@@ -39,6 +32,8 @@ type LicItem = {
   bundle: string | null;
   region: string | null;
   fullName: string;
+  /** Цена комплектации; приходит с сервера, клиент её не задаёт. */
+  price: number;
 };
 
 type LicInfo = {
@@ -88,16 +83,7 @@ export function LicenseStepper({
   const [type, setType] = React.useState<string>("Генерация");
   const [productIndex, setProductIndex] = React.useState<string>("");
   const [dealerComment, setDealerComment] = React.useState<string>(dealerName);
-  const [termMonths, setTermMonths] = React.useState<string>("0");
   const [withoutPayment, setWithoutPayment] = React.useState<boolean>(false);
-  const [customer, setCustomer] = React.useState({
-    fio: "",
-    organization: "",
-    email: "",
-    phone: "",
-    region: "",
-    city: "",
-  });
 
   const [submitting, setSubmitting] = React.useState(false);
   const [result, setResult] = React.useState<{
@@ -110,6 +96,13 @@ export function LicenseStepper({
 
   const selectedItem =
     info?.items.find((i) => String(i.index) === productIndex) ?? null;
+
+  // Устройство обычно даёт один продукт с несколькими комплектациями, но
+  // список приходит плоским — собираем названия без повторов.
+  const productNames = React.useMemo(
+    () => [...new Set(info?.items.map((i) => i.product).filter(Boolean) ?? [])],
+    [info],
+  );
 
   async function checkLicense() {
     if (!file) {
@@ -134,7 +127,11 @@ export function LicenseStepper({
       }
       const data: LicInfo = await res.json();
       setInfo(data);
-      if (data.items.length > 0) setProductIndex(String(data.items[0].index));
+      // Комплектации стоят по-разному, поэтому заранее отмечаем только
+      // единственный вариант: выбор между FULL и ECO делает дилер.
+      setProductIndex(
+        data.items.length === 1 ? String(data.items[0].index) : "",
+      );
       setStep(2);
     } catch {
       toast.error("Ошибка запроса к сервису лицензий");
@@ -145,7 +142,7 @@ export function LicenseStepper({
 
   function toStep3() {
     if (!selectedItem) {
-      toast.error("Выберите продукт");
+      toast.error("Выберите комплектацию");
       return;
     }
     if (!dealerComment.trim()) {
@@ -171,13 +168,6 @@ export function LicenseStepper({
         versionSoftware: info.versionSoftware,
         versionCustom: info.versionCustom,
         dealerComment: dealerComment.trim(),
-        termMonths: Number(termMonths),
-        customerFio: customer.fio,
-        customerOrganization: customer.organization,
-        customerEmail: customer.email,
-        customerPhone: customer.phone,
-        customerRegion: customer.region,
-        customerCity: customer.city,
         ...(canIssueFree ? { issuedWithoutPayment: withoutPayment } : {}),
       }),
     });
@@ -315,96 +305,41 @@ export function LicenseStepper({
                       onChange={setType}
                       options={LICENSE_TYPE_OPTIONS}
                     />
-                    <Select
+                    <ReadonlyField
                       label="Продукт"
-                      value={productIndex}
-                      onChange={setProductIndex}
-                      placeholder="Выберите продукт"
-                      options={info.items.map((it) => ({
-                        value: String(it.index),
-                        label: it.fullName,
-                      }))}
-                    />
-                    <Select
-                      label="Срок действия"
-                      value={termMonths}
-                      onChange={setTermMonths}
-                      options={LICENSE_TERM_OPTIONS}
+                      value={productNames.join(", ") || "—"}
                     />
                   </div>
-                  {info.items.length === 0 ? (
-                    <p className="mt-3 text-sm text-danger">
-                      Для этого устройства нет доступных продуктов для
-                      генерации.
-                    </p>
-                  ) : null}
-                  <div className="mt-3">
+
+                  <div className="mt-5">
+                    <div className="text-xs uppercase tracking-widest text-ink-muted">
+                      Комплектация
+                    </div>
+                    {info.items.length === 0 ? (
+                      <p className="mt-3 text-sm text-danger">
+                        Для этого устройства нет доступных комплектаций.
+                      </p>
+                    ) : (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {info.items.map((it) => (
+                          <BundleButton
+                            key={it.index}
+                            item={it}
+                            active={String(it.index) === productIndex}
+                            onSelect={() => setProductIndex(String(it.index))}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="mt-5">
                     <Input
                       label="Комментарий дилера (имя субдилера) *"
                       value={dealerComment}
                       onChange={(e) => setDealerComment(e.target.value)}
                       placeholder="Например: Артур, Москва"
                       icon={<UserIcon className="h-4 w-4" />}
-                    />
-                  </div>
-                </Card>
-
-                <Card>
-                  <div className="font-display text-lg  tracking-tight mb-1">
-                    Данные клиента
-                  </div>
-                  <p className="text-xs text-ink-muted mb-4">
-                    Необязательно, для вашего учёта.
-                  </p>
-                  <div className="grid sm:grid-cols-2 gap-3">
-                    <Input
-                      label="ФИО"
-                      icon={<UserIcon className="h-4 w-4" />}
-                      value={customer.fio}
-                      onChange={(e) =>
-                        setCustomer({ ...customer, fio: e.target.value })
-                      }
-                    />
-                    <Input
-                      label="Организация"
-                      icon={<Building2 className="h-4 w-4" />}
-                      value={customer.organization}
-                      onChange={(e) =>
-                        setCustomer({
-                          ...customer,
-                          organization: e.target.value,
-                        })
-                      }
-                    />
-                    <Input
-                      label="Email"
-                      icon={<Mail className="h-4 w-4" />}
-                      value={customer.email}
-                      onChange={(e) =>
-                        setCustomer({ ...customer, email: e.target.value })
-                      }
-                    />
-                    <Input
-                      label="Телефон"
-                      icon={<Phone className="h-4 w-4" />}
-                      value={customer.phone}
-                      onChange={(e) =>
-                        setCustomer({ ...customer, phone: e.target.value })
-                      }
-                    />
-                    <Input
-                      label="Регион"
-                      value={customer.region}
-                      onChange={(e) =>
-                        setCustomer({ ...customer, region: e.target.value })
-                      }
-                    />
-                    <Input
-                      label="Город"
-                      value={customer.city}
-                      onChange={(e) =>
-                        setCustomer({ ...customer, city: e.target.value })
-                      }
                     />
                   </div>
                 </Card>
@@ -439,12 +374,13 @@ export function LicenseStepper({
                     label="Тип лицензии"
                     value={<Tag tone="accent">{type}</Tag>}
                   />
-                  <Row label="Продукт" value={selectedItem?.fullName ?? "—"} />
+                  <Row label="Продукт" value={selectedItem?.product ?? "—"} />
                   <Row
-                    label="Срок действия"
+                    label="Комплектация"
                     value={
-                      LICENSE_TERMS.find((t) => String(t.value) === termMonths)
-                        ?.label ?? "Бессрочная"
+                      selectedItem
+                        ? `${selectedItem.bundle || "—"} · ${formatPrice(selectedItem.price)}`
+                        : "—"
                     }
                   />
                   <Row label="Версия ПО" value={info.versionSoftware || "—"} />
@@ -463,7 +399,6 @@ export function LicenseStepper({
                       file ? `${file.name} · ${formatBytes(file.size)}` : "—"
                     }
                   />
-                  <Row label="Клиент" value={customer.fio || "—"} />
                 </div>
 
                 {canIssueFree ? (
@@ -588,6 +523,51 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
       </div>
       <div className="mt-0.5">{value}</div>
     </div>
+  );
+}
+
+/** Продукт определяет устройство, поэтому поле показываем, но не даём менять. */
+function ReadonlyField({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="space-y-1.5">
+      <span className="block text-[12.5px] text-ink-muted">{label}</span>
+      <div className="h-12 rounded-panel border border-hairline bg-surface-muted px-4 flex items-center text-[14.5px] truncate">
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function formatPrice(value: number) {
+  return `${value.toLocaleString("ru-RU")} ₽`;
+}
+
+/** Комплектация как в админке DRIVEMODS: название и цена на одной кнопке. */
+function BundleButton({
+  item,
+  active,
+  onSelect,
+}: {
+  item: LicItem;
+  active: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-pressed={active}
+      className={`inline-flex items-center gap-2.5 rounded-btn border px-4 h-11 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 ${
+        active
+          ? "border-accent bg-accent/5 text-accent"
+          : "border-hairline text-ink hover:border-accent hover:text-accent"
+      }`}
+    >
+      <span className="tracking-tight">{item.bundle || item.product}</span>
+      <span className={active ? "text-accent" : "text-ink-muted"}>
+        {formatPrice(item.price)}
+      </span>
+    </button>
   );
 }
 
