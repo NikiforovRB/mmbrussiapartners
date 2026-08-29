@@ -5,6 +5,7 @@ import { Topbar } from "@/components/cabinet/topbar";
 import { PageHeader } from "@/components/cabinet/page-header";
 import { Card } from "@/components/ui/card";
 import { Tag } from "@/components/ui/tag";
+import { StatusTag } from "@/components/ui/status-tag";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { ChevronRight, Search } from "lucide-react";
@@ -125,7 +126,7 @@ export default async function AdminDealersPage({
                         {u.dealerProfile?.region ? ` · ${u.dealerProfile.region}` : ""}
                       </td>
                       <td className="px-4 py-3">
-                        <StatusTag status={u.status} />
+                        <StatusTag kind="user" status={u.status} />
                       </td>
                       <td className="px-4 py-3 ">
                         {u.dealerProfile?.licensesUsed ?? 0} / {u.dealerProfile?.licenseLimit ?? 0}
@@ -161,21 +162,6 @@ export default async function AdminDealersPage({
       </div>
     </>
   );
-}
-
-function StatusTag({ status }: { status: string }) {
-  switch (status) {
-    case "APPROVED":
-      return <Tag tone="success">Одобрен</Tag>;
-    case "PENDING":
-      return <Tag tone="warning">Ожидает</Tag>;
-    case "REJECTED":
-      return <Tag tone="danger">Отклонён</Tag>;
-    case "SUSPENDED":
-      return <Tag tone="muted">Заблокирован</Tag>;
-    default:
-      return <Tag tone="neutral">{status}</Tag>;
-  }
 }
 
 void Search;

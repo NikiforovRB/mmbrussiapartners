@@ -21,6 +21,7 @@ const ALL_PERMISSIONS = [
   "stats.view",
   "geo.view",
   "payments.view",
+  "payments.manage",
   "payments.refund",
   "settings.edit",
   "auditLog.view",

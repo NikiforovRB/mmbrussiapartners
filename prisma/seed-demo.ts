@@ -331,13 +331,26 @@ async function main() {
         }
         // payment
         if (plan.payment) {
+          const settled = plan.payment === "PAID" || plan.payment === "REFUNDED";
+          // Один из оплаченных оставляем без чека — чтобы в админке было
+          // видно состояние «оплачено, чек не пробит».
+          const receiptDone = settled && i % 4 !== 3;
+          const fiscalNumber = 1000 + seq;
           await prisma.payment.create({
             data: {
               dealerId: dealer.id,
               licenseId: license.id,
               amount: 3000 + (i % 5) * 900,
               status: plan.payment,
+              provider: "manual",
               description: `Оплата лицензии ${number}`,
+              payUrl: `/dealer/payments`,
+              paidAt: settled ? created : null,
+              receiptStatus: settled ? (receiptDone ? "done" : "wait") : null,
+              receiptUrl: receiptDone
+                ? `https://consumer.1-ofd.ru/v1?fn=9288000100014915&i=${fiscalNumber}`
+                : null,
+              fiscalDocNumber: receiptDone ? String(fiscalNumber) : null,
               createdAt: created,
             },
           });

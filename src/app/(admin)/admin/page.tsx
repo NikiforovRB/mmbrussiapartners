@@ -11,7 +11,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { Topbar } from "@/components/cabinet/topbar";
 import { Card } from "@/components/ui/card";
-import { Tag } from "@/components/ui/tag";
+import { StatusTag } from "@/components/ui/status-tag";
 import { Button } from "@/components/ui/button";
 import { ScrollReveal } from "@/components/animations/scroll-reveal";
 import { addDays, formatRuDate } from "@/lib/dates";
@@ -124,7 +124,7 @@ export default async function AdminDashboard() {
                     <div className="text-xs text-ink-muted">{u.email}</div>
                   </div>
                   <div className="flex items-center gap-3 text-sm text-ink-muted">
-                    <Tag tone="warning">PENDING</Tag>
+                    <StatusTag kind="user" status={u.status} />
                     <span>{formatRuDate(u.createdAt)}</span>
                     <Link href={`/admin/dealers/${u.id}`}>
                       <Button size="sm" variant="secondary">Открыть</Button>

@@ -7,6 +7,7 @@ import { hasPermission } from "@/lib/permissions";
 import { uploadObject, getDownloadUrl } from "@/lib/s3";
 import { fioFromParts } from "@/lib/utils";
 import { formatRuDate } from "@/lib/dates";
+import { statusLabel } from "@/lib/status-labels";
 
 export const runtime = "nodejs";
 
@@ -85,7 +86,7 @@ export async function POST(req: Request) {
       versionCustom: l.versionCustom ?? "",
       platform: l.platform ?? "",
       issuedWithoutPayment: l.issuedWithoutPayment ? "Да" : "",
-      status: l.status,
+      status: statusLabel("license", l.status),
       createdAt: formatRuDate(l.createdAt),
       termEnd: formatRuDate(l.termEnd),
       dealer: fioFromParts({

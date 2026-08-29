@@ -8,6 +8,7 @@ import { Topbar } from "@/components/cabinet/topbar";
 import { PageHeader } from "@/components/cabinet/page-header";
 import { Card } from "@/components/ui/card";
 import { Tag } from "@/components/ui/tag";
+import { StatusTag } from "@/components/ui/status-tag";
 import { Pagination, parsePage } from "@/components/cabinet/pagination";
 import { formatRuDateTime } from "@/lib/dates";
 import { fioFromParts } from "@/lib/utils";
@@ -117,7 +118,7 @@ export default async function CancellationRequestsPage({
                             {r.license.number}
                           </Link>
                           <Tag tone={r.license.type === "Генерация" ? "accent" : "neutral"}>{r.license.type}</Tag>
-                          <StatusTag status={r.status} />
+                          <StatusTag kind="request" status={r.status} />
                         </div>
                         <div className="text-xs text-ink-muted mt-1.5">
                           {fio || r.requestedBy.email} · {formatRuDateTime(r.createdAt)}
@@ -150,15 +151,3 @@ export default async function CancellationRequestsPage({
   );
 }
 
-function StatusTag({ status }: { status: string }) {
-  switch (status) {
-    case "PENDING":
-      return <Tag tone="warning">На рассмотрении</Tag>;
-    case "APPROVED":
-      return <Tag tone="success">Одобрена</Tag>;
-    case "REJECTED":
-      return <Tag tone="muted">Отклонена</Tag>;
-    default:
-      return <Tag tone="neutral">{status}</Tag>;
-  }
-}

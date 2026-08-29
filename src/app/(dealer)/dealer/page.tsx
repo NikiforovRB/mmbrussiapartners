@@ -12,6 +12,7 @@ import { db } from "@/lib/db";
 import { Topbar } from "@/components/cabinet/topbar";
 import { Card } from "@/components/ui/card";
 import { Tag } from "@/components/ui/tag";
+import { StatusTag } from "@/components/ui/status-tag";
 import { Button } from "@/components/ui/button";
 import { ScrollReveal } from "@/components/animations/scroll-reveal";
 import { DayActivity } from "@/components/dealer/day-activity";
@@ -194,7 +195,7 @@ export default async function DealerDashboard() {
                       </td>
                       <td className="px-4 py-3">{l.customerFio}</td>
                       <td className="px-4 py-3">
-                        <StatusTag status={l.status} />
+                        <StatusTag kind="license" status={l.status} />
                       </td>
                       <td className="px-4 py-3 text-ink-muted">{formatRuDate(l.termEnd)}</td>
                     </tr>
@@ -296,19 +297,3 @@ function RingProgress({ pct, used, limit, remaining }: { pct: number; used: numb
   );
 }
 
-function StatusTag({ status }: { status: string }) {
-  switch (status) {
-    case "ACTIVE":
-      return <Tag tone="success">Активна</Tag>;
-    case "EXPIRED":
-      return <Tag tone="muted">Истекла</Tag>;
-    case "CANCELLED":
-      return <Tag tone="warning">Аннулирована</Tag>;
-    case "REVOKED":
-      return <Tag tone="danger">Отозвана</Tag>;
-    case "DRAFT":
-      return <Tag tone="neutral">Черновик</Tag>;
-    default:
-      return <Tag tone="neutral">{status}</Tag>;
-  }
-}
