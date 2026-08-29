@@ -154,7 +154,7 @@ export function RegisterForm() {
         title={agreed ? undefined : "Подтвердите согласие на обработку персональных данных"}
         iconRight={<ArrowRight className="h-4 w-4" />}
       >
-        Подать заявку
+        Подать заявку на партнёрство
       </Button>
     </form>
   );

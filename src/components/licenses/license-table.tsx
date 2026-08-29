@@ -41,7 +41,6 @@ type License = {
   licenseKey?: string | null;
   deletedAt?: Date | string | null;
   dealerId: string;
-  platform?: string | null;
   issuedWithoutPayment?: boolean;
 };
 

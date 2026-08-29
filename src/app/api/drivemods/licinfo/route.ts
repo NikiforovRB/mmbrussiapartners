@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { validateDeviceIdFile } from "@/lib/license-engine";
-import { licInfo, productFullName, DriveModsError, isDriveModsConfigured } from "@/lib/drivemods";
+import {
+  licInfo,
+  productFullName,
+  describeDriveModsFailure,
+  isDriveModsConfigured,
+} from "@/lib/drivemods";
 import { ApiError, badRequest, forbidden, route, unauthenticated } from "@/lib/api";
 
 export const runtime = "nodejs";
@@ -28,6 +33,12 @@ export const POST = route(async (req: Request) => {
 
   try {
     const info = await licInfo(buf.toString("base64"));
+    if (info.items.length === 0) {
+      throw badRequest(
+        "DRIVEMODS не нашёл доступных продуктов для этого устройства. " +
+          "Проверьте, что загружен device_id.bin от нужного ШГУ.",
+      );
+    }
     return NextResponse.json({
       recoverable: info.recoverable,
       versionSoftware: info.version_software,
@@ -42,8 +53,9 @@ export const POST = route(async (req: Request) => {
       })),
     });
   } catch (err) {
-    const status = err instanceof DriveModsError ? err.status : 502;
-    const message = err instanceof Error ? err.message : "Ошибка запроса к DRIVEMODS";
+    if (err instanceof ApiError) throw err;
+    console.error("[licinfo] запрос к DRIVEMODS не удался", err);
+    const { status, message } = describeDriveModsFailure(err);
     throw new ApiError("UPSTREAM", message, status);
   }
 });

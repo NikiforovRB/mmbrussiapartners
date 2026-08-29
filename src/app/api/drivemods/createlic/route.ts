@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { hasPermission } from "@/lib/permissions";
 import { ApiError, badRequest, forbidden, parseBody, route, unauthenticated } from "@/lib/api";
 import { uploadObject, getDownloadUrl, deleteObject } from "@/lib/s3";
-import { createLic, DriveModsError, isDriveModsConfigured } from "@/lib/drivemods";
+import { createLic, describeDriveModsFailure, isDriveModsConfigured } from "@/lib/drivemods";
 import { generateLicenseNumber, normalizePhone, fioFromParts } from "@/lib/utils";
 import { isLicenseType, isLicenseTerm, termEndFromMonths } from "@/lib/license-options";
 import { defaultLicensePrice } from "@/lib/payments/provider";
@@ -141,8 +141,9 @@ export const POST = route(async (req: Request) => {
         deviceId: p.deviceId || "",
       });
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Ошибка генерации лицензии";
-      throw new ApiError("UPSTREAM", message, err instanceof DriveModsError ? err.status : 502);
+      console.error("[createlic] генерация в DRIVEMODS не удалась", err);
+      const { status, message } = describeDriveModsFailure(err);
+      throw new ApiError("UPSTREAM", message, status);
     }
 
     const licenseUpload = await uploadObject(

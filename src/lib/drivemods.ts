@@ -16,6 +16,9 @@ const PASSWORD = process.env.DRIVEMODS_PASSWORD ?? "";
 
 const SESSION_TTL_MS = 10 * 60 * 1000;
 
+/** Без таймаута зависший сервис держал бы наш роут до таймаута платформы. */
+const REQUEST_TIMEOUT_MS = Number(process.env.DRIVEMODS_TIMEOUT_MS ?? 20_000);
+
 export type LicInfoItem = {
   product: string;
   bundle: string | null;
@@ -38,11 +41,51 @@ export type CreateLicResponse = {
 
 export class DriveModsError extends Error {
   status: number;
-  constructor(message: string, status = 500) {
+  /** Ответ DRIVEMODS как есть: годится для лога, но не для показа дилеру. */
+  upstream: string | null;
+
+  constructor(message: string, status = 500, upstream: string | null = null) {
     super(message);
     this.name = "DriveModsError";
     this.status = status;
+    this.upstream = upstream;
   }
+}
+
+/**
+ * Текст для дилера и код ответа нашего API. Сообщения DRIVEMODS вида
+ * «Неверный ответ генератора лицензий» наружу не выпускаем: они ничего
+ * не говорят о том, что делать дальше.
+ */
+export function describeDriveModsFailure(err: unknown): { status: number; message: string } {
+  if (!(err instanceof DriveModsError)) {
+    return { status: 502, message: "Сервис лицензий DRIVEMODS недоступен. Попробуйте позже." };
+  }
+  if (err.status === 504) {
+    return { status: 504, message: "Сервис DRIVEMODS не ответил вовремя. Повторите попытку." };
+  }
+  if (err.status === 503) {
+    return { status: 503, message: err.message };
+  }
+  if (err.status === 401 || err.status === 403) {
+    return {
+      status: 502,
+      message: "Портал не смог авторизоваться в DRIVEMODS. Сообщите администратору.",
+    };
+  }
+  if (err.status === 400 || err.status === 422) {
+    return {
+      status: 422,
+      message: "DRIVEMODS отклонил запрос: файл device_id.bin не подходит для генерации.",
+    };
+  }
+  return {
+    status: 502,
+    message:
+      "DRIVEMODS не смог обработать файл device_id.bin. Убедитесь, что это оригинальный файл, " +
+      "выгруженный из ШГУ и не изменённый после выгрузки. Если файл верный — генератор лицензий " +
+      "DRIVEMODS сейчас недоступен, попробуйте позже.",
+  };
 }
 
 export function isDriveModsConfigured(): boolean {
@@ -51,11 +94,38 @@ export function isDriveModsConfigured(): boolean {
 
 let sessionCache: { token: string; ts: number } | null = null;
 
-async function parseJson(res: Response): Promise<Record<string, unknown>> {
+/** Тело ответа разбираем один раз: сырой текст нужен для лога. */
+async function readBody(res: Response): Promise<{ data: Record<string, unknown>; raw: string }> {
+  const raw = await res.text().catch(() => "");
   try {
-    return (await res.json()) as Record<string, unknown>;
+    const parsed = JSON.parse(raw) as unknown;
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return { data: parsed as Record<string, unknown>, raw };
+    }
   } catch {
-    return {};
+    /* не JSON — ниже вернём пустой объект, текст останется в raw */
+  }
+  return { data: {}, raw };
+}
+
+async function post(path: string, body: unknown): Promise<Response> {
+  try {
+    return await fetch(`${BASE_URL}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      cache: "no-store",
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+  } catch (err) {
+    const timedOut = err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError");
+    throw new DriveModsError(
+      timedOut
+        ? `DRIVEMODS не ответил за ${Math.round(REQUEST_TIMEOUT_MS / 1000)} с`
+        : "Не удалось связаться с DRIVEMODS",
+      timedOut ? 504 : 503,
+      err instanceof Error ? err.message : null,
+    );
   }
 }
 
@@ -63,16 +133,15 @@ async function login(): Promise<string> {
   if (!isDriveModsConfigured()) {
     throw new DriveModsError("Интеграция DRIVEMODS не настроена (нет учётных данных мастер-аккаунта).", 503);
   }
-  const res = await fetch(`${BASE_URL}/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username: USERNAME, password: PASSWORD, clientToken: CLIENT_TOKEN }),
-    cache: "no-store",
+  const res = await post("/login", {
+    username: USERNAME,
+    password: PASSWORD,
+    clientToken: CLIENT_TOKEN,
   });
-  const data = await parseJson(res);
+  const { data, raw } = await readBody(res);
   if (!res.ok || !data.sessionToken) {
     const msg = (data.error as string) || "Ошибка авторизации DRIVEMODS";
-    throw new DriveModsError(msg, res.status || 401);
+    throw new DriveModsError(msg, res.status || 401, raw.slice(0, 500));
   }
   const token = data.sessionToken as string;
   sessionCache = { token, ts: Date.now() };
@@ -93,31 +162,21 @@ async function callAuthed(
   path: string,
   payload: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
-  const doCall = async (sessionToken: string) => {
-    const res = await fetch(`${BASE_URL}${path}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...payload,
-        sessionToken,
-        uid: USERNAME,
-        clientToken: CLIENT_TOKEN,
-      }),
-      cache: "no-store",
-    });
-    return res;
-  };
+  const doCall = (sessionToken: string) =>
+    post(path, { ...payload, sessionToken, uid: USERNAME, clientToken: CLIENT_TOKEN });
 
   let sessionToken = await getSession();
   let res = await doCall(sessionToken);
   if (res.status === 401) {
+    sessionCache = null;
     sessionToken = await getSession(true);
     res = await doCall(sessionToken);
   }
-  const data = await parseJson(res);
+  const { data, raw } = await readBody(res);
   if (!res.ok) {
     const msg = (data.error as string) || `Ошибка DRIVEMODS (${res.status})`;
-    throw new DriveModsError(msg, res.status);
+    console.error(`[drivemods] ${path} → ${res.status} ${raw.slice(0, 500)}`);
+    throw new DriveModsError(msg, res.status, raw.slice(0, 500));
   }
   return data;
 }
@@ -178,8 +237,11 @@ export async function createLic(params: CreateLicParams): Promise<CreateLicRespo
 
 export async function health(): Promise<boolean> {
   try {
-    const res = await fetch(`${BASE_URL}/health`, { cache: "no-store" });
-    const data = await parseJson(res);
+    const res = await fetch(`${BASE_URL}/health`, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+    const { data } = await readBody(res);
     return res.ok && data.status === "ok";
   } catch {
     return false;

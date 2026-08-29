@@ -15,25 +15,38 @@ import { FadeUp } from "@/components/animations/fade-up";
 import { HeroBackground } from "@/components/marketing/hero-background";
 import { getCompanyContacts, getHomepageContent } from "@/lib/company-settings";
 import type { HomepageContent } from "@/lib/homepage-content";
+import { auth } from "@/lib/auth";
+import { getCabinetPath } from "@/lib/cabinet-path";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  const [content, contacts] = await Promise.all([getHomepageContent(), getCompanyContacts()]);
+  const [content, contacts, session] = await Promise.all([
+    getHomepageContent(),
+    getCompanyContacts(),
+    auth().catch(() => null),
+  ]);
   const phoneHref = `tel:${contacts.phone.replace(/[^\d+]/g, "")}`;
+  const loginHref = session?.user ? getCabinetPath(session.user) : "/login";
 
   return (
     <main className="min-h-screen">
-      <Header content={content} />
-      <Hero content={content} />
+      <Header content={content} loginHref={loginHref} />
+      <Hero content={content} loginHref={loginHref} />
       <Workflow content={content} />
-      <CtaContact content={content} phone={contacts.phone} email={contacts.email} phoneHref={phoneHref} />
-      <Footer content={content} />
+      <CtaContact
+        content={content}
+        loginHref={loginHref}
+        phone={contacts.phone}
+        email={contacts.email}
+        phoneHref={phoneHref}
+      />
+      <Footer content={content} loginHref={loginHref} />
     </main>
   );
 }
 
-function Header({ content }: { content: HomepageContent }) {
+function Header({ content, loginHref }: { content: HomepageContent; loginHref: string }) {
   return (
     <header className="absolute inset-x-0 top-0 z-20">
       <div className="mx-auto max-w-7xl px-6 lg:px-10 h-20 flex items-center justify-between">
@@ -47,7 +60,7 @@ function Header({ content }: { content: HomepageContent }) {
           </a>
         </nav>
         <div className="flex items-center gap-2">
-          <LoginLink>
+          <LoginLink href={loginHref}>
             <Button
               variant="ghost"
               size="sm"
@@ -67,7 +80,7 @@ function Header({ content }: { content: HomepageContent }) {
   );
 }
 
-function Hero({ content }: { content: HomepageContent }) {
+function Hero({ content, loginHref }: { content: HomepageContent; loginHref: string }) {
   return (
     <section className="relative overflow-hidden grid-mesh pt-28 pb-24 md:pt-36 md:pb-32 gradient-grid">
       <HeroBackground />
@@ -91,7 +104,7 @@ function Hero({ content }: { content: HomepageContent }) {
         </FadeUp>
         <FadeUp delay={0.18}>
           <div className="mt-9 flex flex-wrap items-center gap-3">
-            <LoginLink>
+            <LoginLink href={loginHref}>
               <Button size="lg" icon={<KeyRound className="h-4 w-4" />}>{content.hero.loginButton}</Button>
             </LoginLink>
             <Link href="/register">
@@ -152,11 +165,13 @@ function Workflow({ content }: { content: HomepageContent }) {
 
 function CtaContact({
   content,
+  loginHref,
   phone,
   email,
   phoneHref,
 }: {
   content: HomepageContent;
+  loginHref: string;
   phone: string;
   email: string;
   phoneHref: string;
@@ -179,7 +194,7 @@ function CtaContact({
                     {content.cta.registerButton}
                   </Button>
                 </Link>
-                <LoginLink>
+                <LoginLink href={loginHref}>
                   <Button size="lg" variant="dark" icon={<KeyRound className="h-4 w-4" />}>
                     {content.cta.loginButton}
                   </Button>
@@ -223,7 +238,7 @@ function CtaContact({
   );
 }
 
-function Footer({ content }: { content: HomepageContent }) {
+function Footer({ content, loginHref }: { content: HomepageContent; loginHref: string }) {
   return (
     <footer className="py-10">
       <div className="mx-auto max-w-7xl px-6 lg:px-10 flex flex-wrap items-center justify-between gap-3">
@@ -231,7 +246,9 @@ function Footer({ content }: { content: HomepageContent }) {
           © {new Date().getFullYear()} {content.footer.copyrightPrefix}
         </div>
         <div className="flex items-center gap-2 text-sm text-ink-muted">
-          <LoginLink className="hover:text-ink">{content.footer.loginLink}</LoginLink>
+          <LoginLink href={loginHref} className="hover:text-ink">
+            {content.footer.loginLink}
+          </LoginLink>
           <span>·</span>
           <Link href="/register" className="hover:text-ink">{content.footer.registerLink}</Link>
         </div>

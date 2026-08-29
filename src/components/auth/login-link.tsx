@@ -1,19 +1,21 @@
-"use client";
-
 import Link from "next/link";
-import { useSession } from "next-auth/react";
-import { getCabinetPath } from "@/lib/cabinet-path";
 
+/**
+ * Ссылка «Войти» на публичной странице: вошедшего ведёт сразу в его кабинет.
+ *
+ * Адрес приходит готовым с сервера. Раньше компонент сам звал useSession(),
+ * из-за чего публичная главная тянула /api/auth/session на каждой загрузке —
+ * по разу на каждую ссылку — и падала при рендере вне SessionProvider.
+ */
 export function LoginLink({
+  href,
   children,
   className,
 }: {
+  href: string;
   children: React.ReactNode;
   className?: string;
 }) {
-  const { data: session } = useSession();
-  const href = session?.user ? getCabinetPath(session.user) : "/login";
-
   return (
     <Link href={href} className={className}>
       {children}

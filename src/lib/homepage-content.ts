@@ -64,7 +64,7 @@ export const DEFAULT_HOMEPAGE_CONTENT: HomepageContent = {
     description:
       "Кабинет представителей MMB RUSSIA: генерация лицензий по device-id.bin, мониторинг сроков, гео-аналитика и управление дилерской сетью — всё в одном пространстве.",
     loginButton: "Войти в кабинет",
-    registerButton: "Зарегистрироваться",
+    registerButton: "Подать заявку на партнёрство",
     stats: [
       { value: "24/7", label: "Доступ к кабинету" },
       { value: "<1с", label: "Генерация лицензии" },
@@ -103,7 +103,7 @@ export const DEFAULT_HOMEPAGE_CONTENT: HomepageContent = {
     title: "Готовы подключиться?",
     description:
       "Зарегистрируйтесь как представитель — администратор одобрит вашу заявку и выдаст лимит лицензий.",
-    registerButton: "Стать представителем",
+    registerButton: "Подать заявку на партнёрство",
     loginButton: "Войти",
     phoneLabel: "Телефон",
     emailLabel: "Почта",
