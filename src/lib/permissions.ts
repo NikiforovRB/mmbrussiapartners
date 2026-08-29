@@ -6,7 +6,8 @@ export const PERMISSIONS = {
   "dealers.setLimit": "Управление лимитами лицензий",
   "licenses.view": "Просмотр лицензий",
   "licenses.create": "Создание лицензий",
-  "licenses.edit": "Редактирование лицензий",
+  "licenses.edit": "Редактирование карточки лицензии",
+  "licenses.manageTerms": "Изменение статуса, срока и типа лицензии",
   "licenses.cancel": "Аннулирование лицензий",
   "licenses.revoke": "Отзыв лицензий",
   "licenses.delete": "Удаление лицензий",
@@ -40,6 +41,7 @@ export const PERMISSION_GROUPS: Record<string, PermissionKey[]> = {
     "licenses.view",
     "licenses.create",
     "licenses.edit",
+    "licenses.manageTerms",
     "licenses.cancel",
     "licenses.revoke",
     "licenses.delete",
@@ -53,6 +55,39 @@ export const PERMISSION_GROUPS: Record<string, PermissionKey[]> = {
 };
 
 export const ALL_PERMISSIONS = Object.keys(PERMISSIONS) as PermissionKey[];
+
+/**
+ * Права, которыми представитель пользуется в собственном кабинете: свои
+ * лицензии, свои отчёты, свои счета описаны теми же ключами, что и у
+ * администратора.
+ *
+ * Отличать администратора по ним нельзя. Проверка вида
+ * `isOwner || can("licenses.view")` для представителя всегда истинна, то есть
+ * «право видеть своё» открывало бы и чужое.
+ */
+export const DEALER_SCOPE_PERMISSIONS: PermissionKey[] = [
+  "licenses.view",
+  "licenses.create",
+  "licenses.edit",
+  "reports.view",
+  "payments.view",
+];
+
+/** Права, которые выходят за пределы своего кабинета — только у администратора. */
+export const ADMIN_SCOPE_PERMISSIONS: PermissionKey[] = ALL_PERMISSIONS.filter(
+  (p) => !DEALER_SCOPE_PERMISSIONS.includes(p),
+);
+
+/**
+ * Работает ли пользователь с сетью представителей, а не только со своими
+ * данными. Единственный допустимый признак «это администратор».
+ */
+export function hasAdminScope(
+  userPermissions: readonly string[] | undefined | null,
+  isSuperAdmin = false,
+): boolean {
+  return requireAny(userPermissions, ADMIN_SCOPE_PERMISSIONS, isSuperAdmin);
+}
 
 export function hasPermission(
   userPermissions: readonly string[] | undefined | null,

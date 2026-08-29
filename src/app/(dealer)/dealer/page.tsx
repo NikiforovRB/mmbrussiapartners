@@ -125,7 +125,7 @@ export default async function DealerDashboard() {
                     </Button>
                   </Link>
                   <Link href="/dealer/licenses">
-                    <Button variant="ghost" className="text-white hover:bg-white/10" icon={<KeyRound className="h-4 w-4" />}>
+                    <Button variant="ghost" className="text-white hover:bg-white/10 hover:text-white" icon={<KeyRound className="h-4 w-4" />}>
                       Мои лицензии
                     </Button>
                   </Link>

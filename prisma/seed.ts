@@ -1,42 +1,13 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
+// Единый источник списка прав: копия здесь однажды уже отстала от кода,
+// и роль администратора осталась без недавно добавленного права.
+import { ALL_PERMISSIONS, DEALER_SCOPE_PERMISSIONS } from "../src/lib/permissions";
 
-const ALL_PERMISSIONS = [
-  "dealers.view",
-  "dealers.approve",
-  "dealers.edit",
-  "dealers.suspend",
-  "dealers.setLimit",
-  "licenses.view",
-  "licenses.create",
-  "licenses.edit",
-  "licenses.cancel",
-  "licenses.revoke",
-  "licenses.delete",
-  "licenses.restore",
-  "licenses.issueFree",
-  "roles.manage",
-  "users.manage",
-  "reports.view",
-  "reports.export",
-  "stats.view",
-  "geo.view",
-  "payments.view",
-  "payments.manage",
-  "payments.refund",
-  "settings.edit",
-  "auditLog.view",
-  "templates.edit",
-];
-
-const DEALER_PERMISSIONS = [
-  "licenses.view",
-  "licenses.create",
-  "licenses.edit",
-  "licenses.cancel",
-  "reports.view",
-  "payments.view",
-];
+// Представителю хватает прав на собственный кабинет: к своим лицензиям,
+// отчётам и счетам доступ и так есть по владению. Право licenses.cancel
+// ему выдавать нельзя — оно означает аннулирование любой лицензии сети.
+const DEALER_PERMISSIONS = DEALER_SCOPE_PERMISSIONS;
 
 async function main() {
   const prisma = new PrismaClient();

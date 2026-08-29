@@ -93,7 +93,7 @@ export function LicenseDetailEditor({
   const canEdit = !isAdmin || can("licenses.edit");
   // Тип, срок, статус и набор функций — коммерческие условия лицензии;
   // владелец правит только карточку клиента и данные установки.
-  const canEditTerms = can("licenses.edit");
+  const canEditTerms = can("licenses.manageTerms");
   const canDownload = !isAdmin || can("licenses.view");
   const canCancel = !isAdmin || can("licenses.cancel");
   const canRevoke = isAdmin && can("licenses.revoke");

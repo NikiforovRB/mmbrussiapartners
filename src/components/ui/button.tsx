@@ -3,7 +3,7 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
-type Variant = "primary" | "secondary" | "dark" | "ghost" | "danger";
+type Variant = "primary" | "secondary" | "dark" | "ghost" | "ghostDanger" | "danger";
 type Size = "sm" | "md" | "lg";
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -41,7 +41,10 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function 
     secondary:
       "bg-white text-ink border border-hairline hover:border-accent hover:text-accent active:scale-[0.985]",
     dark: "bg-bg-dark text-white hover:bg-[#111] active:scale-[0.985]",
-    ghost: "bg-transparent text-ink hover:bg-surface-muted active:scale-[0.985]",
+    ghost: "bg-transparent text-ink hover:bg-surface-muted hover:text-accent active:scale-[0.985]",
+    // Тот же ghost, но для необратимых действий: удаление, отказ по заявке.
+    ghostDanger:
+      "bg-transparent text-ink hover:bg-danger/10 hover:text-danger active:scale-[0.985]",
     danger: "bg-danger text-white hover:bg-[#dc2626] active:scale-[0.985]",
   };
 

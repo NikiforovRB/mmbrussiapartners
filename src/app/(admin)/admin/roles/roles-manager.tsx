@@ -160,7 +160,7 @@ export function RolesManager({ roles }: { roles: Role[] }) {
                 {!active.isSystem ? (
                   <>
                     <Button
-                      variant="ghost"
+                      variant="ghostDanger"
                       disabled={!canManage}
                       title={canManage ? undefined : "Нет права на управление ролями"}
                       icon={<Trash2 className="h-4 w-4" />}

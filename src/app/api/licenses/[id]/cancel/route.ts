@@ -22,10 +22,12 @@ export const POST = route(async (req: Request, ctx: { params: Promise<{ id: stri
   const license = await db.license.findUnique({ where: { id }, include: { dealer: true } });
   if (!license) throw notFound("Лицензия не найдена");
 
+  // Прямое аннулирование — административное действие. Представитель на свою
+  // лицензию подаёт заявку (/cancel-request), её рассматривает администратор.
   const isOwner = license.dealerId === session.user.id;
-  const canCancel =
-    hasPermission(session.user.permissions, "licenses.cancel", session.user.isSuperAdmin) || isOwner;
-  if (!canCancel) throw forbidden();
+  if (!hasPermission(session.user.permissions, "licenses.cancel", session.user.isSuperAdmin)) {
+    throw forbidden();
+  }
 
   if (license.status === "CANCELLED" || license.status === "REVOKED") {
     throw badRequest("Лицензия уже неактивна");

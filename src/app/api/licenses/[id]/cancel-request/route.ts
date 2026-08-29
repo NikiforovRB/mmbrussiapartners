@@ -21,6 +21,8 @@ export const POST = route(async (req: Request, ctx: { params: Promise<{ id: stri
   const license = await db.license.findUnique({ where: { id }, include: { dealer: true } });
   if (!license) throw notFound("Лицензия не найдена");
 
+  // Заявку подаёт владелец лицензии; администратору она не нужна —
+  // он аннулирует напрямую, но доступ оставляем для разбора спорных случаев.
   const isOwner = license.dealerId === session.user.id;
   const canRequest =
     isOwner || hasPermission(session.user.permissions, "licenses.cancel", session.user.isSuperAdmin);

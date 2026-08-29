@@ -45,7 +45,7 @@ export function RequestActions({ id }: { id: string }) {
       </Button>
       <Button
         size="sm"
-        variant="ghost"
+        variant="ghostDanger"
         icon={<XCircle className="h-4 w-4" />}
         onClick={() => setRejectOpen(true)}
       >

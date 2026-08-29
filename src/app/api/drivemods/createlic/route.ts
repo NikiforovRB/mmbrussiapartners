@@ -62,12 +62,13 @@ export const POST = route(async (req: Request) => {
   });
   if (!actor) throw unauthenticated();
 
-  // Администратор выпускает лицензии от своего имени и лимитом дилера
-  // не ограничен; для представителя лимит обязателен.
-  const isAdminActor =
+  // Лимитом не связан тот, кто этими лимитами управляет. Право licenses.create
+  // здесь не подходит: оно есть и у представителя, а значит не отличает
+  // администратора и обнулило бы проверку остатка для всех.
+  const bypassesLimit =
     session.user.isSuperAdmin ||
-    hasPermission(session.user.permissions, "licenses.create", session.user.isSuperAdmin);
-  if (!isAdminActor && !actor.dealerProfile) throw badRequest("Профиль не найден");
+    hasPermission(session.user.permissions, "dealers.setLimit", session.user.isSuperAdmin);
+  if (!bypassesLimit && !actor.dealerProfile) throw badRequest("Профиль не найден");
 
   const canIssueFree = hasPermission(
     session.user.permissions,
@@ -79,7 +80,7 @@ export const POST = route(async (req: Request) => {
   // Слот занимаем до похода во внешний API: между проверкой остатка и
   // инкрементом лежат две загрузки в S3 и генерация, и без резервирования
   // два параллельных запроса пробили бы лимит.
-  const limited = Boolean(actor.dealerProfile) && !isAdminActor;
+  const limited = Boolean(actor.dealerProfile) && !bypassesLimit;
   if (limited) {
     const reserved = await db.dealerProfile.updateMany({
       where: { userId: actor.id, licensesUsed: { lt: actor.dealerProfile!.licenseLimit } },
