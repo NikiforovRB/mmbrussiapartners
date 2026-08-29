@@ -33,7 +33,7 @@ export default async function NewLicensePage() {
         user={{ name: fio || user.email, email: user.email, role: user.role.name }}
       />
       <div className="mt-6">
-        <LicenseStepper limit={limit} used={used} />
+        <LicenseStepper limit={limit} used={used} dealerName={fio || user.email} />
       </div>
     </>
   );

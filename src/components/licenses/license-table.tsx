@@ -17,18 +17,20 @@ import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { Modal } from "@/components/ui/modal";
 import { Textarea } from "@/components/ui/textarea";
-import { formatRuDate } from "@/lib/dates";
 import { fileSafeName } from "@/components/licenses/utils";
 import { toast } from "sonner";
 import { usePermissions } from "@/hooks/use-permissions";
+import { LICENSE_TYPE_FILTER_OPTIONS } from "@/lib/license-options";
 
 type License = {
   id: string;
   number: string;
-  type: "ECO" | "FULL" | "CUSTOM";
+  type: string;
   status: "ACTIVE" | "EXPIRED" | "CANCELLED" | "REVOKED" | "DRAFT";
   termStart: Date | string;
   termEnd: Date | string;
+  product?: string | null;
+  versionSoftware?: string | null;
   customerFio: string;
   customerOrganization?: string | null;
   customerEmail?: string | null;
@@ -204,16 +206,11 @@ export function LicenseTable({
               ]}
             />
             <Select
-              label="Тип"
+              label="Тип лицензии"
               value={type}
               onChange={(v) => setType(v)}
-              placeholder="Любой тип"
-              options={[
-                { value: "", label: "Любой тип" },
-                { value: "ECO", label: "ECO" },
-                { value: "FULL", label: "FULL" },
-                { value: "CUSTOM", label: "CUSTOM" },
-              ]}
+              placeholder="Все типы лицензий"
+              options={LICENSE_TYPE_FILTER_OPTIONS}
             />
           </div>
         ) : null}
@@ -229,7 +226,7 @@ export function LicenseTable({
                 <th className="px-4 py-3">Клиент</th>
                 <th className="px-4 py-3">Email / Тел.</th>
                 <th className="px-4 py-3">Статус</th>
-                <th className="px-4 py-3">Срок</th>
+                <th className="px-4 py-3">Версия ПО</th>
                 <th className="px-4 py-3 text-right">Действия</th>
               </tr>
             </thead>
@@ -258,9 +255,10 @@ export function LicenseTable({
                     ) : null}
                   </td>
                   <td className="px-4 py-3">
-                    <Tag tone={l.type === "FULL" ? "accent" : l.type === "ECO" ? "muted" : "neutral"}>
-                      {l.type}
-                    </Tag>
+                    <Tag tone={l.type === "Генерация" ? "accent" : "neutral"}>{l.type}</Tag>
+                    {l.product ? (
+                      <div className="text-xs text-ink-muted mt-1">{l.product}</div>
+                    ) : null}
                   </td>
                   <td className="px-4 py-3">
                     <div className="">{l.customerFio}</div>
@@ -275,7 +273,9 @@ export function LicenseTable({
                   <td className="px-4 py-3">
                     <StatusTag status={l.status} />
                   </td>
-                  <td className="px-4 py-3 text-ink-muted">{formatRuDate(l.termEnd)}</td>
+                  <td className="px-4 py-3 text-ink-muted text-xs break-all">
+                    {l.versionSoftware || "—"}
+                  </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1.5">
                       {l.licenseKey ? (

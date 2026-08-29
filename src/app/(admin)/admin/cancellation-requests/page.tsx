@@ -116,7 +116,7 @@ export default async function CancellationRequestsPage({
                           >
                             {r.license.number}
                           </Link>
-                          <Tag tone={r.license.type === "FULL" ? "accent" : "neutral"}>{r.license.type}</Tag>
+                          <Tag tone={r.license.type === "Генерация" ? "accent" : "neutral"}>{r.license.type}</Tag>
                           <StatusTag status={r.status} />
                         </div>
                         <div className="text-xs text-ink-muted mt-1.5">

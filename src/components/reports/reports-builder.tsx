@@ -9,7 +9,7 @@ import { Select } from "@/components/ui/select";
 import { DateRangePicker, type DateRange } from "@/components/ui/date-range-picker";
 import { addDays, addMonths, formatRuDate } from "@/lib/dates";
 import { usePermissions } from "@/hooks/use-permissions";
-import { LICENSE_PLATFORM_OPTIONS } from "@/lib/license-options";
+import { LICENSE_PLATFORM_OPTIONS, LICENSE_TYPE_FILTER_OPTIONS } from "@/lib/license-options";
 
 const PRESETS = [
   { id: "today", label: "Сегодня", days: 0 },
@@ -90,16 +90,11 @@ export function ReportsBuilder({ context }: { context: "dealer" | "admin" }) {
             ]}
           />
           <Select
-            label="Тип"
+            label="Тип лицензии"
             value={type}
             onChange={(v) => setType(v)}
-            placeholder="Любой"
-            options={[
-              { value: "", label: "Любой" },
-              { value: "ECO", label: "ECO" },
-              { value: "FULL", label: "FULL" },
-              { value: "CUSTOM", label: "CUSTOM" },
-            ]}
+            placeholder="Все типы лицензий"
+            options={LICENSE_TYPE_FILTER_OPTIONS}
           />
           <Select
             label="Тип платформы"
@@ -151,7 +146,7 @@ export function ReportsBuilder({ context }: { context: "dealer" | "admin" }) {
               : "—"}
           </Line>
           <Line label="Статус">{status || "Все"}</Line>
-          <Line label="Тип">{type || "Любой"}</Line>
+          <Line label="Тип лицензии">{type || "Все типы"}</Line>
           <Line label="Платформа">{platform || "Любая"}</Line>
         </div>
         <div className="divider my-4" />

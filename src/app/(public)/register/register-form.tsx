@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { GeoNotice } from "./geo-notice";
 import { registerDealerAction } from "./actions";
 
 export function RegisterForm() {
@@ -57,6 +58,7 @@ export function RegisterForm() {
 
   return (
     <form onSubmit={onSubmit} className="space-y-4">
+      <GeoNotice />
       <div className="grid md:grid-cols-2 gap-3">
         <Input
           label="Фамилия *"

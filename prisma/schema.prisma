@@ -15,12 +15,6 @@ enum UserStatus {
   SUSPENDED
 }
 
-enum LicenseType {
-  ECO
-  FULL
-  CUSTOM
-}
-
 enum LicenseStatus {
   DRAFT
   ACTIVE
@@ -141,6 +135,9 @@ model DealerProfile {
   lat                 Float?
   lng                 Float?
   avatarKey           String?
+  signupCountry       String?
+  signupCity          String?
+  signupIp            String?
   licenseLimit        Int      @default(0)
   licensesUsed        Int      @default(0)
   approvedAt          DateTime?
@@ -162,7 +159,7 @@ model License {
   id                    String        @id @default(cuid())
   number                String        @unique
   dealerId              String
-  type                  LicenseType   @default(FULL)
+  type                  String        @default("Генерация")
   status                LicenseStatus @default(DRAFT)
   features              Json          @default("{}")
   termStart             DateTime
@@ -170,6 +167,12 @@ model License {
   deviceId              String
   deviceIdKey           String?
   licenseKey            String?
+  product               String?
+  bundle                String?
+  productRegion         String?
+  versionSoftware       String?
+  versionCustom         String?
+  dealerComment         String?
   customerFio           String
   customerOrganization  String?
   customerEmail         String?

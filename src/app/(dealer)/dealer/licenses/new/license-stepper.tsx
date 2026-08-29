@@ -11,54 +11,61 @@ import {
   Sparkles,
   FileBox,
   KeyRound,
-  Mail,
-  Phone,
+  Download,
   User as UserIcon,
   Building2,
-  Car,
-  Download,
+  Mail,
+  Phone,
+  ShieldCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { DatePicker } from "@/components/ui/date-picker";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card } from "@/components/ui/card";
 import { Tag } from "@/components/ui/tag";
-import { formatRuDate, addMonths } from "@/lib/dates";
-import { LICENSE_PLATFORM_OPTIONS } from "@/lib/license-options";
+import { LICENSE_TYPE_OPTIONS } from "@/lib/license-options";
 
 type Step = 1 | 2 | 3 | 4;
 
-const FEATURES_DEFAULT: Record<string, boolean> = {
-  carplay: true,
-  android_auto: true,
-  navi: true,
-  voice: true,
-  hidden_menu: false,
-  dvr: false,
-  hud: false,
+type LicItem = {
+  index: number;
+  product: string;
+  bundle: string | null;
+  region: string | null;
+  fullName: string;
 };
 
-const FEATURE_LABELS: Record<string, string> = {
-  carplay: "CarPlay",
-  android_auto: "Android Auto",
-  navi: "Навигация",
-  voice: "Голосовое управление",
-  hidden_menu: "Скрытые функции",
-  dvr: "Видеорегистратор",
-  hud: "HUD",
+type LicInfo = {
+  recoverable: boolean;
+  versionSoftware: string;
+  versionCustom: string;
+  deviceId: string;
+  items: LicItem[];
 };
+
+async function fileToBase64(file: File): Promise<string> {
+  const buf = await file.arrayBuffer();
+  const bytes = new Uint8Array(buf);
+  let binary = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
 
 export function LicenseStepper({
   limit,
   used,
   context = "dealer",
+  dealerName = "",
 }: {
   limit: number;
   used: number;
   context?: "dealer" | "admin";
+  dealerName?: string;
 }) {
   const router = useRouter();
   const isAdmin = context === "admin";
@@ -67,12 +74,14 @@ export function LicenseStepper({
   const [step, setStep] = React.useState<Step>(1);
 
   const [file, setFile] = React.useState<File | null>(null);
-  const [type, setType] = React.useState<"ECO" | "FULL" | "CUSTOM">("FULL");
-  const [platform, setPlatform] = React.useState<string>("");
+  const [deviceBase64, setDeviceBase64] = React.useState<string>("");
+  const [loadingInfo, setLoadingInfo] = React.useState(false);
+  const [info, setInfo] = React.useState<LicInfo | null>(null);
+
+  const [type, setType] = React.useState<string>("Генерация");
+  const [productIndex, setProductIndex] = React.useState<string>("");
+  const [dealerComment, setDealerComment] = React.useState<string>(dealerName);
   const [withoutPayment, setWithoutPayment] = React.useState<boolean>(isAdmin);
-  const [features, setFeatures] = React.useState(FEATURES_DEFAULT);
-  const [termStart, setTermStart] = React.useState<Date | null>(new Date());
-  const [termEnd, setTermEnd] = React.useState<Date | null>(addMonths(new Date(), 12));
   const [customer, setCustomer] = React.useState({
     fio: "",
     organization: "",
@@ -80,62 +89,87 @@ export function LicenseStepper({
     phone: "",
     region: "",
     city: "",
-    vehicleVin: "",
-    vehicleModel: "",
   });
+
   const [submitting, setSubmitting] = React.useState(false);
   const [result, setResult] = React.useState<{
     licenseId: string;
     number: string;
     downloadUrl: string;
+    filename?: string;
   } | null>(null);
 
-  function next() {
-    if (step === 1 && !file) {
-      toast.error("Загрузите файл device-id.bin");
+  const selectedItem = info?.items.find((i) => String(i.index) === productIndex) ?? null;
+
+  async function checkLicense() {
+    if (!file) {
+      toast.error("Загрузите файл device_id.bin");
       return;
     }
-    if (step === 2) {
-      if (!customer.fio.trim()) {
-        toast.error("Укажите ФИО клиента");
+    setLoadingInfo(true);
+    try {
+      const [b64, res] = await Promise.all([
+        fileToBase64(file),
+        (async () => {
+          const fd = new FormData();
+          fd.append("device", file);
+          return fetch("/api/drivemods/licinfo", { method: "POST", body: fd });
+        })(),
+      ]);
+      setDeviceBase64(b64);
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        toast.error(j.error ?? "Не удалось получить данные лицензии");
         return;
       }
-      if (!termStart || !termEnd) {
-        toast.error("Укажите срок действия");
-        return;
-      }
-      if (termEnd.getTime() <= termStart.getTime()) {
-        toast.error("Срок окончания должен быть позже начала");
-        return;
-      }
+      const data: LicInfo = await res.json();
+      setInfo(data);
+      if (data.items.length > 0) setProductIndex(String(data.items[0].index));
+      setStep(2);
+    } catch {
+      toast.error("Ошибка запроса к сервису лицензий");
+    } finally {
+      setLoadingInfo(false);
     }
-    setStep((s) => (Math.min(4, s + 1) as Step));
   }
-  function back() {
-    setStep((s) => (Math.max(1, s - 1) as Step));
+
+  function toStep3() {
+    if (!selectedItem) {
+      toast.error("Выберите продукт");
+      return;
+    }
+    if (!dealerComment.trim()) {
+      toast.error("Укажите комментарий дилера (имя субдилера)");
+      return;
+    }
+    setStep(3);
   }
 
   async function submit() {
-    if (!file || !termStart || !termEnd) return;
+    if (!selectedItem || !deviceBase64 || !info) return;
     setSubmitting(true);
-    const fd = new FormData();
-    fd.append("device", file);
-    fd.append("type", type);
-    fd.append("features", JSON.stringify(features));
-    fd.append("termStart", termStart.toISOString());
-    fd.append("termEnd", termEnd.toISOString());
-    fd.append("customerFio", customer.fio);
-    fd.append("customerOrganization", customer.organization);
-    fd.append("customerEmail", customer.email);
-    fd.append("customerPhone", customer.phone);
-    fd.append("customerRegion", customer.region);
-    fd.append("customerCity", customer.city);
-    fd.append("vehicleVin", customer.vehicleVin);
-    fd.append("vehicleModel", customer.vehicleModel);
-    fd.append("platform", platform);
-    if (isAdmin && withoutPayment) fd.append("issuedWithoutPayment", "true");
-
-    const res = await fetch("/api/licenses/generate", { method: "POST", body: fd });
+    const res = await fetch("/api/drivemods/createlic", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        deviceBase64,
+        deviceId: info.deviceId,
+        type,
+        product: selectedItem.product,
+        bundle: selectedItem.bundle,
+        region: selectedItem.region,
+        versionSoftware: info.versionSoftware,
+        versionCustom: info.versionCustom,
+        dealerComment: dealerComment.trim(),
+        customerFio: customer.fio,
+        customerOrganization: customer.organization,
+        customerEmail: customer.email,
+        customerPhone: customer.phone,
+        customerRegion: customer.region,
+        customerCity: customer.city,
+        ...(isAdmin ? { issuedWithoutPayment: withoutPayment } : {}),
+      }),
+    });
     setSubmitting(false);
     if (!res.ok) {
       const j = await res.json().catch(() => ({}));
@@ -147,6 +181,7 @@ export function LicenseStepper({
       licenseId: data.licenseId,
       number: data.number,
       downloadUrl: data.downloadUrl,
+      filename: data.filename,
     });
     setStep(4);
     router.refresh();
@@ -158,8 +193,8 @@ export function LicenseStepper({
         <div className="text-xs uppercase tracking-widest text-ink-muted">Шаги</div>
         <ol className="mt-4 space-y-1.5">
           {[
-            { id: 1, label: "Загрузка device-id.bin" },
-            { id: 2, label: "Параметры лицензии" },
+            { id: 1, label: "Загрузка device_id.bin" },
+            { id: 2, label: "Продукт и параметры" },
             { id: 3, label: "Подтверждение" },
             { id: 4, label: "Готово" },
           ].map((s) => {
@@ -199,172 +234,141 @@ export function LicenseStepper({
               <Card>
                 <div className="flex items-center gap-3 mb-2">
                   <Sparkles className="h-5 w-5 text-accent" />
-                  <div className="font-display text-lg  tracking-tight">Загрузите файл device-id.bin</div>
+                  <div className="font-display text-lg  tracking-tight">Загрузите файл device_id.bin</div>
                 </div>
                 <p className="text-sm text-ink-muted mb-5">
-                  Файл создаётся ШГУ автоматически после прошивки и сохраняется на USB-флешке.
+                  Файл создаётся ШГУ автоматически. Мы отправим его в сервис DRIVEMODS и покажем доступные продукты.
                 </p>
                 <DropZone file={file} onChange={setFile} />
                 <div className="mt-6 flex justify-end gap-2">
-                  <Button onClick={next} icon={<ArrowRight className="h-4 w-4" />}>
-                    Далее
+                  <Button loading={loadingInfo} onClick={checkLicense} icon={<ArrowRight className="h-4 w-4" />}>
+                    Проверить лицензию
                   </Button>
                 </div>
               </Card>
             </motion.div>
           ) : null}
 
-          {step === 2 ? (
+          {step === 2 && info ? (
             <motion.div key="s2" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }}>
               <div className="grid gap-5">
                 <Card>
-                  <div className="font-display text-lg  tracking-tight mb-4">Тип лицензии</div>
+                  <div className="font-display text-lg  tracking-tight mb-4">Данные ШГУ</div>
                   <div className="grid sm:grid-cols-3 gap-3">
-                    {(["ECO", "FULL", "CUSTOM"] as const).map((t) => (
-                      <button
-                        key={t}
-                        type="button"
-                        onClick={() => {
-                          setType(t);
-                          if (t === "ECO") setFeatures({ ...FEATURES_DEFAULT, hidden_menu: false, dvr: false, hud: false, voice: false });
-                          if (t === "FULL") setFeatures({ ...FEATURES_DEFAULT, hidden_menu: true, dvr: true, hud: true });
-                        }}
-                        className={`rounded-panel bg-white p-5 text-left transition-all ${
-                          type === t ? "ring-0 outline-none scale-[1.01] bg-accent text-white" : ""
-                        }`}
-                      >
-                        <div className="font-display text-2xl  tracking-tight">{t}</div>
-                        <div className={`text-xs mt-1 ${type === t ? "text-white/70" : "text-ink-muted"}`}>
-                          {t === "ECO" && "Базовые функции"}
-                          {t === "FULL" && "Все функции"}
-                          {t === "CUSTOM" && "Свой набор опций"}
-                        </div>
-                      </button>
-                    ))}
+                    <Info label="Версия ПО" value={info.versionSoftware || "—"} />
+                    <Info label="Версия кастома" value={info.versionCustom || "—"} />
+                    <Info label="ID устройства" value={info.deviceId || "—"} />
                   </div>
                   <div className="mt-3">
+                    {info.recoverable ? (
+                      <Tag tone="success">Восстановление доступно</Tag>
+                    ) : (
+                      <Tag tone="muted">Восстановление недоступно</Tag>
+                    )}
+                  </div>
+                </Card>
+
+                <Card>
+                  <div className="font-display text-lg  tracking-tight mb-4">Продукт и тип</div>
+                  <div className="grid sm:grid-cols-2 gap-3">
                     <Select
-                      label="Тип платформы"
-                      value={platform}
-                      onChange={setPlatform}
-                      placeholder="Выберите платформу"
-                      options={[{ value: "", label: "Не указана" }, ...LICENSE_PLATFORM_OPTIONS]}
+                      label="Тип лицензии"
+                      value={type}
+                      onChange={setType}
+                      options={LICENSE_TYPE_OPTIONS}
+                    />
+                    <Select
+                      label="Продукт"
+                      value={productIndex}
+                      onChange={setProductIndex}
+                      placeholder="Выберите продукт"
+                      options={info.items.map((it) => ({ value: String(it.index), label: it.fullName }))}
                     />
                   </div>
-                  <div className="divider my-5" />
-                  <div className="grid sm:grid-cols-2 gap-3">
-                    {Object.keys(FEATURE_LABELS).map((k) => (
-                      <Checkbox
-                        key={k}
-                        checked={features[k]}
-                        onChange={(v) => setFeatures((f) => ({ ...f, [k]: v }))}
-                        label={FEATURE_LABELS[k]}
-                      />
-                    ))}
+                  {info.items.length === 0 ? (
+                    <p className="mt-3 text-sm text-danger">
+                      Для этого устройства нет доступных продуктов для генерации.
+                    </p>
+                  ) : null}
+                  <div className="mt-3">
+                    <Input
+                      label="Комментарий дилера (имя субдилера) *"
+                      value={dealerComment}
+                      onChange={(e) => setDealerComment(e.target.value)}
+                      placeholder="Например: Артур, Москва"
+                      icon={<UserIcon className="h-4 w-4" />}
+                    />
                   </div>
                 </Card>
+
                 <Card>
-                  <div className="font-display text-lg  tracking-tight mb-4">Срок действия</div>
-                  <div className="grid sm:grid-cols-2 gap-3">
-                    <DatePicker label="Начало" value={termStart} onChange={setTermStart} />
-                    <DatePicker label="Окончание" value={termEnd} onChange={setTermEnd} min={termStart ?? undefined} />
-                  </div>
-                </Card>
-                <Card>
-                  <div className="font-display text-lg  tracking-tight mb-4">Данные клиента</div>
+                  <div className="font-display text-lg  tracking-tight mb-1">Данные клиента</div>
+                  <p className="text-xs text-ink-muted mb-4">Необязательно, для вашего учёта.</p>
                   <div className="grid sm:grid-cols-2 gap-3">
                     <Input
-                      label="ФИО *"
+                      label="ФИО"
                       icon={<UserIcon className="h-4 w-4" />}
                       value={customer.fio}
                       onChange={(e) => setCustomer({ ...customer, fio: e.target.value })}
-                      placeholder="Иванов Иван Иванович"
                     />
                     <Input
                       label="Организация"
                       icon={<Building2 className="h-4 w-4" />}
                       value={customer.organization}
                       onChange={(e) => setCustomer({ ...customer, organization: e.target.value })}
-                      placeholder="ООО / ИП"
                     />
                     <Input
                       label="Email"
                       icon={<Mail className="h-4 w-4" />}
                       value={customer.email}
                       onChange={(e) => setCustomer({ ...customer, email: e.target.value })}
-                      placeholder="example@mail.ru"
                     />
                     <Input
                       label="Телефон"
                       icon={<Phone className="h-4 w-4" />}
                       value={customer.phone}
                       onChange={(e) => setCustomer({ ...customer, phone: e.target.value })}
-                      placeholder="+7 ___ ___-__-__"
                     />
                     <Input
                       label="Регион"
                       value={customer.region}
                       onChange={(e) => setCustomer({ ...customer, region: e.target.value })}
-                      placeholder="Москва"
                     />
                     <Input
                       label="Город"
                       value={customer.city}
                       onChange={(e) => setCustomer({ ...customer, city: e.target.value })}
-                      placeholder="Москва"
-                    />
-                    <Input
-                      label="VIN автомобиля"
-                      icon={<Car className="h-4 w-4" />}
-                      value={customer.vehicleVin}
-                      onChange={(e) => setCustomer({ ...customer, vehicleVin: e.target.value })}
-                      placeholder="WDB..."
-                    />
-                    <Input
-                      label="Модель автомобиля"
-                      value={customer.vehicleModel}
-                      onChange={(e) => setCustomer({ ...customer, vehicleModel: e.target.value })}
-                      placeholder="Mercedes-Benz E-class"
                     />
                   </div>
                 </Card>
+
                 <div className="flex justify-between gap-2">
-                  <Button variant="ghost" onClick={back} icon={<ArrowLeft className="h-4 w-4" />}>
+                  <Button variant="ghost" onClick={() => setStep(1)} icon={<ArrowLeft className="h-4 w-4" />}>
                     Назад
                   </Button>
-                  <Button onClick={next} iconRight={<ArrowRight className="h-4 w-4" />}>Подтверждение</Button>
+                  <Button onClick={toStep3} iconRight={<ArrowRight className="h-4 w-4" />}>
+                    Подтверждение
+                  </Button>
                 </div>
               </div>
             </motion.div>
           ) : null}
 
-          {step === 3 ? (
+          {step === 3 && info ? (
             <motion.div key="s3" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }}>
               <Card>
                 <div className="font-display text-lg  tracking-tight mb-4">Подтверждение</div>
                 <div className="grid sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
                   <Row label="Тип лицензии" value={<Tag tone="accent">{type}</Tag>} />
-                  <Row label="Тип платформы" value={platform || "—"} />
-                  <Row label="Файл device-id.bin" value={file ? `${file.name} · ${formatBytes(file.size)}` : "—"} />
-                  <Row label="Срок начала" value={termStart ? formatRuDate(termStart) : "—"} />
-                  <Row label="Срок окончания" value={termEnd ? formatRuDate(termEnd) : "—"} />
-                  <Row label="ФИО клиента" value={customer.fio || "—"} />
-                  <Row label="Организация" value={customer.organization || "—"} />
-                  <Row label="Email клиента" value={customer.email || "—"} />
-                  <Row label="Телефон" value={customer.phone || "—"} />
-                  <Row label="Регион / Город" value={[customer.region, customer.city].filter(Boolean).join(", ") || "—"} />
-                  <Row label="Авто (VIN / Модель)" value={[customer.vehicleVin, customer.vehicleModel].filter(Boolean).join(" · ") || "—"} />
+                  <Row label="Продукт" value={selectedItem?.fullName ?? "—"} />
+                  <Row label="Версия ПО" value={info.versionSoftware || "—"} />
+                  <Row label="Версия кастома" value={info.versionCustom || "—"} />
+                  <Row label="ID устройства" value={info.deviceId || "—"} />
+                  <Row label="Комментарий дилера" value={dealerComment || "—"} />
+                  <Row label="Файл device_id.bin" value={file ? `${file.name} · ${formatBytes(file.size)}` : "—"} />
+                  <Row label="Клиент" value={customer.fio || "—"} />
                 </div>
-                <div className="divider my-5" />
-                <div className="font-display  tracking-tight mb-3">Включённые функции</div>
-                <div className="flex flex-wrap gap-2">
-                  {Object.entries(features).filter(([, v]) => v).map(([k]) => (
-                    <Tag key={k} tone="accent">{FEATURE_LABELS[k]}</Tag>
-                  ))}
-                  {Object.values(features).every((v) => !v) ? (
-                    <span className="text-sm text-ink-muted">— ни одной не выбрано</span>
-                  ) : null}
-                </div>
+
                 {isAdmin ? (
                   <>
                     <div className="divider my-5" />
@@ -378,8 +382,9 @@ export function LicenseStepper({
                     </div>
                   </>
                 ) : null}
+
                 <div className="mt-6 flex justify-between gap-2">
-                  <Button variant="ghost" onClick={back} icon={<ArrowLeft className="h-4 w-4" />}>
+                  <Button variant="ghost" onClick={() => setStep(2)} icon={<ArrowLeft className="h-4 w-4" />}>
                     Назад
                   </Button>
                   <Button loading={submitting} onClick={submit} icon={<KeyRound className="h-4 w-4" />}>
@@ -399,15 +404,13 @@ export function LicenseStepper({
                   <div className="inline-flex items-center gap-2 rounded-panel bg-white/10 px-3.5 py-1.5 text-xs">
                     <CheckCircle2 className="h-4 w-4 text-bg-accent" /> Лицензия сгенерирована
                   </div>
-                  <h2 className="mt-4 font-display text-3xl  tracking-tightest">
-                    {result.number}
-                  </h2>
+                  <h2 className="mt-4 font-display text-3xl  tracking-tightest">{result.number}</h2>
                   <p className="mt-2 text-white/70">
-                    Файл device-license.bin готов к скачиванию. Передайте его клиенту вместе с инструкцией.
+                    Файл {result.filename ?? "device-license.bin"} готов к скачиванию. Передайте его клиенту.
                   </p>
                   <div className="mt-6 flex flex-wrap gap-2">
-                    <a href={result.downloadUrl} download="device-license.bin">
-                      <Button variant="primary" icon={<Download className="h-4 w-4" />}>Скачать device-license.bin</Button>
+                    <a href={result.downloadUrl} download={result.filename ?? "device-license.bin"}>
+                      <Button variant="primary" icon={<Download className="h-4 w-4" />}>Скачать лицензию</Button>
                     </a>
                     <a href={`${basePath}/${result.licenseId}`}>
                       <Button variant="ghost" className="text-white hover:bg-white/10" icon={<FileBox className="h-4 w-4" />}>
@@ -430,6 +433,15 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
     <div>
       <div className="text-[11px] uppercase tracking-tight text-ink-subtle">{label}</div>
       <div className="mt-0.5">{value}</div>
+    </div>
+  );
+}
+
+function Info({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-panel bg-white p-3">
+      <div className="text-[11px] uppercase tracking-tight text-ink-subtle">{label}</div>
+      <div className="mt-1 text-sm break-all">{value}</div>
     </div>
   );
 }
@@ -461,7 +473,7 @@ function DropZone({ file, onChange }: { file: File | null; onChange: (f: File | 
       }}
       onClick={() => inputRef.current?.click()}
       className={`relative cursor-pointer rounded-panel bg-white p-10 text-center transition-all ${
-        drag ? "scale-[1.01]" : ""
+        drag ? "ring-2 ring-accent" : ""
       }`}
     >
       <input
@@ -502,3 +514,5 @@ function formatBytes(n: number) {
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
   return `${(n / 1024 / 1024).toFixed(2)} MB`;
 }
+
+void ShieldCheck;
