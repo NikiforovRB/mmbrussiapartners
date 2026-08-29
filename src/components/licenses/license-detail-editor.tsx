@@ -282,7 +282,7 @@ export function LicenseDetailEditor({
             </div>
           </div>
           {data.cancellationReason ? (
-            <div className="mt-5 rounded-panel bg-white p-4">
+            <div className="mt-5 rounded-panel border border-hairline p-4">
               <div className="text-xs text-ink-subtle">Причина аннулирования / отзыва</div>
               <div className="mt-1 text-sm">{data.cancellationReason}</div>
               {data.cancelledAt ? (
@@ -291,7 +291,7 @@ export function LicenseDetailEditor({
             </div>
           ) : null}
           {latestRequest ? (
-            <div className="mt-5 rounded-panel bg-white p-4">
+            <div className="mt-5 rounded-panel border border-hairline p-4">
               <div className="flex items-center justify-between gap-2">
                 <div className="text-xs text-ink-subtle">Заявка на аннулирование</div>
                 <StatusTag kind="request" status={latestRequest.status} />
@@ -422,9 +422,9 @@ export function LicenseDetailEditor({
           <History className="h-4 w-4 text-accent" />
           <div className="font-display  tracking-tight">Аудит</div>
         </div>
-        <ul className="space-y-3.5">
+        <ul className="divide-y divide-hairline border-t border-hairline">
           {data.auditLogs.map((entry) => (
-            <li key={entry.id} className="rounded-panel bg-white p-3">
+            <li key={entry.id} className="py-3">
               <div className="flex items-center justify-between text-xs text-ink-muted">
                 <Tag tone={mapAuditTone(entry.action)}>{labelAction(entry.action)}</Tag>
                 <span>{formatRuDate(entry.createdAt)}</span>
@@ -434,7 +434,7 @@ export function LicenseDetailEditor({
             </li>
           ))}
           {data.auditLogs.length === 0 ? (
-            <li className="text-sm text-ink-muted">Записей пока нет</li>
+            <li className="py-3 text-sm text-ink-muted">Записей пока нет</li>
           ) : null}
         </ul>
       </Card>
@@ -511,7 +511,7 @@ export function LicenseDetailEditor({
 
 function ReadonlyField({ label, value }: { label: string; value: string | null }) {
   return (
-    <div className="rounded-panel bg-white p-3">
+    <div className="rounded-panel border border-hairline p-3">
       <div className="text-[11px] uppercase tracking-tight text-ink-subtle">{label}</div>
       <div className="mt-1 text-sm break-all">{value || "—"}</div>
     </div>

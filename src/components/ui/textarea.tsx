@@ -22,7 +22,13 @@ export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(fun
           {label}
         </label>
       ) : null}
-      <div className={cn("field-control rounded-panel bg-card-light px-4 py-3", error && "bg-[#fde7e7]")}>
+      <div
+        className={cn(
+          "field-control rounded-panel bg-white border border-hairline px-4 py-3 transition-colors",
+          "focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/20",
+          error && "border-danger",
+        )}
+      >
         <textarea
           ref={ref}
           id={textareaId}

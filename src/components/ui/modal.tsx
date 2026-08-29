@@ -59,7 +59,11 @@ export function Modal({ open, onClose, title, description, children, footer, siz
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.96, y: 12 }}
             transition={{ type: "spring", stiffness: 460, damping: 36 }}
-            className={cn("relative w-full bg-white rounded-panel p-6", sizeMap[size], className)}
+            className={cn(
+              "relative w-full bg-white border border-hairline rounded-panel p-6",
+              sizeMap[size],
+              className,
+            )}
           >
             {title || description ? (
               <div className="mb-5 pr-10">
@@ -71,7 +75,7 @@ export function Modal({ open, onClose, title, description, children, footer, siz
               type="button"
               onClick={onClose}
               aria-label="Закрыть"
-              className="absolute top-5 right-5 grid h-9 w-9 place-items-center rounded-btn bg-card-light text-ink-muted hover:text-ink"
+              className="absolute top-5 right-5 grid h-9 w-9 place-items-center rounded-btn text-ink-muted transition-colors hover:bg-surface-muted hover:text-ink"
             >
               <X className="h-4 w-4" />
             </button>

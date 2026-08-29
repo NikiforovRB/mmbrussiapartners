@@ -53,10 +53,11 @@ export function Select<T extends string = string>({
           disabled={disabled}
           onClick={() => !disabled && setOpen((v) => !v)}
           className={cn(
-            "field-control w-full h-12 rounded-panel bg-card-light px-4 flex items-center justify-between gap-3 text-left text-[14.5px] transition-colors",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-white",
+            "field-control w-full h-12 rounded-panel bg-white border border-hairline px-4 flex items-center justify-between gap-3 text-left text-[14.5px] transition-colors",
+            "focus-visible:outline-none focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20",
+            open && "border-accent",
             !current && "text-ink-subtle",
-            disabled && "opacity-50 cursor-not-allowed",
+            disabled && "bg-surface-muted text-ink-muted cursor-not-allowed",
           )}
         >
           <span className="truncate">{current?.label ?? placeholder}</span>
@@ -71,7 +72,7 @@ export function Select<T extends string = string>({
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -6 }}
               transition={{ duration: 0.18 }}
-              className="absolute z-30 mt-2 w-full rounded-panel bg-white p-2 max-h-72 overflow-auto scrollbar-clean"
+              className="absolute z-30 mt-2 w-full rounded-panel bg-white border border-hairline p-2 max-h-72 overflow-auto scrollbar-clean"
               style={{ boxShadow: "0 24px 60px -24px rgba(11,16,32,0.18)" }}
             >
               {options.map((opt) => {
@@ -86,7 +87,7 @@ export function Select<T extends string = string>({
                     }}
                     className={cn(
                       "w-full flex items-center justify-between gap-3 rounded-panel px-3 py-2.5 text-sm text-left transition-colors",
-                      active ? "bg-card-light" : "hover:bg-card-light/70",
+                      active ? "bg-surface-muted" : "hover:bg-surface-muted",
                     )}
                   >
                     <span className="flex-1">

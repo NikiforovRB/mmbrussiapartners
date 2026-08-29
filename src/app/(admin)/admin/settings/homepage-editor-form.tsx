@@ -89,7 +89,7 @@ export function HomepageEditorForm({ initial }: { initial: HomepageContent }) {
           <Input label="Заголовок, строка 1" value={data.workflow.titleLine1} onChange={(e) => setData({ ...data, workflow: { ...data.workflow, titleLine1: e.target.value } })} />
           <Input label="Заголовок, акцент" value={data.workflow.titleHighlight} onChange={(e) => setData({ ...data, workflow: { ...data.workflow, titleHighlight: e.target.value } })} />
           {data.workflow.steps.map((step, i) => (
-            <div key={i} className="rounded-panel bg-white p-4 space-y-3">
+            <div key={i} className="rounded-panel border border-hairline p-4 space-y-3">
               <div className="text-sm text-ink-muted">Шаг {i + 1}</div>
               <div className="grid sm:grid-cols-3 gap-3">
                 <Input

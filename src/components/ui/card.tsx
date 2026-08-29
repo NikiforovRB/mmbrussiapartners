@@ -9,7 +9,7 @@ export function Card({
   ...props
 }: React.HTMLAttributes<HTMLDivElement> & { tone?: Tone }) {
   const map: Record<Tone, string> = {
-    light: "bg-card-light text-ink",
+    light: "bg-white border border-hairline text-ink",
     dark: "bg-bg-dark text-white",
     glass: "surface-glass text-ink",
     accent: "bg-accent text-white",

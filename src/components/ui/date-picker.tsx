@@ -73,9 +73,11 @@ export function DatePicker({
         disabled={disabled}
         onClick={() => setOpen((v) => !v)}
         className={cn(
-          "field-control w-full h-12 rounded-panel bg-card-light px-4 flex items-center justify-between gap-3 text-left text-[14.5px] transition-colors",
+          "field-control w-full h-12 rounded-panel bg-white border border-hairline px-4 flex items-center justify-between gap-3 text-left text-[14.5px] transition-colors",
+          "focus-visible:outline-none focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20",
+          open && "border-accent",
           !value && "text-ink-subtle",
-          disabled && "opacity-50",
+          disabled && "bg-surface-muted text-ink-muted cursor-not-allowed",
         )}
       >
         <span className="flex items-center gap-2">
@@ -103,14 +105,14 @@ export function DatePicker({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -8, scale: 0.98 }}
             transition={{ duration: 0.18 }}
-            className="absolute z-40 mt-2 w-[320px] rounded-panel bg-white p-4"
+            className="absolute z-40 mt-2 w-[320px] rounded-panel bg-white border border-hairline p-4"
             style={{ boxShadow: "0 24px 60px -24px rgba(11,16,32,0.18)" }}
           >
             <div className="flex items-center justify-between px-1">
               <button
                 type="button"
                 onClick={() => shift(-1)}
-                className="grid h-9 w-9 place-items-center rounded-btn hover:bg-card-light"
+                className="grid h-9 w-9 place-items-center rounded-btn hover:bg-surface-muted"
               >
                 <ChevronLeft className="h-4 w-4" />
               </button>
@@ -120,7 +122,7 @@ export function DatePicker({
               <button
                 type="button"
                 onClick={() => shift(1)}
-                className="grid h-9 w-9 place-items-center rounded-btn hover:bg-card-light"
+                className="grid h-9 w-9 place-items-center rounded-btn hover:bg-surface-muted"
               >
                 <ChevronRight className="h-4 w-4" />
               </button>
@@ -151,8 +153,8 @@ export function DatePicker({
                       selected
                         ? "bg-accent text-white"
                         : isToday
-                          ? "bg-card-light text-ink"
-                          : "hover:bg-card-light",
+                          ? "bg-surface-muted text-ink"
+                          : "hover:bg-surface-muted",
                       disabledDay && "opacity-30 cursor-not-allowed",
                     )}
                   >
@@ -169,7 +171,7 @@ export function DatePicker({
                   setView({ year: today.getFullYear(), month: today.getMonth() });
                   setOpen(false);
                 }}
-                className="rounded-btn px-3 py-1.5 hover:bg-card-light"
+                className="rounded-btn px-3 py-1.5 hover:bg-surface-muted"
               >
                 Сегодня
               </button>

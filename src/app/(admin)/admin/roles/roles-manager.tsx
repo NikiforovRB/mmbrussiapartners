@@ -107,7 +107,7 @@ export function RolesManager({ roles }: { roles: Role[] }) {
               <button
                 onClick={() => setActiveId(r.id)}
                 className={`w-full flex items-center justify-between gap-2 rounded-panel px-3 py-2.5 text-sm text-left transition-colors ${
-                  active?.id === r.id ? "bg-white" : "hover:bg-white/60"
+                  active?.id === r.id ? "bg-surface-muted" : "hover:bg-surface-muted"
                 }`}
               >
                 <span className="flex items-center gap-2 min-w-0">
@@ -188,7 +188,7 @@ export function RolesManager({ roles }: { roles: Role[] }) {
               {Object.entries(PERMISSION_GROUPS).map(([group, list]) => {
                 const all = list.every((p) => perms.includes(p));
                 return (
-                  <div key={group} className="rounded-panel bg-white p-4">
+                  <div key={group} className="rounded-panel border border-hairline p-4">
                     <div className="flex items-center justify-between mb-3">
                       <div className="font-display  tracking-tight">{group}</div>
                       {!active.isSystem && canManage ? (

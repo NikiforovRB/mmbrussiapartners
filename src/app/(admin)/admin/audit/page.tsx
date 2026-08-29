@@ -53,9 +53,9 @@ export default async function AdminAuditPage({
           {logs.length === 0 ? (
             <div className="text-sm text-ink-muted py-10 text-center">Событий пока нет</div>
           ) : null}
-          <ul className="space-y-2.5">
+          <ul className="divide-y divide-hairline border-t border-hairline">
             {logs.map((l) => (
-              <li key={l.id} className="rounded-panel bg-white p-3.5 flex items-start justify-between gap-4">
+              <li key={l.id} className="py-3.5 flex items-start justify-between gap-4">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <Tag tone={tone(l.action)}>{label(l.action)}</Tag>

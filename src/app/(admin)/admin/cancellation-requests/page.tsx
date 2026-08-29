@@ -84,7 +84,9 @@ export default async function CancellationRequestsPage({
               key={t.key}
               href={`/admin/cancellation-requests?status=${t.key}`}
               className={`rounded-btn px-4 h-9 inline-flex items-center text-sm transition-colors ${
-                status === t.key ? "bg-accent text-white" : "bg-card-light text-ink hover:bg-[#dde3f0]"
+                status === t.key
+                  ? "bg-accent text-white"
+                  : "border border-hairline text-ink hover:border-accent hover:text-accent"
               }`}
             >
               {t.label}
@@ -99,7 +101,7 @@ export default async function CancellationRequestsPage({
               <div className="mt-2 text-sm">Заявок в этой категории нет</div>
             </div>
           ) : (
-            <ul className="space-y-3">
+            <ul className="divide-y divide-hairline border-t border-hairline">
               {requests.map((r) => {
                 const fio = fioFromParts({
                   firstName: r.requestedBy.dealerProfile?.firstName,
@@ -107,7 +109,7 @@ export default async function CancellationRequestsPage({
                   middleName: r.requestedBy.dealerProfile?.middleName,
                 });
                 return (
-                  <li key={r.id} className="rounded-panel bg-white p-4">
+                  <li key={r.id} className="py-4">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">

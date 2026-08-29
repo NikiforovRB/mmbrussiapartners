@@ -207,12 +207,16 @@ export function LicenseStepper({
               <li
                 key={s.id}
                 className={`flex items-center gap-3 rounded-panel px-3 py-2.5 text-sm ${
-                  isActive ? "bg-white" : "text-ink-muted"
+                  isActive ? "bg-surface-muted" : "text-ink-muted"
                 }`}
               >
                 <span
                   className={`grid h-6 w-6 place-items-center rounded-panel text-[11px] ${
-                    isDone ? "bg-accent text-white" : isActive ? "bg-bg-dark text-white" : "bg-card-light text-ink-muted"
+                    isDone
+                      ? "bg-accent text-white"
+                      : isActive
+                        ? "bg-bg-dark text-white"
+                        : "border border-hairline text-ink-muted"
                   }`}
                 >
                   {isDone ? <CheckCircle2 className="h-3.5 w-3.5" /> : s.id}
@@ -375,7 +379,7 @@ export function LicenseStepper({
                 {isAdmin ? (
                   <>
                     <div className="divider my-5" />
-                    <div className="rounded-panel bg-white p-4">
+                    <div className="rounded-panel border border-hairline p-4">
                       <Checkbox
                         checked={withoutPayment}
                         onChange={setWithoutPayment}
@@ -461,7 +465,7 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
 
 function Info({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-panel bg-white p-3">
+    <div className="rounded-panel border border-hairline p-3">
       <div className="text-[11px] uppercase tracking-tight text-ink-subtle">{label}</div>
       <div className="mt-1 text-sm break-all">{value}</div>
     </div>
@@ -494,8 +498,8 @@ function DropZone({ file, onChange }: { file: File | null; onChange: (f: File | 
         if (f) onSelect(f);
       }}
       onClick={() => inputRef.current?.click()}
-      className={`relative cursor-pointer rounded-panel bg-white p-10 text-center transition-all ${
-        drag ? "ring-2 ring-accent" : ""
+      className={`relative cursor-pointer rounded-panel border border-dashed p-10 text-center transition-colors ${
+        drag ? "border-accent bg-accent/5" : "border-hairline hover:border-accent"
       }`}
     >
       <input
@@ -510,7 +514,7 @@ function DropZone({ file, onChange }: { file: File | null; onChange: (f: File | 
       />
       {file ? (
         <div className="flex items-center justify-center gap-3">
-          <div className="grid h-14 w-14 place-items-center rounded-panel bg-card-light text-accent">
+          <div className="grid h-14 w-14 place-items-center rounded-panel bg-surface-muted text-accent">
             <FileBox className="h-6 w-6" />
           </div>
           <div className="text-left">
@@ -520,7 +524,7 @@ function DropZone({ file, onChange }: { file: File | null; onChange: (f: File | 
         </div>
       ) : (
         <>
-          <div className="mx-auto grid h-16 w-16 place-items-center rounded-panel bg-card-light text-accent">
+          <div className="mx-auto grid h-16 w-16 place-items-center rounded-panel bg-surface-muted text-accent">
             <Upload className="h-7 w-7" />
           </div>
           <div className="mt-4 ">Перетащите файл или нажмите для выбора</div>

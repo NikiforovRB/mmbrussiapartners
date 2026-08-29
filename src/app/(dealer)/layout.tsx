@@ -48,7 +48,7 @@ export default async function DealerLayout({ children }: { children: React.React
   const limit = user.dealerProfile?.licenseLimit ?? 0;
 
   const footer = (
-    <div className="rounded-panel bg-white p-3.5">
+    <div className="rounded-panel border border-hairline p-3.5">
       <div className="text-xs text-ink-muted">Лимит лицензий</div>
       <div className="mt-1 flex items-end gap-1">
         <div className="font-display text-2xl  tracking-tight">{Math.max(0, remaining)}</div>
@@ -59,7 +59,7 @@ export default async function DealerLayout({ children }: { children: React.React
 
   return (
     <MobileNavProvider items={items} footer={footer}>
-      <div className="min-h-screen flex bg-bg-default">
+      <div className="cabinet min-h-screen flex bg-bg-default">
         <Sidebar items={items} footer={footer} />
         <div className="flex-1 min-w-0 px-4 lg:px-6 pb-12">{children}</div>
         <CommandPalette />
@@ -71,7 +71,7 @@ export default async function DealerLayout({ children }: { children: React.React
 function PendingScreen({ email }: { email: string }) {
   return (
     <div className="min-h-screen grid place-items-center bg-bg-default px-6">
-      <div className="rounded-panel bg-card-light p-10 max-w-lg w-full text-center">
+      <div className="rounded-panel bg-white border border-hairline p-10 max-w-lg w-full text-center">
         <div className="mx-auto flex justify-center">
           <Logo href={undefined} height={40} />
         </div>
@@ -85,7 +85,7 @@ function PendingScreen({ email }: { email: string }) {
         <div className="mt-6 flex justify-center gap-3">
           <a
             href="mailto:marat@mmbrussia.ru"
-            className="rounded-btn bg-white px-5 h-11 inline-flex items-center text-sm"
+            className="rounded-btn border border-hairline px-5 h-11 inline-flex items-center text-sm transition-colors hover:border-accent hover:text-accent"
           >
             Связаться с MMB
           </a>

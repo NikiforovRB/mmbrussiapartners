@@ -42,11 +42,11 @@ export function Pagination({
       {showNav ? (
         <div className="flex items-center gap-2">
           {current > 1 ? (
-            <Link href={href(current - 1)} className={cn(navBtn, "bg-card-light text-ink hover:bg-[#dde3f0]")}>
+            <Link href={href(current - 1)} className={cn(navBtn, "bg-white border border-hairline text-ink hover:border-accent hover:text-accent")}>
               <ChevronLeft className="h-4 w-4" /> Назад
             </Link>
           ) : (
-            <span className={cn(navBtn, "bg-card-light/60 text-ink-subtle cursor-not-allowed")} aria-disabled="true">
+            <span className={cn(navBtn, "border border-hairline text-ink-subtle cursor-not-allowed")} aria-disabled="true">
               <ChevronLeft className="h-4 w-4" /> Назад
             </span>
           )}
@@ -54,11 +54,11 @@ export function Pagination({
             {current} / {totalPages}
           </span>
           {current < totalPages ? (
-            <Link href={href(current + 1)} className={cn(navBtn, "bg-card-light text-ink hover:bg-[#dde3f0]")}>
+            <Link href={href(current + 1)} className={cn(navBtn, "bg-white border border-hairline text-ink hover:border-accent hover:text-accent")}>
               Далее <ChevronRight className="h-4 w-4" />
             </Link>
           ) : (
-            <span className={cn(navBtn, "bg-card-light/60 text-ink-subtle cursor-not-allowed")} aria-disabled="true">
+            <span className={cn(navBtn, "border border-hairline text-ink-subtle cursor-not-allowed")} aria-disabled="true">
               Далее <ChevronRight className="h-4 w-4" />
             </span>
           )}

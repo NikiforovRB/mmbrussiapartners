@@ -41,7 +41,7 @@ export function Checkbox({
         className={cn(
           "relative rounded-btn transition-colors duration-200 grid place-items-center shrink-0 mt-0.5",
           dim,
-          checked ? "bg-accent" : "bg-[#cfd5e6]",
+          checked ? "bg-accent" : "bg-white border border-hairline",
         )}
       >
         <AnimatePresence>

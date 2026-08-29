@@ -104,9 +104,9 @@ export function CommandPalette() {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.97, y: 6 }}
             transition={{ type: "spring", stiffness: 460, damping: 35 }}
-            className="relative w-full max-w-xl rounded-panel bg-white p-3"
+            className="relative w-full max-w-xl rounded-panel bg-white border border-hairline p-3"
           >
-            <div className="flex items-center gap-2 rounded-panel bg-card-light px-4 h-12">
+            <div className="flex items-center gap-2 rounded-panel border border-hairline px-4 h-12 transition-colors focus-within:border-accent">
               <Search className="h-4 w-4 text-ink-subtle" />
               <input
                 autoFocus
@@ -138,10 +138,10 @@ export function CommandPalette() {
                     onClick={() => go(it.href)}
                     onMouseEnter={() => setActive(i)}
                     className={`w-full flex items-center gap-3 rounded-panel px-3 py-2.5 text-sm text-left transition-colors ${
-                      active === i ? "bg-card-light" : "hover:bg-card-light/70"
+                      active === i ? "bg-surface-muted" : "hover:bg-surface-muted"
                     }`}
                   >
-                    <span className="grid h-8 w-8 place-items-center rounded-panel bg-white text-accent">{it.icon}</span>
+                    <span className="grid h-8 w-8 place-items-center rounded-panel text-accent">{it.icon}</span>
                     <span className="flex-1">{it.label}</span>
                     <span className="text-[11px] uppercase tracking-tight text-ink-subtle">
                       {it.scope === "dealer" ? "Партнёр" : it.scope === "admin" ? "Админ" : "Везде"}

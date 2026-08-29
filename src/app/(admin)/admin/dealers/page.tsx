@@ -3,7 +3,6 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { Topbar } from "@/components/cabinet/topbar";
 import { PageHeader } from "@/components/cabinet/page-header";
-import { Card } from "@/components/ui/card";
 import { Tag } from "@/components/ui/tag";
 import { StatusTag } from "@/components/ui/status-tag";
 import { Avatar } from "@/components/ui/avatar";
@@ -78,8 +77,8 @@ export default async function AdminDealersPage({
           description="Просматривайте, одобряйте и редактируйте профили представителей."
         />
         <DealersFilters initialQuery={sp.q ?? ""} initialStatus={sp.status ?? ""} />
-        <Card className="mt-5">
-          <div className="overflow-x-auto scrollbar-clean rounded-panel bg-white">
+        <div className="mt-5 rounded-panel border border-hairline overflow-hidden">
+          <div className="overflow-x-auto scrollbar-clean">
             <table className="w-full min-w-[720px] text-sm">
               <thead>
                 <tr className="text-left text-[11.5px] uppercase tracking-tight text-ink-subtle">
@@ -100,14 +99,14 @@ export default async function AdminDealersPage({
                     </td>
                   </tr>
                 ) : null}
-                {dealers.map((u, i) => {
+                {dealers.map((u) => {
                   const fio = fioFromParts({
                     firstName: u.dealerProfile?.firstName,
                     lastName: u.dealerProfile?.lastName,
                     middleName: u.dealerProfile?.middleName,
                   });
                   return (
-                    <tr key={u.id} style={i > 0 ? { boxShadow: "inset 0 1px 0 #c1cbe1" } : undefined}>
+                    <tr key={u.id} className="transition-colors hover:bg-surface-muted">
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
                           <Avatar name={fio || u.email} size={36} />
@@ -151,14 +150,14 @@ export default async function AdminDealersPage({
               </tbody>
             </table>
           </div>
-          <Pagination
-            page={page}
-            pageSize={PAGE_SIZE}
-            total={total}
-            basePath="/admin/dealers"
-            query={{ q: sp.q, status: sp.status }}
-          />
-        </Card>
+        </div>
+        <Pagination
+          page={page}
+          pageSize={PAGE_SIZE}
+          total={total}
+          basePath="/admin/dealers"
+          query={{ q: sp.q, status: sp.status }}
+        />
       </div>
     </>
   );

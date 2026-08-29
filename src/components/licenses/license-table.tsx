@@ -170,9 +170,9 @@ export function LicenseTable({
 
   return (
     <>
-      <div className="rounded-panel bg-card-light p-3.5 mb-5">
+      <div className="mb-5">
         <div className="flex flex-wrap items-center gap-2.5">
-          <div className="flex items-center gap-2 rounded-panel bg-white px-4 h-11 flex-1 min-w-[240px]">
+          <div className="flex items-center gap-2 rounded-panel border border-hairline px-4 h-11 flex-1 min-w-[240px] transition-colors focus-within:border-accent">
             <Search className="h-4 w-4 text-ink-subtle" />
             <input
               value={q}
@@ -217,8 +217,8 @@ export function LicenseTable({
         ) : null}
       </div>
 
-      <div className="rounded-panel bg-card-light p-2.5">
-        <div className="overflow-x-auto scrollbar-clean rounded-panel bg-white">
+      <div className="rounded-panel border border-hairline overflow-hidden">
+        <div className="overflow-x-auto scrollbar-clean">
           <table className="w-full min-w-[760px] text-sm">
             <thead>
               <tr className="text-left text-[11.5px] uppercase tracking-tight text-ink-subtle">
@@ -239,12 +239,8 @@ export function LicenseTable({
                   </td>
                 </tr>
               ) : null}
-              {licenses.map((l, i) => (
-                <tr
-                  key={l.id}
-                  className={i > 0 ? "" : ""}
-                  style={i > 0 ? { boxShadow: "inset 0 1px 0 #c1cbe1" } : undefined}
-                >
+              {licenses.map((l) => (
+                <tr key={l.id} className="transition-colors hover:bg-surface-muted">
                   <td className="px-4 py-3">
                     <Link href={`${basePath}/${l.id}`} className=" text-ink hover:text-accent">
                       {l.number}

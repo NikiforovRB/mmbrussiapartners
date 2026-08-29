@@ -31,8 +31,8 @@ export function DealersFilters({
   }, [q, status, router, pathname]);
 
   return (
-    <div className="rounded-panel bg-card-light p-3.5 grid md:grid-cols-[1fr_240px] gap-3">
-      <div className="flex items-center gap-2 rounded-panel bg-white px-4 h-12">
+    <div className="grid md:grid-cols-[1fr_240px] gap-3">
+      <div className="flex items-center gap-2 rounded-panel border border-hairline px-4 h-12 transition-colors focus-within:border-accent">
         <Search className="h-4 w-4 text-ink-subtle" />
         <input
           value={q}

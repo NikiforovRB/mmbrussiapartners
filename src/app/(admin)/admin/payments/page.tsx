@@ -77,12 +77,14 @@ export default async function AdminPaymentsPage({
           </div>
         </Card>
 
-        <Card>
-          <div className="font-display text-lg  tracking-tight mb-4">История</div>
+        <div className="rounded-panel border border-hairline overflow-hidden">
+          <div className="px-5 py-4 border-b border-hairline font-display text-lg tracking-tight">
+            История
+          </div>
           {payments.length === 0 ? (
             <div className="text-sm text-ink-muted py-10 text-center">Платежей пока нет</div>
           ) : (
-            <div className="overflow-x-auto scrollbar-clean rounded-panel bg-white">
+            <div className="overflow-x-auto scrollbar-clean">
               <table className="w-full min-w-[980px] text-sm">
                 <thead>
                   <tr className="text-left text-[11.5px] uppercase tracking-tight text-ink-subtle">
@@ -97,8 +99,8 @@ export default async function AdminPaymentsPage({
                   </tr>
                 </thead>
                 <tbody>
-                  {payments.map((p, i) => (
-                    <tr key={p.id} style={i > 0 ? { boxShadow: "inset 0 1px 0 #c1cbe1" } : undefined}>
+                  {payments.map((p) => (
+                    <tr key={p.id} className="transition-colors hover:bg-surface-muted">
                       <td className="px-4 py-3">{formatRuDate(p.createdAt)}</td>
                       <td className="px-4 py-3">{p.dealer.email}</td>
                       <td className="px-4 py-3">{p.license?.number ?? "—"}</td>
@@ -138,8 +140,8 @@ export default async function AdminPaymentsPage({
               </table>
             </div>
           )}
-          <Pagination page={page} pageSize={PAGE_SIZE} total={total} basePath="/admin/payments" />
-        </Card>
+        </div>
+        <Pagination page={page} pageSize={PAGE_SIZE} total={total} basePath="/admin/payments" />
       </div>
     </>
   );

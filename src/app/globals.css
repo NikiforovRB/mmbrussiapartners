@@ -18,6 +18,9 @@
   --card-on-light: #e7ecf6;
   --card-on-dark: #ffffff;
   --line: #c1cbe1;
+  /* Волосяная рамка кабинета: заменяет сплошные заливки на белом фоне */
+  --hairline: #dddcdb;
+  --surface-muted: #f7f7f6;
   --ink: #0b1020;
   --ink-muted: #5b6478;
   --ink-subtle: #8a93a8;
@@ -108,7 +111,11 @@
   .divider {
     height: 1px;
     width: 100%;
-    background: var(--line);
+    background: var(--hairline);
+  }
+  .panel {
+    background: #ffffff;
+    border: 1px solid var(--hairline);
   }
   .divider-vertical {
     width: 1px;
@@ -232,8 +239,21 @@ body,
   border-radius: var(--radius-button) !important;
 }
 
-.bg-card-light .field-control {
-  background-color: #ffffff !important;
+/*
+ * Единая сетка таблиц кабинета: линия под шапкой и между строками.
+ * Правило живёт здесь, а не в разметке, чтобы любая новая таблица
+ * в ЛК получала разделители автоматически.
+ */
+.cabinet table thead th {
+  border-bottom: 1px solid var(--hairline);
+}
+
+.cabinet table tbody tr + tr > td {
+  border-top: 1px solid var(--hairline);
+}
+
+.cabinet table tfoot td {
+  border-top: 1px solid var(--hairline);
 }
 
 /* Hero — пульсации (синий / голубой / бирюза) */

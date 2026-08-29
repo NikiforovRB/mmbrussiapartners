@@ -7,6 +7,7 @@ import { Topbar } from "@/components/cabinet/topbar";
 import { PageHeader } from "@/components/cabinet/page-header";
 import { Button } from "@/components/ui/button";
 import { LicenseTable } from "@/components/licenses/license-table";
+import { LICENSE_LIST_SELECT } from "@/lib/license-list";
 import { Pagination, parsePage } from "@/components/cabinet/pagination";
 import { LICENSE_TYPES } from "@/lib/license-options";
 
@@ -29,6 +30,7 @@ export default async function AdminLicensesPage({
     db.license.count({ where }),
     db.license.findMany({
       where,
+      select: LICENSE_LIST_SELECT,
       orderBy: { createdAt: "desc" },
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
