@@ -181,9 +181,9 @@ export default async function DealerDashboard() {
                   <tr className="text-left text-[12px] uppercase tracking-tight text-ink-subtle">
                     <th className="px-4 py-3">Номер</th>
                     <th className="px-4 py-3">Тип</th>
-                    <th className="px-4 py-3">Клиент</th>
+                    <th className="px-4 py-3">Продукт</th>
                     <th className="px-4 py-3">Статус</th>
-                    <th className="px-4 py-3">Действует до</th>
+                    <th className="px-4 py-3">Выдана</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -193,13 +193,11 @@ export default async function DealerDashboard() {
                       <td className="px-4 py-3">
                         <Tag tone={l.type === "Генерация" ? "accent" : "neutral"}>{l.type}</Tag>
                       </td>
-                      <td className="px-4 py-3">{l.customerFio}</td>
+                      <td className="px-4 py-3">{l.product ?? "—"}</td>
                       <td className="px-4 py-3">
                         <StatusTag kind="license" status={l.status} />
                       </td>
-                      <td className="px-4 py-3 text-ink-muted">
-                        {l.termEnd ? formatRuDate(l.termEnd) : "Бессрочная"}
-                      </td>
+                      <td className="px-4 py-3 text-ink-muted">{formatRuDate(l.createdAt)}</td>
                     </tr>
                   ))}
                 </tbody>

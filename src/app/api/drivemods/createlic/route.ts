@@ -6,8 +6,8 @@ import { hasPermission } from "@/lib/permissions";
 import { ApiError, badRequest, forbidden, parseBody, route, unauthenticated } from "@/lib/api";
 import { uploadObject, getDownloadUrl, deleteObject } from "@/lib/s3";
 import { createLic, describeDriveModsFailure, isDriveModsConfigured } from "@/lib/drivemods";
-import { generateLicenseNumber, normalizePhone, fioFromParts } from "@/lib/utils";
-import { isLicenseType, isLicenseTerm, termEndFromMonths } from "@/lib/license-options";
+import { generateLicenseNumber, fioFromParts } from "@/lib/utils";
+import { isLicenseType } from "@/lib/license-options";
 import { resolvePrice, positionLabel } from "@/lib/pricing";
 import { createPayment } from "@/lib/payments/service";
 import { notifyAdmins } from "@/lib/app-notifications";
@@ -26,16 +26,9 @@ const schema = z.object({
   product: z.string().min(1),
   bundle: z.string().nullable().optional(),
   region: z.string().nullable().optional(),
-  termMonths: z.number().int().optional(),
   versionSoftware: z.string().optional().or(z.literal("")),
   versionCustom: z.string().optional().or(z.literal("")),
   dealerComment: z.string().optional().or(z.literal("")),
-  customerFio: z.string().optional().or(z.literal("")),
-  customerOrganization: z.string().optional().or(z.literal("")),
-  customerEmail: z.string().email().optional().or(z.literal("")),
-  customerPhone: z.string().optional().or(z.literal("")),
-  customerRegion: z.string().optional().or(z.literal("")),
-  customerCity: z.string().optional().or(z.literal("")),
   issuedWithoutPayment: z.boolean().optional(),
   /** Признак прошлой выдачи из ответа /licinfo. */
   recoverable: z.boolean().optional(),
@@ -54,9 +47,6 @@ export const POST = route(async (req: Request) => {
 
   const p = await parseBody(req, schema);
   if (!isLicenseType(p.type)) throw badRequest("Неверный тип лицензии");
-
-  const termMonths = p.termMonths ?? 0;
-  if (!isLicenseTerm(termMonths)) throw badRequest("Неверный срок лицензии");
 
   const actor = await db.user.findUnique({
     where: { id: session.user.id },
@@ -156,8 +146,6 @@ export const POST = route(async (req: Request) => {
     );
     uploadedKeys.push(licenseUpload.key);
 
-    const termStart = new Date();
-    const termEnd = termEndFromMonths(termStart, termMonths);
     const position = { product: p.product, bundle: p.bundle, region: p.region };
     const resolved = issuedWithoutPayment ? null : await resolvePrice(actor.id, position);
     const price = resolved?.price ?? 0;
@@ -180,8 +168,6 @@ export const POST = route(async (req: Request) => {
           status: "ACTIVE",
           price: price || null,
           features: {},
-          termStart,
-          termEnd,
           deviceId,
           deviceIdKey: deviceIdUpload.key,
           licenseKey: licenseUpload.key,
@@ -193,12 +179,10 @@ export const POST = route(async (req: Request) => {
           dealerComment,
           issuedWithoutPayment,
           repeatGeneration,
-          customerFio: (p.customerFio || dealerComment).trim(),
-          customerOrganization: p.customerOrganization || null,
-          customerEmail: p.customerEmail || null,
-          customerPhone: p.customerPhone ? normalizePhone(p.customerPhone) : null,
-          region: p.customerRegion || null,
-          city: p.customerCity || null,
+          // Гео-аналитика считает выдачи по месту представителя: клиента у
+          // лицензии нет, а дилер потом может переехать.
+          region: actor.dealerProfile?.region ?? null,
+          city: actor.dealerProfile?.city ?? null,
         },
       });
       await tx.licenseAuditLog.create({

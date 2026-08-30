@@ -29,7 +29,6 @@ const BASE = (process.env.E2E_BASE_URL ?? "http://localhost:3000").replace(/\/+$
 const MOCK_PORT = Number(process.env.E2E_MOCK_PORT ?? 3210);
 const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL ?? "nikiforovrb@yandex.ru";
 const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD ?? "1vngbwxcn824";
-const CRON_SECRET = process.env.CRON_SECRET ?? "";
 const ATOL_WEBHOOK_SECRET = process.env.ATOL_WEBHOOK_SECRET ?? "";
 
 const MARK = "ТЕСТ";
@@ -167,19 +166,12 @@ function licensePayload(type: string, extra: Record<string, unknown> = {}) {
     deviceBase64: DEVICE_BASE64,
     deviceId: "MOCK-DEVICE-0001",
     type,
-    product: "MB-S5WM",
+    product: "ТЕСТ-S5WM",
     bundle: "ECO",
     region: null,
     versionSoftware: "1.2.3-mock",
     versionCustom: "custom-mock",
     dealerComment: `${MARK}: автопрогон`,
-    termMonths: 0,
-    customerFio: `${MARK} Клиент Тестович`,
-    customerOrganization: `${MARK} ООО «Проверка»`,
-    customerEmail: "e2e@test.mmbrussia.local",
-    customerPhone: "+7 900 000-00-00",
-    customerRegion: "Москва",
-    customerCity: "Москва",
     ...extra,
   };
 }
@@ -261,15 +253,15 @@ async function testGeneration(dealer: Session, dealerId: string) {
 
   // Последний случай — продукт без пакета: документация DRIVEMODS разрешает
   // bundle = null, и такие устройства не должны упираться в нашу валидацию.
-  for (const [type, termMonths, termLabel, bundle, product] of [
-    ["Генерация", 0, "бессрочная", "FULL", "MB-S5WM"],
-    ["Обновление", 12, "1 год", "ECO", "MB-S5WM"],
-    ["Восстановление", 36, "3 года", "FULL", "MB-S5WM"],
-    ["Генерация", 0, "бессрочная", null, "MB-LITE"],
+  for (const [type, bundle, product] of [
+    ["Генерация", "FULL", "ТЕСТ-S5WM"],
+    ["Обновление", "ECO", "ТЕСТ-S5WM"],
+    ["Восстановление", "FULL", "ТЕСТ-S5WM"],
+    ["Генерация", null, "ТЕСТ-LITE"],
   ] as const) {
     const res = await dealer.post(
       "/api/drivemods/createlic",
-      licensePayload(type, { termMonths, bundle, product }),
+      licensePayload(type, { bundle, product }),
     );
     const body = res.body as { licenseId?: string; number?: string; payment?: { amount: number } | null; error?: string };
     if (res.status !== 200 || !body.licenseId) {
@@ -279,16 +271,15 @@ async function testGeneration(dealer: Session, dealerId: string) {
     await trackLicense(body.licenseId);
 
     const lic = await prisma.license.findUnique({ where: { id: body.licenseId } });
-    const termOk = termMonths === 0 ? lic?.termEnd === null : lic?.termEnd instanceof Date;
     const audit = await prisma.licenseAuditLog.count({
       where: { licenseId: body.licenseId, action: "CREATED" },
     });
 
     const label = bundle ?? "без пакета";
     check(
-      `Тип «${type}», ${label} (${termLabel})`,
-      lic?.type === type && lic?.status === "ACTIVE" && termOk && audit === 1,
-      `${body.number}, срок ${lic?.termEnd ? lic.termEnd.toISOString().slice(0, 10) : "бессрочно"}, счёт ${body.payment?.amount ?? "—"} ₽`,
+      `Тип «${type}», ${label}`,
+      lic?.type === type && lic?.status === "ACTIVE" && audit === 1,
+      `${body.number}, счёт ${body.payment?.amount ?? "—"} ₽`,
     );
 
     const expected = licensePrice(bundle);
@@ -412,7 +403,6 @@ async function testValidation(dealer: Session) {
 
   const cases: Array<[string, Record<string, unknown>, number]> = [
     ["Неизвестный тип лицензии", licensePayload("Взлом"), 400],
-    ["Недопустимый срок (7 месяцев)", licensePayload("Генерация", { termMonths: 7 }), 400],
     ["Пустой device_id.bin", licensePayload("Генерация", { deviceBase64: "" }), 400],
   ];
 
@@ -444,22 +434,19 @@ async function testLicenseEditRights(dealer: Session, admin: Session, dealerId: 
     `${r1.status}, статус остался ${fresh1?.status}`,
   );
 
-  const r2 = await dealer.patch(`/api/licenses/${license.id}`, { termEnd: null });
-  check("Дилер не меняет срок своей лицензии", r2.status === 403, `${r2.status}`);
-
-  const r3 = await dealer.patch(`/api/licenses/${license.id}`, {
-    customerFio: `${MARK} Изменённый клиент`,
-    vehicleModel: `${MARK} Lada`,
-  });
-  const fresh3 = await prisma.license.findUnique({ where: { id: license.id } });
+  const r2 = await dealer.patch(`/api/licenses/${license.id}`, { type: "Обновление" });
+  const fresh2 = await prisma.license.findUnique({ where: { id: license.id } });
   check(
-    "Дилер правит карточку клиента",
-    r3.status === 200 && fresh3?.customerFio === `${MARK} Изменённый клиент`,
-    `${r3.status}`,
+    "Дилер не меняет тип своей лицензии",
+    r2.status === 403 && fresh2?.type === license.type,
+    `${r2.status}, тип остался ${fresh2?.type}`,
   );
 
-  const r4 = await admin.patch(`/api/licenses/${license.id}`, { termEnd: null, status: "ACTIVE" });
-  check("Администратор меняет срок и статус", r4.status === 200, `${r4.status}`);
+  const r4 = await admin.patch(`/api/licenses/${license.id}`, {
+    type: license.type,
+    status: "ACTIVE",
+  });
+  check("Администратор меняет тип и статус", r4.status === 200, `${r4.status}`);
 }
 
 async function testPayments(dealer: Session, admin: Session, dealerId: string) {
@@ -547,30 +534,9 @@ async function testPayments(dealer: Session, admin: Session, dealerId: string) {
 }
 
 async function testCronAndWebhook() {
-  section("Крон и колбэк кассы");
+  section("Колбэк кассы");
 
   const anon = new Session();
-
-  const noAuth = await anon.json("/api/cron/expire-licenses");
-  check(
-    "Крон без ключа не пускает",
-    noAuth.status === 401 || noAuth.status === 403 || noAuth.status === 503,
-    `${noAuth.status} ${(noAuth.body as { code?: string }).code ?? ""}`,
-  );
-
-  const wrong = await anon.json("/api/cron/expire-licenses", {
-    headers: { Authorization: "Bearer wrong-cron-key" },
-  });
-  check("Крон с чужим ключом не пускает", wrong.status === 403, `${wrong.status}`);
-
-  if (CRON_SECRET) {
-    const right = await anon.json("/api/cron/expire-licenses", {
-      headers: { Authorization: `Bearer ${CRON_SECRET}` },
-    });
-    check("Крон с верным ключом отрабатывает", right.status === 200, `${right.status}`);
-  } else {
-    skip("Крон с верным ключом отрабатывает", "нет CRON_SECRET в окружении прогона");
-  }
 
   const hookNoToken = await anon.post("/api/atol/webhook", { uuid: "нет-такого" });
   check(
@@ -684,16 +650,16 @@ async function testDealerCannotTouchOthers(dealer: Session, dealerId: string) {
 
   const foreign = await prisma.license.findFirst({
     where: { dealerId: { not: dealerId }, deletedAt: null, status: "ACTIVE" },
-    select: { id: true, customerFio: true, status: true },
+    select: { id: true, type: true, status: true },
   });
   if (!foreign) {
     skip("Дилер не трогает чужую лицензию", "нет чужой активной лицензии");
   } else {
-    const r4 = await dealer.patch(`/api/licenses/${foreign.id}`, { customerFio: `${MARK} захват` });
+    const r4 = await dealer.patch(`/api/licenses/${foreign.id}`, { type: "Восстановление" });
     const afterPatch = await prisma.license.findUnique({ where: { id: foreign.id } });
     check(
       "Дилер не правит чужую лицензию",
-      r4.status === 403 && afterPatch?.customerFio === foreign.customerFio,
+      r4.status === 403 && afterPatch?.type === foreign.type,
       `${r4.status}`,
     );
 
@@ -882,8 +848,8 @@ async function testPricing(dealer: Session, admin: Session, dealerId: string) {
       ]),
     );
   }
-  const ECO = "MB-S5WM|ECO|";
-  const A9 = "MB-S5WM-A9|FULL|RUS";
+  const ECO = "ТЕСТ-S5WM|ECO|";
+  const A9 = "ТЕСТ-A9|FULL|RUS";
 
   const created: string[] = [];
   async function addItem(item: Record<string, unknown>): Promise<string | null> {
@@ -894,30 +860,30 @@ async function testPricing(dealer: Session, admin: Session, dealerId: string) {
   }
 
   const denied = await dealer.post("/api/pricing/items", {
-    product: "MB-S5WM",
+    product: "ТЕСТ-S5WM",
     bundle: "ECO",
     price: 4000,
   });
   check("Представитель не заводит позицию прайса", denied.status === 403, `${denied.status}`);
 
-  const ecoId = await addItem({ product: "MB-S5WM", bundle: "ECO", price: 4000 });
+  const ecoId = await addItem({ product: "ТЕСТ-S5WM", bundle: "ECO", price: 4000 });
   check("Администратор заводит позицию", Boolean(ecoId), ecoId ? "создана" : "не создана");
   if (!ecoId) return;
 
   check("Цена берётся по тройке продукт-комплектация-регион", (await wizard())[ECO]?.price === 4000);
 
-  // MB-S5WM FULL и MB-S5WM ECO — разные товары: цена одного не должна
+  // FULL и ECO одного продукта — разные товары: цена одного не должна
   // достаться другому.
-  await addItem({ product: "MB-S5WM", bundle: "FULL", price: 9100 });
+  await addItem({ product: "ТЕСТ-S5WM", bundle: "FULL", price: 9100 });
   const both = await wizard();
   check(
     "Комплектации одного продукта не делят цену",
-    both["MB-S5WM|FULL|"]?.price === 9100 && both[ECO]?.price === 4000,
-    `FULL ${both["MB-S5WM|FULL|"]?.price} ₽, ECO ${both[ECO]?.price} ₽`,
+    both["ТЕСТ-S5WM|FULL|"]?.price === 9100 && both[ECO]?.price === 4000,
+    `FULL ${both["ТЕСТ-S5WM|FULL|"]?.price} ₽, ECO ${both[ECO]?.price} ₽`,
   );
 
-  // У MB-S5WM-A9 регион RUS. Позиция без региона к нему не относится.
-  await addItem({ product: "MB-S5WM-A9", bundle: "FULL", price: 111 });
+  // У ТЕСТ-A9 регион RUS. Позиция без региона к нему не относится.
+  await addItem({ product: "ТЕСТ-A9", bundle: "FULL", price: 111 });
   const strict = await wizard();
   check(
     "Позиция без региона не применяется к региональной",
@@ -925,12 +891,12 @@ async function testPricing(dealer: Session, admin: Session, dealerId: string) {
     `${strict[A9]?.price} ₽, из справочника: ${strict[A9]?.priced}`,
   );
 
-  await addItem({ product: "MB-S5WM-A9", bundle: "FULL", region: "RUS", price: 12000 });
+  await addItem({ product: "ТЕСТ-A9", bundle: "FULL", region: "RUS", price: 12000 });
   check("Региональная позиция получает свою цену", (await wizard())[A9]?.price === 12000);
 
   // Регистр и лишние пробелы не должны плодить вторую позицию.
   const dup = await admin.post("/api/pricing/items", {
-    product: " mb-s5wm ",
+    product: " тест-s5wm ",
     bundle: "eco",
     price: 1,
   });

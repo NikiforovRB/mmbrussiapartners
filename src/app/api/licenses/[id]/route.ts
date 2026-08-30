@@ -11,25 +11,14 @@ export const runtime = "nodejs";
 const patchSchema = z.object({
   type: z.enum(["Генерация", "Обновление", "Восстановление"]).optional(),
   features: z.record(z.union([z.boolean(), z.string()])).optional(),
-  termStart: z.string().datetime().optional(),
-  termEnd: z.string().datetime().nullable().optional(),
-  customerFio: z.string().optional(),
-  customerOrganization: z.string().nullable().optional(),
-  customerEmail: z.string().email().nullable().optional().or(z.literal("")),
-  customerPhone: z.string().nullable().optional().or(z.literal("")),
-  region: z.string().nullable().optional(),
-  city: z.string().nullable().optional(),
-  vehicleVin: z.string().nullable().optional(),
-  vehicleModel: z.string().nullable().optional(),
   status: z.enum(["ACTIVE", "EXPIRED", "CANCELLED", "REVOKED", "DRAFT"]).optional(),
 });
 
 /**
- * Коммерческие условия лицензии. Право licenses.edit для них не годится:
- * оно есть и у представителя — иначе он не отредактировал бы карточку
- * клиента. Разграничивает доступ отдельное licenses.manageTerms.
+ * Условия лицензии меняет только администратор с licenses.manageTerms:
+ * право licenses.edit есть и у представителя, и одного его мало.
  */
-const TERM_FIELDS = ["status", "termStart", "termEnd", "features", "type"] as const;
+const TERM_FIELDS = ["status", "features", "type"] as const;
 
 export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: string }> }) => {
   const session = await auth();
@@ -70,20 +59,6 @@ export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: str
     data: {
       ...(data.type !== undefined && { type: data.type }),
       ...(data.features !== undefined && { features: data.features }),
-      ...(data.termStart && { termStart: new Date(data.termStart) }),
-      ...(data.termEnd !== undefined && {
-        termEnd: data.termEnd ? new Date(data.termEnd) : null,
-      }),
-      ...(data.customerFio !== undefined && { customerFio: data.customerFio }),
-      ...(data.customerOrganization !== undefined && {
-        customerOrganization: data.customerOrganization,
-      }),
-      ...(data.customerEmail !== undefined && { customerEmail: data.customerEmail || null }),
-      ...(data.customerPhone !== undefined && { customerPhone: data.customerPhone || null }),
-      ...(data.region !== undefined && { region: data.region }),
-      ...(data.city !== undefined && { city: data.city }),
-      ...(data.vehicleVin !== undefined && { vehicleVin: data.vehicleVin }),
-      ...(data.vehicleModel !== undefined && { vehicleModel: data.vehicleModel }),
       ...(data.status !== undefined && { status: data.status }),
     },
   });

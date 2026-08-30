@@ -166,7 +166,6 @@ async function main() {
       versionSoftware: info.body.versionSoftware,
       versionCustom: info.body.versionCustom,
       dealerComment: "ТЕСТ MMB портал: повторная генерация",
-      termMonths: 0,
       recoverable: info.body.recoverable,
       issuedWithoutPayment: true,
     },
