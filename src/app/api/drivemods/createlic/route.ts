@@ -8,7 +8,7 @@ import { uploadObject, getDownloadUrl, deleteObject } from "@/lib/s3";
 import { createLic, describeDriveModsFailure, isDriveModsConfigured } from "@/lib/drivemods";
 import { generateLicenseNumber, normalizePhone, fioFromParts } from "@/lib/utils";
 import { isLicenseType, isLicenseTerm, termEndFromMonths } from "@/lib/license-options";
-import { resolvePrice } from "@/lib/pricing";
+import { resolvePrice, positionLabel } from "@/lib/pricing";
 import { createPayment } from "@/lib/payments/service";
 import { notifyAdmins } from "@/lib/app-notifications";
 
@@ -156,10 +156,9 @@ export const POST = route(async (req: Request) => {
 
     const termStart = new Date();
     const termEnd = termEndFromMonths(termStart, termMonths);
-    const price = issuedWithoutPayment
-      ? 0
-      : (await resolvePrice(actor.id, { product: p.product, bundle: p.bundle, region: p.region }))
-          .price;
+    const position = { product: p.product, bundle: p.bundle, region: p.region };
+    const resolved = issuedWithoutPayment ? null : await resolvePrice(actor.id, position);
+    const price = resolved?.price ?? 0;
 
     const license = await db.$transaction(async (tx) => {
       const created = await tx.license.create({
@@ -239,6 +238,17 @@ export const POST = route(async (req: Request) => {
         title: `Лицензия ${license.number} выдана без оплаты`,
         body: `Выдал ${actor.email}`,
         link: `/admin/licenses/${license.id}`,
+      });
+    }
+
+    // Цену не нашли в справочнике — счёт ушёл по запасной. Молчать нельзя:
+    // иначе незаполненная позиция будет тихо продаваться не по своей цене.
+    if (resolved && resolved.itemId === null) {
+      await notifyAdmins(["pricing.manage"], {
+        type: "PRICE_MISSING",
+        title: `Нет цены для ${positionLabel(position)}`,
+        body: `Лицензия ${license.number} выдана по запасной цене ${price.toLocaleString("ru-RU")} ₽. Добавьте позицию в справочник.`,
+        link: "/admin/pricing",
       });
     }
 

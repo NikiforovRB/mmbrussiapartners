@@ -34,10 +34,16 @@ type LicItem = {
   fullName: string;
   /** Цена комплектации; приходит с сервера, клиент её не задаёт. */
   price: number;
+  /** Цена нашлась в справочнике, а не взята из запасной настройки. */
+  priced: boolean;
 };
 
 type LicInfo = {
+  /** DRIVEMODS уже держит лицензию для этого ШГУ. */
   recoverable: boolean;
+  /** Признак повторной выдачи: по данным DRIVEMODS или по нашей базе. */
+  repeat: boolean;
+  previous: { id: string; number: string; type: string; createdAt: string } | null;
   versionSoftware: string;
   versionCustom: string;
   deviceId: string;
@@ -285,13 +291,23 @@ export function LicenseStepper({
                     />
                     <Info label="ID устройства" value={info.deviceId || "—"} />
                   </div>
-                  <div className="mt-3">
-                    {info.recoverable ? (
-                      <Tag tone="success">Восстановление доступно</Tag>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    {info.repeat ? (
+                      <Tag tone="warning">Повторная генерация</Tag>
                     ) : (
-                      <Tag tone="muted">Восстановление недоступно</Tag>
+                      <Tag tone="success">Новая генерация</Tag>
                     )}
+                    {info.recoverable ? (
+                      <Tag tone="muted">Лицензия уже есть в DRIVEMODS</Tag>
+                    ) : null}
                   </div>
+                  {info.previous ? (
+                    <p className="mt-2 text-xs text-ink-muted">
+                      По этому ШГУ уже выдавалась лицензия {info.previous.number} (
+                      {info.previous.type.toLowerCase()},{" "}
+                      {new Date(info.previous.createdAt).toLocaleDateString("ru-RU")}).
+                    </p>
+                  ) : null}
                 </Card>
 
                 <Card>
@@ -331,6 +347,11 @@ export function LicenseStepper({
                         ))}
                       </div>
                     )}
+                    {isAdmin && info.items.some((it) => !it.priced) ? (
+                      <p className="mt-3 text-xs text-warning">
+                        Для части позиций цены нет в справочнике — показана запасная.
+                      </p>
+                    ) : null}
                   </div>
 
                   <div className="mt-5">

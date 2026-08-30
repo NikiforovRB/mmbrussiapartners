@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { hasPermission } from "@/lib/permissions";
+import { priceKey } from "@/lib/pricing";
 import { Topbar } from "@/components/cabinet/topbar";
 import { PricingManager, type PriceItem } from "./pricing-manager";
 
@@ -51,6 +52,25 @@ export default async function AdminPricingPage({
     price: Number(r.price),
   }));
 
+  // Тройки, по которым лицензии уже выдавались, но цены в справочнике нет:
+  // такие позиции ушли по запасной цене, и их видно сразу.
+  //
+  // Старые записи держали всё название в одном поле («MB-S5WM FULL RUS»);
+  // такой продукт не совпадёт ни с одной позицией DRIVEMODS, и в списке он
+  // только мешал бы — отличаем их по пробелу в коде продукта.
+  const issued = await db.license.groupBy({
+    by: ["product", "bundle", "productRegion"],
+    where: { deletedAt: null, product: { not: null } },
+  });
+  const known = new Set(items.map((i) => priceKey(i)));
+  const missing = issued
+    .map((g) => ({
+      product: (g.product ?? "").trim(),
+      bundle: g.bundle ?? "",
+      region: g.productRegion ?? "",
+    }))
+    .filter((p) => p.product && !p.product.includes(" ") && !known.has(priceKey(p)));
+
   return (
     <>
       <Topbar
@@ -61,6 +81,7 @@ export default async function AdminPricingPage({
       <div className="mt-6">
         <PricingManager
           items={items}
+          missing={missing}
           initialDealerId={dealerParam ?? null}
           dealers={dealers.map((d) => ({
             id: d.id,

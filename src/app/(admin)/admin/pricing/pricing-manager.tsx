@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Pencil, Trash2, Tag as TagIcon, Save } from "lucide-react";
+import { AlertTriangle, Plus, Pencil, Trash2, Tag as TagIcon, Save } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -54,18 +54,27 @@ function withAdjust(base: number, kind: AdjustKind, value: number | null) {
   return base;
 }
 
+function isPriceItem(value: PriceItem | MissingPosition): value is PriceItem {
+  return typeof (value as PriceItem).id === "string";
+}
+
 function dealerName(d: PricingDealer) {
   const fio = [d.lastName, d.firstName, d.middleName].filter(Boolean).join(" ");
   return fio || d.organization || d.email;
 }
 
+export type MissingPosition = { product: string; bundle: string; region: string };
+
 export function PricingManager({
   items,
   dealers,
+  missing,
   initialDealerId,
 }: {
   items: PriceItem[];
   dealers: PricingDealer[];
+  /** Тройки из выданных лицензий, которых нет в справочнике. */
+  missing: MissingPosition[];
   /** Приходит из карточки представителя: открываем сразу его цены. */
   initialDealerId?: string | null;
 }) {
@@ -96,7 +105,7 @@ export function PricingManager({
       </div>
 
       {tab === "catalog" ? (
-        <Catalog items={items} />
+        <Catalog items={items} missing={missing} />
       ) : (
         <DealerPrices items={items} dealers={dealers} initialDealerId={initialDealerId} />
       )}
@@ -106,9 +115,9 @@ export function PricingManager({
 
 // ─────────────────────────── справочник ───────────────────────────
 
-function Catalog({ items }: { items: PriceItem[] }) {
+function Catalog({ items, missing }: { items: PriceItem[]; missing: MissingPosition[] }) {
   const router = useRouter();
-  const [editing, setEditing] = React.useState<PriceItem | "new" | null>(null);
+  const [editing, setEditing] = React.useState<PriceItem | "new" | MissingPosition | null>(null);
 
   const byProduct = React.useMemo(() => {
     const map = new Map<string, PriceItem[]>();
@@ -139,13 +148,40 @@ function Catalog({ items }: { items: PriceItem[] }) {
     <>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-ink-muted max-w-2xl">
-          DRIVEMODS отдаёт только продукт, комплектацию и регион — цены задаются здесь. Если у
-          продукта нет комплектаций, оставьте поле пустым: такая цена применится ко всему продукту.
+          Цена привязана к тройке «продукт + комплектация + регион» — ровно к той, что присылает
+          DRIVEMODS. MB-S5WM FULL RUS, MB-S5WM FULL CHN и MB-S5WM ECO считаются разными товарами.
+          Если комплектации или региона у продукта нет, поле оставьте пустым.
         </p>
         <Button icon={<Plus className="h-4 w-4" />} onClick={() => setEditing("new")}>
           Добавить позицию
         </Button>
       </div>
+
+      {missing.length > 0 ? (
+        <div className="mb-5 rounded-panel border border-hairline bg-[#fffbeb] p-4">
+          <div className="flex items-center gap-2 text-sm">
+            <AlertTriangle className="h-4 w-4 text-[#a16207]" />
+            <span className="font-display tracking-tight text-[#a16207]">Позиции без цены</span>
+          </div>
+          <p className="mt-1.5 text-xs text-ink-muted">
+            По этим сочетаниям лицензии уже выдавались, а цены в справочнике нет — счёт уходил по
+            запасной.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {missing.map((m) => (
+              <button
+                key={`${m.product}|${m.bundle}|${m.region}`}
+                type="button"
+                onClick={() => setEditing(m)}
+                className="inline-flex items-center gap-2 rounded-btn border border-hairline bg-white px-3 h-9 text-sm transition-colors hover:border-accent hover:text-accent"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                {[m.product, m.bundle, m.region].filter(Boolean).join(" ")}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       {items.length === 0 ? (
         <Card>
@@ -183,10 +219,10 @@ function Catalog({ items }: { items: PriceItem[] }) {
                         {item.bundle ? (
                           <Tag tone="accent">{item.bundle}</Tag>
                         ) : (
-                          <span className="text-ink-muted">Без комплектаций</span>
+                          <span className="text-ink-muted">Без комплектации</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-ink-muted">{item.region || "Все регионы"}</td>
+                      <td className="px-4 py-3 text-ink-muted">{item.region || "Без региона"}</td>
                       <td className="px-4 py-3 font-display tracking-tight">{rub(item.price)}</td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-1.5">
@@ -234,12 +270,14 @@ function ItemModal({
   onClose,
   onSaved,
 }: {
-  value: PriceItem | "new" | null;
+  value: PriceItem | "new" | MissingPosition | null;
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const isNew = value === "new";
-  const item = isNew || value === null ? null : value;
+  // Позиция без цены приходит из списка выданных лицензий: полей у неё
+  // столько же, но id нет — значит, создаём, а не правим.
+  const source = value === "new" || value === null ? null : value;
+  const item = source && isPriceItem(source) ? source : null;
   const [product, setProduct] = React.useState("");
   const [bundle, setBundle] = React.useState("");
   const [region, setRegion] = React.useState("");
@@ -247,11 +285,11 @@ function ItemModal({
   const [saving, setSaving] = React.useState(false);
 
   React.useEffect(() => {
-    setProduct(item?.product ?? "");
-    setBundle(item?.bundle ?? "");
-    setRegion(item?.region ?? "");
+    setProduct(source?.product ?? "");
+    setBundle(source?.bundle ?? "");
+    setRegion(source?.region ?? "");
     setPrice(item ? String(item.price) : "");
-  }, [item]);
+  }, [source, item]);
 
   async function save() {
     const amount = Number(price.replace(",", "."));
@@ -300,14 +338,14 @@ function ItemModal({
             value={bundle}
             onChange={(e) => setBundle(e.target.value)}
             placeholder="FULL"
-            hint="Пусто — у продукта одна цена"
+            hint="Пусто — DRIVEMODS не присылает комплектацию"
           />
           <Input
             label="Регион"
             value={region}
             onChange={(e) => setRegion(e.target.value)}
             placeholder="RUS"
-            hint="Пусто — цена для всех регионов"
+            hint="Пусто — DRIVEMODS не присылает регион"
           />
         </div>
         <Input
@@ -465,7 +503,7 @@ function DealerPrices({
                       <td className="px-4 py-3">
                         <div className="font-display tracking-tight">{item.product}</div>
                         <div className="text-xs text-ink-muted mt-0.5">
-                          {[item.bundle || "без комплектаций", item.region || "все регионы"].join(
+                          {[item.bundle || "без комплектации", item.region || "без региона"].join(
                             " · ",
                           )}
                         </div>

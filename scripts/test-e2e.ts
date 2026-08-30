@@ -167,9 +167,9 @@ function licensePayload(type: string, extra: Record<string, unknown> = {}) {
     deviceBase64: DEVICE_BASE64,
     deviceId: "MOCK-DEVICE-0001",
     type,
-    product: "DriveMods FULL",
+    product: "MB-S5WM",
     bundle: "ECO",
-    region: "RU",
+    region: null,
     versionSoftware: "1.2.3-mock",
     versionCustom: "custom-mock",
     dealerComment: `${MARK}: автопрогон`,
@@ -262,10 +262,10 @@ async function testGeneration(dealer: Session, dealerId: string) {
   // Последний случай — продукт без пакета: документация DRIVEMODS разрешает
   // bundle = null, и такие устройства не должны упираться в нашу валидацию.
   for (const [type, termMonths, termLabel, bundle, product] of [
-    ["Генерация", 0, "бессрочная", "FULL", "DriveMods FULL"],
-    ["Обновление", 12, "1 год", "ECO", "DriveMods FULL"],
-    ["Восстановление", 36, "3 года", "FULL", "DriveMods FULL"],
-    ["Генерация", 0, "бессрочная", null, "DriveMods LITE"],
+    ["Генерация", 0, "бессрочная", "FULL", "MB-S5WM"],
+    ["Обновление", 12, "1 год", "ECO", "MB-S5WM"],
+    ["Восстановление", 36, "3 года", "FULL", "MB-S5WM"],
+    ["Генерация", 0, "бессрочная", null, "MB-LITE"],
   ] as const) {
     const res = await dealer.post(
       "/api/drivemods/createlic",
@@ -813,6 +813,44 @@ async function cleanup(dealerId: string | null) {
 // ───────────────────────── запуск ─────────────────────────
 
 /**
+ * Единственный признак прошлой выдачи, который отдаёт DRIVEMODS, — recoverable.
+ * Мастер дополняет его нашей базой: если по этому ШГУ лицензия уже выдавалась,
+ * генерация повторная, даже когда сервис молчит.
+ */
+async function testRepeatDetection(dealer: Session) {
+  section("Новая и повторная генерация");
+
+  const bytes = new Uint8Array(Buffer.from(DEVICE_BASE64, "base64"));
+  const { mockState } = await import("./mock-drivemods");
+  async function info() {
+    const form = new FormData();
+    form.append("device", new Blob([bytes]), "device_id.bin");
+    return (
+      await dealer.json<{ repeat?: boolean; recoverable?: boolean; previous?: { number: string } | null }>(
+        "/api/drivemods/licinfo",
+        { method: "POST", body: form },
+      )
+    ).body;
+  }
+
+  const withFlag = await info();
+  check(
+    "recoverable из DRIVEMODS читается как повторная",
+    withFlag.recoverable === true && withFlag.repeat === true,
+    `recoverable=${withFlag.recoverable}, repeat=${withFlag.repeat}`,
+  );
+
+  mockState.recoverable = false;
+  const own = await info();
+  check(
+    "Своя прошлая выдача тоже делает генерацию повторной",
+    own.repeat === true && Boolean(own.previous?.number),
+    `repeat=${own.repeat}, прошлая ${own.previous?.number ?? "—"}`,
+  );
+  mockState.recoverable = true;
+}
+
+/**
  * Цена лицензии складывается из справочника, правила представителя и его
  * личной цены. Проверяем всю цепочку там, где её видит пользователь: в мастере
  * выдачи, в самой лицензии и в счёте.
@@ -821,35 +859,89 @@ async function testPricing(dealer: Session, admin: Session, dealerId: string) {
   section("Справочник цен");
 
   const bytes = new Uint8Array(Buffer.from(DEVICE_BASE64, "base64"));
-  async function ecoPrice(): Promise<number | null> {
+  type InfoItem = {
+    product: string;
+    bundle: string | null;
+    region: string | null;
+    price: number;
+    priced: boolean;
+  };
+
+  /** Цены всех позиций устройства так, как их видит мастер выдачи. */
+  async function wizard(): Promise<Record<string, InfoItem>> {
     const form = new FormData();
     form.append("device", new Blob([bytes]), "device_id.bin");
-    const res = await dealer.json<{ items?: { bundle: string | null; price: number }[] }>(
+    const res = await dealer.json<{ items?: InfoItem[]; repeat?: boolean }>(
       "/api/drivemods/licinfo",
       { method: "POST", body: form },
     );
-    return res.body.items?.find((i) => i.bundle === "ECO")?.price ?? null;
+    return Object.fromEntries(
+      (res.body.items ?? []).map((i) => [
+        [i.product, i.bundle ?? "", i.region ?? ""].join("|"),
+        i,
+      ]),
+    );
+  }
+  const ECO = "MB-S5WM|ECO|";
+  const A9 = "MB-S5WM-A9|FULL|RUS";
+
+  const created: string[] = [];
+  async function addItem(item: Record<string, unknown>): Promise<string | null> {
+    const res = await admin.post("/api/pricing/items", item);
+    const id = (res.body as { id?: string }).id ?? null;
+    if (id) created.push(id);
+    return id;
   }
 
-  const item = { product: "DriveMods FULL", bundle: "ECO", price: 4000 };
-  const denied = await dealer.post("/api/pricing/items", item);
+  const denied = await dealer.post("/api/pricing/items", {
+    product: "MB-S5WM",
+    bundle: "ECO",
+    price: 4000,
+  });
   check("Представитель не заводит позицию прайса", denied.status === 403, `${denied.status}`);
 
-  const added = await admin.post("/api/pricing/items", item);
-  const itemId = (added.body as { id?: string }).id;
-  check("Администратор заводит позицию", added.status === 200 && Boolean(itemId), `${added.status}`);
-  if (!itemId) return;
+  const ecoId = await addItem({ product: "MB-S5WM", bundle: "ECO", price: 4000 });
+  check("Администратор заводит позицию", Boolean(ecoId), ecoId ? "создана" : "не создана");
+  if (!ecoId) return;
 
-  // Регион у позиции пустой, а устройство сообщает RU: общая цена продукта
-  // должна подхватываться и для конкретного региона.
-  check("Мастер берёт цену из справочника", (await ecoPrice()) === 4000, `${await ecoPrice()} ₽`);
+  check("Цена берётся по тройке продукт-комплектация-регион", (await wizard())[ECO]?.price === 4000);
+
+  // MB-S5WM FULL и MB-S5WM ECO — разные товары: цена одного не должна
+  // достаться другому.
+  await addItem({ product: "MB-S5WM", bundle: "FULL", price: 9100 });
+  const both = await wizard();
+  check(
+    "Комплектации одного продукта не делят цену",
+    both["MB-S5WM|FULL|"]?.price === 9100 && both[ECO]?.price === 4000,
+    `FULL ${both["MB-S5WM|FULL|"]?.price} ₽, ECO ${both[ECO]?.price} ₽`,
+  );
+
+  // У MB-S5WM-A9 регион RUS. Позиция без региона к нему не относится.
+  await addItem({ product: "MB-S5WM-A9", bundle: "FULL", price: 111 });
+  const strict = await wizard();
+  check(
+    "Позиция без региона не применяется к региональной",
+    strict[A9]?.price !== 111 && strict[A9]?.priced === false,
+    `${strict[A9]?.price} ₽, из справочника: ${strict[A9]?.priced}`,
+  );
+
+  await addItem({ product: "MB-S5WM-A9", bundle: "FULL", region: "RUS", price: 12000 });
+  check("Региональная позиция получает свою цену", (await wizard())[A9]?.price === 12000);
+
+  // Регистр и лишние пробелы не должны плодить вторую позицию.
+  const dup = await admin.post("/api/pricing/items", {
+    product: " mb-s5wm ",
+    bundle: "eco",
+    price: 1,
+  });
+  check("Та же позиция в другом регистре не дублируется", dup.status === 400, `${dup.status}`);
 
   await admin.json(`/api/pricing/dealers/${dealerId}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ adjustKind: "PERCENT", adjustValue: 25 }),
   });
-  check("Процентное правило применяется", (await ecoPrice()) === 5000, `${await ecoPrice()} ₽`);
+  check("Процентное правило применяется", (await wizard())[ECO]?.price === 5000);
 
   await admin.json(`/api/pricing/dealers/${dealerId}`, {
     method: "PUT",
@@ -857,10 +949,10 @@ async function testPricing(dealer: Session, admin: Session, dealerId: string) {
     body: JSON.stringify({
       adjustKind: "PERCENT",
       adjustValue: 25,
-      overrides: [{ itemId, price: 3333 }],
+      overrides: [{ itemId: ecoId, price: 3333 }],
     }),
   });
-  check("Личная цена важнее правила", (await ecoPrice()) === 3333, `${await ecoPrice()} ₽`);
+  check("Личная цена важнее правила", (await wizard())[ECO]?.price === 3333);
 
   await prisma.dealerProfile.update({ where: { userId: dealerId }, data: { licenseLimit: 99 } });
   const res = await dealer.post("/api/drivemods/createlic", licensePayload("Генерация"));
@@ -875,13 +967,18 @@ async function testPricing(dealer: Session, admin: Session, dealerId: string) {
     `лицензия ${issued?.price ?? "—"} ₽, счёт ${body.payment?.amount ?? "—"} ₽`,
   );
 
-  const removed = await admin.json(`/api/pricing/items/${itemId}`, { method: "DELETE" });
+  for (const id of created) await admin.json(`/api/pricing/items/${id}`, { method: "DELETE" });
   const fallback = licensePrice("ECO");
   check(
     "Без позиции в справочнике работает запасная цена",
-    removed.status === 200 && (await ecoPrice()) === fallback,
-    `${await ecoPrice()} ₽, запасная ${fallback} ₽`,
+    (await wizard())[ECO]?.price === fallback,
+    `${(await wizard())[ECO]?.price} ₽, запасная ${fallback} ₽`,
   );
+
+  const alerts = await prisma.appNotification.count({
+    where: { type: "PRICE_MISSING", createdAt: { gte: startedAt } },
+  });
+  check("Выдача без цены в справочнике поднимает тревогу", alerts > 0, `${alerts} уведомлений`);
 
   await admin.json(`/api/pricing/dealers/${dealerId}`, {
     method: "PUT",
@@ -924,6 +1021,7 @@ async function main() {
     await testLicenseEditRights(dealer, admin, dealerId);
     await testDealerCannotTouchOthers(dealer, dealerId);
     await testAdminStillWorks(admin);
+    await testRepeatDetection(dealer);
     await testPricing(dealer, admin, dealerId);
     await testPayments(dealer, admin, dealerId);
     await testCronAndWebhook();

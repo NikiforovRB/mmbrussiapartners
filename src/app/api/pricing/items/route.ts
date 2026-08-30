@@ -24,7 +24,9 @@ export const POST = route(async (req: Request) => {
   }
 
   const data = await parseBody(req, schema);
-  const product = data.product.trim();
+  // Любое сочетание допустимо: генератор присылает пакет и регион независимо
+  // друг от друга, и обоих может не быть.
+  const product = normalizeKey(data.product);
   const bundle = normalizeKey(data.bundle);
   const region = normalizeKey(data.region);
 

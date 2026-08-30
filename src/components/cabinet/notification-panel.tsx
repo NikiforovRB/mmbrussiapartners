@@ -11,6 +11,7 @@ import {
   CreditCard,
   KeyRound,
   ReceiptText,
+  Tags,
   UserPlus,
   X,
 } from "lucide-react";
@@ -40,6 +41,7 @@ const ICONS: Record<string, React.ReactNode> = {
   PAYMENT_CREATED: <CreditCard className="h-4 w-4" />,
   PAYMENT_PAID: <CreditCard className="h-4 w-4" />,
   RECEIPT_FAILED: <ReceiptText className="h-4 w-4" />,
+  PRICE_MISSING: <Tags className="h-4 w-4" />,
 };
 
 /** Как часто подтягиваем счётчик, пока вкладка открыта. */

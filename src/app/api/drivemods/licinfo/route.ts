@@ -8,6 +8,8 @@ import {
   isDriveModsConfigured,
 } from "@/lib/drivemods";
 import { ApiError, badRequest, forbidden, route, unauthenticated } from "@/lib/api";
+import { db } from "@/lib/db";
+import { hasAdminScope } from "@/lib/permissions";
 import { resolvePrices } from "@/lib/pricing";
 
 export const runtime = "nodejs";
@@ -44,8 +46,32 @@ export const POST = route(async (req: Request) => {
     // ровно та же сумма попадёт в счёт, что бы ни прислал браузер.
     const prices = await resolvePrices(session.user.id, info.items);
 
+    // Представитель видит только свои прошлые выдачи по этому ШГУ,
+    // администратор — любые.
+    const seesAll = hasAdminScope(session.user.permissions, session.user.isSuperAdmin);
+    const previous = await db.license.findFirst({
+      where: {
+        deviceId: info.device_id,
+        deletedAt: null,
+        ...(seesAll ? {} : { dealerId: session.user.id }),
+      },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, number: true, createdAt: true, type: true },
+    });
+
     return NextResponse.json({
+      // DRIVEMODS отдаёт единственный признак прошлой выдачи: recoverable
+      // означает, что лицензия для этого ШГУ у него уже есть.
       recoverable: info.recoverable,
+      repeat: info.recoverable || previous !== null,
+      previous: previous
+        ? {
+            id: previous.id,
+            number: previous.number,
+            type: previous.type,
+            createdAt: previous.createdAt.toISOString(),
+          }
+        : null,
       versionSoftware: info.version_software,
       versionCustom: info.version_custom,
       deviceId: info.device_id,
@@ -56,6 +82,8 @@ export const POST = route(async (req: Request) => {
         region: it.region,
         fullName: productFullName(it),
         price: prices[index].price,
+        /** Цена взята из справочника, а не из запасной настройки. */
+        priced: prices[index].itemId !== null,
       })),
     });
   } catch (err) {
