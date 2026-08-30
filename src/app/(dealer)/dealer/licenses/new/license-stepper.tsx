@@ -379,7 +379,7 @@ export function LicenseStepper({
                     label="Комплектация"
                     value={
                       selectedItem
-                        ? `${selectedItem.bundle || "—"} · ${formatPrice(selectedItem.price)}`
+                        ? `${bundleLabel(selectedItem)} · ${formatPrice(selectedItem.price)}`
                         : "—"
                     }
                   />
@@ -542,6 +542,11 @@ function formatPrice(value: number) {
   return `${value.toLocaleString("ru-RU")} ₽`;
 }
 
+/** У части продуктов пакета и региона нет — тогда подписью служит сам продукт. */
+function bundleLabel(item: LicItem) {
+  return [item.bundle, item.region].filter(Boolean).join(" ") || item.product;
+}
+
 /** Комплектация как в админке DRIVEMODS: название и цена на одной кнопке. */
 function BundleButton({
   item,
@@ -563,7 +568,7 @@ function BundleButton({
           : "border-hairline text-ink hover:border-accent hover:text-accent"
       }`}
     >
-      <span className="tracking-tight">{item.bundle || item.product}</span>
+      <span className="tracking-tight">{bundleLabel(item)}</span>
       <span className={active ? "text-accent" : "text-ink-muted"}>
         {formatPrice(item.price)}
       </span>

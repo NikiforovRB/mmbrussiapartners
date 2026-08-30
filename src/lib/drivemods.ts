@@ -73,18 +73,25 @@ export function describeDriveModsFailure(err: unknown): { status: number; messag
       message: "Портал не смог авторизоваться в DRIVEMODS. Сообщите администратору.",
     };
   }
+  // По документации 400 — это нехватка обязательных параметров или сбой
+  // вызова личного кабинета, то есть проблема запроса, а не файла ШГУ.
   if (err.status === 400 || err.status === 422) {
     return {
       status: 422,
-      message: "DRIVEMODS отклонил запрос: файл device_id.bin не подходит для генерации.",
+      message:
+        "DRIVEMODS отклонил запрос: не хватает обязательных параметров или сервис не смог " +
+        "обратиться к личному кабинету. Проверьте выбранный продукт и комментарий дилера, " +
+        "затем повторите попытку.",
     };
   }
+  // 502 у DRIVEMODS — «ошибка генератора / лицензия недоступна».
   return {
     status: 502,
     message:
-      "DRIVEMODS не смог обработать файл device_id.bin. Убедитесь, что это оригинальный файл, " +
-      "выгруженный из ШГУ и не изменённый после выгрузки. Если файл верный — генератор лицензий " +
-      "DRIVEMODS сейчас недоступен, попробуйте позже.",
+      "DRIVEMODS не смог выдать лицензию по этому файлу device_id.bin. Убедитесь, что это " +
+      "оригинальный файл, выгруженный из ШГУ и не изменённый после выгрузки, и что для " +
+      "устройства доступна лицензия. Если файл верный — генератор сейчас недоступен, " +
+      "попробуйте позже.",
   };
 }
 
@@ -229,11 +236,10 @@ export type CreateLicParams = {
  * Генерация лицензии.
  */
 export async function createLic(params: CreateLicParams): Promise<CreateLicResponse> {
-  // Пустые bundle и dealer_comment сервис считает отсутствующими параметрами
-  // и отвечает невнятным 400 — отсекаем заранее понятным текстом.
+  // Пустые значения сервис считает отсутствующими параметрами и отвечает
+  // невнятным 400 — отсекаем заранее понятным текстом.
   const missing = [
     !params.product && "продукт",
-    !params.bundle && "комплектация (bundle)",
     !params.dealerComment.trim() && "комментарий дилера",
     !params.deviceId && "идентификатор устройства",
   ].filter(Boolean);
@@ -241,11 +247,14 @@ export async function createLic(params: CreateLicParams): Promise<CreateLicRespo
     throw new DriveModsError(`DRIVEMODS требует заполнить: ${missing.join(", ")}`, 400);
   }
 
+  // bundle и region документация велит передавать «если не null»: у части
+  // продуктов их нет, и явный null сервис читает как пустой обязательный
+  // параметр.
   const data = await callAuthed("/createlic", {
     did: toBase64Url(params.deviceIdBase64),
     product: params.product,
-    bundle: params.bundle,
-    region: params.region,
+    ...(params.bundle ? { bundle: params.bundle } : {}),
+    ...(params.region ? { region: params.region } : {}),
     version_software: params.versionSoftware,
     version_custom: params.versionCustom,
     dealer_comment: params.dealerComment,
