@@ -44,6 +44,19 @@ export function fioFromParts(p: { firstName?: string | null; lastName?: string |
   return [p.lastName, p.firstName, p.middleName].filter(Boolean).join(" ");
 }
 
+/**
+ * Русское склонение после числа: 1 позиция, 2 позиции, 5 позиций.
+ * Формы передаются в порядке «одна, две, пять».
+ */
+export function plural(count: number, forms: [string, string, string]): string {
+  const n = Math.abs(count) % 100;
+  const n1 = n % 10;
+  if (n > 10 && n < 20) return forms[2];
+  if (n1 > 1 && n1 < 5) return forms[1];
+  if (n1 === 1) return forms[0];
+  return forms[2];
+}
+
 export function initials(name: string | undefined | null): string {
   if (!name) return "MR";
   return name

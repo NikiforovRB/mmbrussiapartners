@@ -34,6 +34,7 @@ export default async function AdminPricingPage({
             firstName: true,
             lastName: true,
             middleName: true,
+            phone: true,
             organization: true,
             priceAdjustKind: true,
             priceAdjustValue: true,
@@ -89,6 +90,7 @@ export default async function AdminPricingPage({
             firstName: d.dealerProfile?.firstName ?? "",
             lastName: d.dealerProfile?.lastName ?? "",
             middleName: d.dealerProfile?.middleName ?? "",
+            phone: d.dealerProfile?.phone ?? null,
             organization: d.dealerProfile?.organization ?? null,
             adjustKind: d.dealerProfile?.priceAdjustKind ?? "NONE",
             adjustValue:

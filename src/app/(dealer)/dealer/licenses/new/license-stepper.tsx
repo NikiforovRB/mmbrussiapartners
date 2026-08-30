@@ -174,6 +174,7 @@ export function LicenseStepper({
         versionSoftware: info.versionSoftware,
         versionCustom: info.versionCustom,
         dealerComment: dealerComment.trim(),
+        recoverable: info.recoverable,
         ...(canIssueFree ? { issuedWithoutPayment: withoutPayment } : {}),
       }),
     });
@@ -393,7 +394,12 @@ export function LicenseStepper({
                 <div className="grid sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
                   <Row
                     label="Тип лицензии"
-                    value={<Tag tone="accent">{type}</Tag>}
+                    value={
+                      <span className="flex flex-wrap items-center gap-1.5">
+                        <Tag tone="accent">{type}</Tag>
+                        {info.repeat ? <Tag tone="warning">Повторная генерация</Tag> : null}
+                      </span>
+                    }
                   />
                   <Row label="Продукт" value={selectedItem?.product ?? "—"} />
                   <Row
