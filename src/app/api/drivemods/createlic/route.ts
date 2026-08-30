@@ -8,7 +8,7 @@ import { uploadObject, getDownloadUrl, deleteObject } from "@/lib/s3";
 import { createLic, describeDriveModsFailure, isDriveModsConfigured } from "@/lib/drivemods";
 import { generateLicenseNumber, normalizePhone, fioFromParts } from "@/lib/utils";
 import { isLicenseType, isLicenseTerm, termEndFromMonths } from "@/lib/license-options";
-import { licensePrice } from "@/lib/payments/provider";
+import { resolvePrice } from "@/lib/pricing";
 import { createPayment } from "@/lib/payments/service";
 import { notifyAdmins } from "@/lib/app-notifications";
 
@@ -156,7 +156,10 @@ export const POST = route(async (req: Request) => {
 
     const termStart = new Date();
     const termEnd = termEndFromMonths(termStart, termMonths);
-    const price = issuedWithoutPayment ? 0 : licensePrice(p.bundle);
+    const price = issuedWithoutPayment
+      ? 0
+      : (await resolvePrice(actor.id, { product: p.product, bundle: p.bundle, region: p.region }))
+          .price;
 
     const license = await db.$transaction(async (tx) => {
       const created = await tx.license.create({

@@ -8,7 +8,7 @@ import {
   isDriveModsConfigured,
 } from "@/lib/drivemods";
 import { ApiError, badRequest, forbidden, route, unauthenticated } from "@/lib/api";
-import { licensePrice } from "@/lib/payments/provider";
+import { resolvePrices } from "@/lib/pricing";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -40,6 +40,10 @@ export const POST = route(async (req: Request) => {
           "Проверьте, что загружен device_id.bin от нужного ШГУ.",
       );
     }
+    // Цены считает сервер по справочнику и правилам этого представителя:
+    // ровно та же сумма попадёт в счёт, что бы ни прислал браузер.
+    const prices = await resolvePrices(session.user.id, info.items);
+
     return NextResponse.json({
       recoverable: info.recoverable,
       versionSoftware: info.version_software,
@@ -51,9 +55,7 @@ export const POST = route(async (req: Request) => {
         bundle: it.bundle,
         region: it.region,
         fullName: productFullName(it),
-        // Цену считает сервер: она же будет применена при генерации,
-        // что бы ни прислал браузер.
-        price: licensePrice(it.bundle),
+        price: prices[index].price,
       })),
     });
   } catch (err) {

@@ -66,6 +66,17 @@ enum AuditEntity {
   ROLE
   PAYMENT
   SETTINGS
+  PRICE
+}
+
+/// Как считать цены представителя относительно справочника.
+enum PriceAdjustKind {
+  /// Цены справочника без изменений.
+  NONE
+  /// Процент к каждой цене: 10 — дороже на 10%, -10 — дешевле.
+  PERCENT
+  /// Фиксированная сумма в рублях к каждой цене, может быть отрицательной.
+  FIXED
 }
 
 enum PaymentStatus {
@@ -126,6 +137,7 @@ model User {
   sessions              Session[]
   requestedCancellations CancellationRequest[] @relation("RequestedCancellations")
   reviewedCancellations  CancellationRequest[] @relation("ReviewedCancellations")
+  prices                 DealerPrice[]         @relation("DealerPrices")
 
   @@index([status])
   @@index([roleId])
@@ -167,6 +179,9 @@ model DealerProfile {
   signupIp            String?
   licenseLimit        Int      @default(0)
   licensesUsed        Int      @default(0)
+  /// Общее правило пересчёта цен справочника для этого представителя.
+  priceAdjustKind     PriceAdjustKind @default(NONE)
+  priceAdjustValue    Decimal? @db.Decimal(12, 2)
   approvedAt          DateTime?
   approvedById        String?
   rejectionReason     String?
@@ -390,6 +405,48 @@ model EmailTemplate {
   variables Json     @default("[]")
   updatedAt DateTime @updatedAt
   createdAt DateTime @default(now())
+}
+
+/**
+ * Справочник цен. DRIVEMODS цен не отдаёт: его API возвращает только продукт,
+ * пакет и регион, поэтому прайс ведём у себя.
+ *
+ * Пакет и регион у продукта могут отсутствовать. Храним их пустой строкой,
+ * а не null: в Postgres два null в уникальном индексе считаются разными,
+ * и позиции без пакета можно было бы завести дважды.
+ */
+model PriceListItem {
+  id        String   @id @default(cuid())
+  /// Название продукта из DRIVEMODS, например MB-S5WM.
+  product   String
+  /// Пакет продукта (FULL, ECO). Пусто — у продукта одна цена.
+  bundle    String   @default("")
+  /// Регион продукта (RUS, CHN). Пусто — цена общая для всех регионов.
+  region    String   @default("")
+  price     Decimal  @db.Decimal(12, 2)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  dealerPrices DealerPrice[]
+
+  @@unique([product, bundle, region])
+  @@index([product])
+}
+
+/// Цена позиции справочника, назначенная конкретному представителю.
+model DealerPrice {
+  id        String   @id @default(cuid())
+  dealerId  String
+  itemId    String
+  price     Decimal  @db.Decimal(12, 2)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  dealer User          @relation("DealerPrices", fields: [dealerId], references: [id], onDelete: Cascade)
+  item   PriceListItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([dealerId, itemId])
+  @@index([dealerId])
 }
 
 model CompanySettings {

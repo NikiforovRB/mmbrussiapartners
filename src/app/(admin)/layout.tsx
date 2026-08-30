@@ -11,6 +11,7 @@ import {
   Settings,
   Trash2,
   ClipboardList,
+  Tags,
 } from "lucide-react";
 import { Sidebar, type SidebarItem } from "@/components/cabinet/sidebar";
 import { MobileNavProvider } from "@/components/cabinet/mobile-nav";
@@ -69,6 +70,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     items.push({ href: "/admin/geo", label: "Гео-аналитика", icon: <MapPinned className="h-4 w-4" /> });
   if (user.isSuperAdmin || hasPermission(user.role.permissions, "payments.view", user.isSuperAdmin))
     items.push({ href: "/admin/payments", label: "Платежи", icon: <CreditCard className="h-4 w-4" /> });
+  if (user.isSuperAdmin || hasPermission(user.role.permissions, "pricing.manage", user.isSuperAdmin))
+    items.push({ href: "/admin/pricing", label: "Справочник цен", icon: <Tags className="h-4 w-4" /> });
   if (user.isSuperAdmin || hasPermission(user.role.permissions, "auditLog.view", user.isSuperAdmin))
     items.push({ href: "/admin/audit", label: "Аудит", icon: <History className="h-4 w-4" /> });
   if (user.isSuperAdmin || hasPermission(user.role.permissions, "licenses.restore", user.isSuperAdmin))

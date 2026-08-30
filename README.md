@@ -53,7 +53,9 @@ npm run dev
 
    Генерация лицензий (мастер-аккаунт DRIVEMODS): `DRIVEMODS_STORE_API_URL`, `DRIVEMODS_USERNAME`, `DRIVEMODS_PASSWORD`, `DRIVEMODS_CLIENT_TOKEN`.
 
-   Касса и оплата: `ATOL_LOGIN`, `ATOL_PASSWORD`, `ATOL_GROUP`, `ATOL_BASE_URL`, `ATOL_COMPANY_INN`, `ATOL_COMPANY_EMAIL`, `ATOL_COMPANY_PAYMENT_ADDRESS`, `ATOL_COMPANY_SNO`, `ATOL_VAT_TYPE`, `PAYMENT_PROVIDER`, `PAYMENT_BUNDLE_PRICES` (прайс по комплектациям, например `{"FULL":10000,"ECO":6000}`), `PAYMENT_LICENSE_PRICE` (запасная цена) — и `ATOL_PAY_API_TOKEN`, если включаете АТОЛ Pay.
+   Касса и оплата: `ATOL_LOGIN`, `ATOL_PASSWORD`, `ATOL_GROUP`, `ATOL_BASE_URL`, `ATOL_COMPANY_INN`, `ATOL_COMPANY_EMAIL`, `ATOL_COMPANY_PAYMENT_ADDRESS`, `ATOL_COMPANY_SNO`, `ATOL_VAT_TYPE`, `PAYMENT_PROVIDER` — и `ATOL_PAY_API_TOKEN`, если включаете АТОЛ Pay.
+
+   Цены лицензий ведутся в админке, раздел «Справочник цен»: DRIVEMODS их не отдаёт, его API возвращает только продукт, комплектацию и регион. Переменные `PAYMENT_BUNDLE_PRICES` и `PAYMENT_LICENSE_PRICE` остаются запасным вариантом на случай, если позиции нет в справочнике.
 3. Build Command — `npm run vercel-build`. Миграции применятся автоматически.
 4. Cron-задачи (`vercel.json`):
    - `/api/cron/license-expiry` — ежедневное напоминание об истекающих лицензиях.
