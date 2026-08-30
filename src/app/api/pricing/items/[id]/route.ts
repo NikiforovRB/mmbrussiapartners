@@ -32,7 +32,7 @@ export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: str
   if (!item) throw notFound("Позиция не найдена");
 
   const data = await parseBody(req, schema);
-  const product = data.product === undefined ? item.product : data.product.trim();
+  const product = data.product === undefined ? item.product : normalizeKey(data.product);
   const bundle = data.bundle === undefined ? item.bundle : normalizeKey(data.bundle);
   const region = data.region === undefined ? item.region : normalizeKey(data.region);
 

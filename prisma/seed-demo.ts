@@ -231,7 +231,14 @@ async function main() {
       ],
     };
 
-    const PRODUCTS = ["HM-GEN5W FULL RUS", "MB-SSWM FULL", "LG-GEN5 CUSTOM+RUS", "MB-SSWM-A9 FULL RUS"];
+    // Продукт, пакет и регион DRIVEMODS присылает раздельно, и цена привязана
+    // к этой тройке — демо-данные должны иметь ту же форму.
+    const PRODUCTS: { product: string; bundle: string | null; region: string | null }[] = [
+      { product: "HM-GEN5W", bundle: "FULL", region: "RUS" },
+      { product: "MB-S5WM", bundle: "FULL", region: null },
+      { product: "LG-GEN5", bundle: "CUSTOM", region: "RUS" },
+      { product: "MB-S5WM-A9", bundle: "FULL", region: "RUS" },
+    ];
     const VERSIONS_SW = [
       "SP3C.CHN.SOPL.V1.0.221130-SP3C-L3001C",
       "MQ422.KOR.SSW_M",
@@ -275,7 +282,9 @@ async function main() {
             termEnd,
             deviceId: deviceHex(),
             licenseKey: `partners-portal/licenses/${number}-device-license.bin`,
-            product: pick(PRODUCTS, i),
+            product: pick(PRODUCTS, i).product,
+            bundle: pick(PRODUCTS, i).bundle,
+            productRegion: pick(PRODUCTS, i).region,
             versionSoftware: pick(VERSIONS_SW, i),
             versionCustom: pick(VERSIONS_CUSTOM, i),
             dealerComment: dealerCityComment,

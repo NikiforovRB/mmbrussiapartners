@@ -26,13 +26,17 @@ export type ResolvedPrice = {
   personal: boolean;
 };
 
-/** Пакет и регион в справочнике хранятся пустой строкой, а не null. */
+/**
+ * Регистр и пробелы не должны создавать вторую позицию для того же продукта,
+ * поэтому ключи приводим к единому виду и на записи, и на поиске. Пакет и
+ * регион отсутствуют — это пустая строка, а не null.
+ */
 export function normalizeKey(value?: string | null): string {
   return (value ?? "").trim().toUpperCase();
 }
 
 export function priceKey(q: PriceQuery): string {
-  return [q.product.trim(), normalizeKey(q.bundle), normalizeKey(q.region)].join("\u0000");
+  return [normalizeKey(q.product), normalizeKey(q.bundle), normalizeKey(q.region)].join("\u0000");
 }
 
 function toNumber(value: Prisma.Decimal | number | null | undefined): number {
@@ -51,27 +55,18 @@ function applyAdjust(base: number, kind: PriceAdjustKind, value: number | null):
 }
 
 /**
- * Позиция справочника для запроса. Точное совпадение важнее общего: цена для
- * MB-S5WM FULL RUS перебивает цену MB-S5WM FULL, а та — цену MB-S5WM.
+ * Позиция справочника для запроса — только точное совпадение тройки.
+ *
+ * MB-S5WM FULL RUS, MB-S5WM FULL CHN и MB-S5WM ECO — три разных товара со
+ * своими ценами, поэтому подставлять цену соседа нельзя: незаполненная
+ * позиция должна честно уйти на запасную цену и попасть в список без цен.
  */
 function matchItem<T extends { product: string; bundle: string; region: string }>(
   items: T[],
   q: PriceQuery,
 ): T | null {
-  const product = q.product.trim();
-  const bundle = normalizeKey(q.bundle);
-  const region = normalizeKey(q.region);
-  const candidates: [string, string][] = [
-    [bundle, region],
-    [bundle, ""],
-    ["", region],
-    ["", ""],
-  ];
-  for (const [b, r] of candidates) {
-    const found = items.find((i) => i.product === product && i.bundle === b && i.region === r);
-    if (found) return found;
-  }
-  return null;
+  const key = priceKey(q);
+  return items.find((i) => priceKey({ product: i.product, bundle: i.bundle, region: i.region }) === key) ?? null;
 }
 
 /**
@@ -84,7 +79,8 @@ export async function resolvePrices(
 ): Promise<ResolvedPrice[]> {
   if (queries.length === 0) return [];
 
-  const products = [...new Set(queries.map((q) => q.product.trim()).filter(Boolean))];
+  // В справочнике продукт хранится нормализованным, поэтому и ищем по такому же.
+  const products = [...new Set(queries.map((q) => normalizeKey(q.product)).filter(Boolean))];
   const [items, profile, personal] = await Promise.all([
     products.length > 0
       ? db.priceListItem.findMany({ where: { product: { in: products } } })
@@ -127,4 +123,9 @@ export async function resolvePrice(
 
 export function formatRub(value: number): string {
   return `${value.toLocaleString("ru-RU")} ₽`;
+}
+
+/** Подпись позиции: продукт, а за ним пакет и регион, если они есть. */
+export function positionLabel(q: PriceQuery): string {
+  return [q.product, q.bundle, q.region].map((v) => (v ?? "").trim()).filter(Boolean).join(" ");
 }

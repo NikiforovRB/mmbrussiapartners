@@ -17,13 +17,23 @@ export type MockState = {
   /** Следующий вызов /createlic завершится ошибкой — для проверки отката. */
   failNextCreate: boolean;
   createCalls: number;
+  /** Ответ /licinfo о том, есть ли у сервиса лицензия для этого ШГУ. */
+  recoverable: boolean;
 };
 
-export const mockState: MockState = { failNextCreate: false, createCalls: 0 };
+export const mockState: MockState = {
+  failNextCreate: false,
+  createCalls: 0,
+  recoverable: true,
+};
 
+// Повторяет то, что боевой сервис отдаёт на реальные device_id.bin: у одного
+// продукта две комплектации без региона, у другого — комплектация с регионом.
 const PRODUCTS = [
-  { product: "DriveMods FULL", bundle: "ECO", region: "RU" },
-  { product: "DriveMods LITE", bundle: null, region: "RU" },
+  { product: "MB-S5WM", bundle: "FULL", region: null },
+  { product: "MB-S5WM", bundle: "ECO", region: null },
+  { product: "MB-S5WM-A9", bundle: "FULL", region: "RUS" },
+  { product: "MB-LITE", bundle: null, region: null },
 ];
 
 /**
@@ -74,7 +84,8 @@ export function startMockDriveMods(port = 3210): Promise<Server> {
       const bad = badDid(body.did);
       if (bad) return json(res, bad.startsWith("Отсутствуют") ? 400 : 502, { error: bad });
       return json(res, 200, {
-        recoverable: true,
+        // Признак того, что лицензия для ШГУ у сервиса уже есть.
+        recoverable: mockState.recoverable,
         version_software: "1.2.3-mock",
         version_custom: "custom-mock",
         device_id: "MOCK-DEVICE-0001",

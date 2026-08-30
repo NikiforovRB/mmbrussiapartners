@@ -58,6 +58,7 @@ enum AppNotificationType {
   PAYMENT_CREATED
   PAYMENT_PAID
   RECEIPT_FAILED
+  PRICE_MISSING
 }
 
 /** Область, к которой относится действие в журнале аудита. */
