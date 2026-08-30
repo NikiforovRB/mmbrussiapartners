@@ -723,7 +723,13 @@ async function testDealerCannotTouchOthers(dealer: Session, dealerId: string) {
 async function testAdminStillWorks(admin: Session) {
   section("Администратор не потерял доступ");
 
-  for (const path of ["/admin", "/admin/licenses", "/admin/dealers", "/admin/payments"]) {
+  for (const path of [
+    "/admin",
+    "/admin/licenses",
+    "/admin/dealers",
+    "/admin/payments",
+    "/admin/pricing",
+  ]) {
     const res = await admin.raw(path);
     check(
       `Страница ${path} открывается`,
@@ -806,6 +812,88 @@ async function cleanup(dealerId: string | null) {
 
 // ───────────────────────── запуск ─────────────────────────
 
+/**
+ * Цена лицензии складывается из справочника, правила представителя и его
+ * личной цены. Проверяем всю цепочку там, где её видит пользователь: в мастере
+ * выдачи, в самой лицензии и в счёте.
+ */
+async function testPricing(dealer: Session, admin: Session, dealerId: string) {
+  section("Справочник цен");
+
+  const bytes = new Uint8Array(Buffer.from(DEVICE_BASE64, "base64"));
+  async function ecoPrice(): Promise<number | null> {
+    const form = new FormData();
+    form.append("device", new Blob([bytes]), "device_id.bin");
+    const res = await dealer.json<{ items?: { bundle: string | null; price: number }[] }>(
+      "/api/drivemods/licinfo",
+      { method: "POST", body: form },
+    );
+    return res.body.items?.find((i) => i.bundle === "ECO")?.price ?? null;
+  }
+
+  const item = { product: "DriveMods FULL", bundle: "ECO", price: 4000 };
+  const denied = await dealer.post("/api/pricing/items", item);
+  check("Представитель не заводит позицию прайса", denied.status === 403, `${denied.status}`);
+
+  const added = await admin.post("/api/pricing/items", item);
+  const itemId = (added.body as { id?: string }).id;
+  check("Администратор заводит позицию", added.status === 200 && Boolean(itemId), `${added.status}`);
+  if (!itemId) return;
+
+  // Регион у позиции пустой, а устройство сообщает RU: общая цена продукта
+  // должна подхватываться и для конкретного региона.
+  check("Мастер берёт цену из справочника", (await ecoPrice()) === 4000, `${await ecoPrice()} ₽`);
+
+  await admin.json(`/api/pricing/dealers/${dealerId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ adjustKind: "PERCENT", adjustValue: 25 }),
+  });
+  check("Процентное правило применяется", (await ecoPrice()) === 5000, `${await ecoPrice()} ₽`);
+
+  await admin.json(`/api/pricing/dealers/${dealerId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      adjustKind: "PERCENT",
+      adjustValue: 25,
+      overrides: [{ itemId, price: 3333 }],
+    }),
+  });
+  check("Личная цена важнее правила", (await ecoPrice()) === 3333, `${await ecoPrice()} ₽`);
+
+  await prisma.dealerProfile.update({ where: { userId: dealerId }, data: { licenseLimit: 99 } });
+  const res = await dealer.post("/api/drivemods/createlic", licensePayload("Генерация"));
+  const body = res.body as { licenseId?: string; payment?: { amount?: number } };
+  if (body.licenseId) await trackLicense(body.licenseId);
+  const issued = body.licenseId
+    ? await prisma.license.findUnique({ where: { id: body.licenseId } })
+    : null;
+  check(
+    "Лицензия и счёт выставлены по личной цене",
+    Number(issued?.price ?? 0) === 3333 && body.payment?.amount === 3333,
+    `лицензия ${issued?.price ?? "—"} ₽, счёт ${body.payment?.amount ?? "—"} ₽`,
+  );
+
+  const removed = await admin.json(`/api/pricing/items/${itemId}`, { method: "DELETE" });
+  const fallback = licensePrice("ECO");
+  check(
+    "Без позиции в справочнике работает запасная цена",
+    removed.status === 200 && (await ecoPrice()) === fallback,
+    `${await ecoPrice()} ₽, запасная ${fallback} ₽`,
+  );
+
+  await admin.json(`/api/pricing/dealers/${dealerId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ adjustKind: "NONE" }),
+  });
+  await prisma.dealerProfile.update({
+    where: { userId: dealerId },
+    data: { licenseLimit: TEST_DEALER_LIMIT },
+  });
+}
+
 async function main() {
   console.log(`\x1b[1mСквозной прогон\x1b[0m  портал: ${BASE}`);
 
@@ -836,6 +924,7 @@ async function main() {
     await testLicenseEditRights(dealer, admin, dealerId);
     await testDealerCannotTouchOthers(dealer, dealerId);
     await testAdminStillWorks(admin);
+    await testPricing(dealer, admin, dealerId);
     await testPayments(dealer, admin, dealerId);
     await testCronAndWebhook();
     await testNotificationsAndAudit(admin, dealerId);
