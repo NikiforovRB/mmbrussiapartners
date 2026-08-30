@@ -59,6 +59,7 @@ type LicenseShape = {
   licenseKey: string | null;
   deviceId: string | null;
   issuedWithoutPayment: boolean;
+  repeatGeneration: boolean;
   product: string | null;
   bundle: string | null;
   productRegion: string | null;
@@ -235,6 +236,7 @@ export function LicenseDetailEditor({
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <StatusTag kind="license" status={data.status} />
                 <Tag tone={data.type === "Генерация" ? "accent" : "neutral"}>{data.type}</Tag>
+                {data.repeatGeneration ? <Tag tone="warning">Повторная генерация</Tag> : null}
                 {data.issuedWithoutPayment ? <Tag tone="warning">Без оплаты</Tag> : null}
               </div>
             </div>

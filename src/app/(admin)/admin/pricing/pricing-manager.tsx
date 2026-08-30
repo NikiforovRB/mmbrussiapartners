@@ -2,7 +2,16 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Plus, Pencil, Trash2, Tag as TagIcon, Save } from "lucide-react";
+import {
+  AlertTriangle,
+  ChevronDown,
+  Plus,
+  Pencil,
+  Search,
+  Trash2,
+  Tag as TagIcon,
+  Save,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -10,6 +19,7 @@ import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Tag } from "@/components/ui/tag";
 import { Modal } from "@/components/ui/modal";
+import { cn, formatPhone, plural } from "@/lib/utils";
 
 export type PriceItem = {
   id: string;
@@ -27,6 +37,7 @@ export type PricingDealer = {
   firstName: string;
   lastName: string;
   middleName: string;
+  phone: string | null;
   organization: string | null;
   adjustKind: AdjustKind;
   adjustValue: number | null;
@@ -118,16 +129,30 @@ export function PricingManager({
 function Catalog({ items, missing }: { items: PriceItem[]; missing: MissingPosition[] }) {
   const router = useRouter();
   const [editing, setEditing] = React.useState<PriceItem | "new" | MissingPosition | null>(null);
+  const [query, setQuery] = React.useState("");
+  const [collapsed, setCollapsed] = React.useState<Set<string>>(new Set());
 
   const byProduct = React.useMemo(() => {
+    const q = query.trim().toLowerCase();
     const map = new Map<string, PriceItem[]>();
     for (const item of items) {
+      const hay = [item.product, item.bundle, item.region].filter(Boolean).join(" ").toLowerCase();
+      if (q && !hay.includes(q)) continue;
       const list = map.get(item.product) ?? [];
       list.push(item);
       map.set(item.product, list);
     }
     return [...map.entries()];
-  }, [items]);
+  }, [items, query]);
+
+  function toggle(product: string) {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(product)) next.delete(product);
+      else next.add(product);
+      return next;
+    });
+  }
 
   async function remove(item: PriceItem) {
     const name = [item.product, item.bundle, item.region].filter(Boolean).join(" ");
@@ -152,9 +177,20 @@ function Catalog({ items, missing }: { items: PriceItem[]; missing: MissingPosit
           DRIVEMODS. MB-S5WM FULL RUS, MB-S5WM FULL CHN и MB-S5WM ECO считаются разными товарами.
           Если комплектации или региона у продукта нет, поле оставьте пустым.
         </p>
-        <Button icon={<Plus className="h-4 w-4" />} onClick={() => setEditing("new")}>
-          Добавить позицию
-        </Button>
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-ink-subtle" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Поиск по продукту, комплектации, региону"
+              className="field-control h-10 w-72 rounded-panel border border-hairline bg-white pl-9 pr-3 text-sm placeholder:text-ink-subtle focus:outline-none focus:border-accent"
+            />
+          </div>
+          <Button icon={<Plus className="h-4 w-4" />} onClick={() => setEditing("new")}>
+            Добавить позицию
+          </Button>
+        </div>
       </div>
 
       {missing.length > 0 ? (
@@ -193,17 +229,49 @@ function Catalog({ items, missing }: { items: PriceItem[]; missing: MissingPosit
             </div>
           </div>
         </Card>
+      ) : byProduct.length === 0 ? (
+        <Card>
+          <div className="py-12 text-center text-ink-muted">
+            <Search className="h-6 w-6 mx-auto text-ink-subtle" />
+            <div className="mt-2 text-sm">По запросу «{query.trim()}» ничего не нашлось.</div>
+          </div>
+        </Card>
       ) : (
         <div className="space-y-5">
-          {byProduct.map(([product, list]) => (
+          {byProduct.map(([product, list]) => {
+            const open = !collapsed.has(product);
+            return (
             <div key={product} className="rounded-panel border border-hairline overflow-hidden">
               <div className="flex items-center justify-between gap-3 px-4 py-3 bg-surface-muted">
-                <div className="font-display tracking-tight">{product}</div>
-                <span className="text-xs text-ink-muted">
-                  {list.length} {list.length === 1 ? "позиция" : "позиций"}
-                </span>
+                <button
+                  type="button"
+                  onClick={() => toggle(product)}
+                  className="flex items-center gap-2 text-left transition-colors hover:text-accent"
+                  aria-expanded={open}
+                >
+                  <ChevronDown
+                    className={cn(
+                      "h-4 w-4 text-ink-subtle transition-transform duration-200",
+                      !open && "-rotate-90",
+                    )}
+                  />
+                  <span className="font-display tracking-tight">{product}</span>
+                </button>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-ink-muted">
+                    {list.length} {plural(list.length, ["позиция", "позиции", "позиций"])}
+                  </span>
+                  <button
+                    type="button"
+                    title={`Добавить позицию в ${product}`}
+                    onClick={() => setEditing({ product, bundle: "", region: "" })}
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-btn border border-hairline bg-white text-ink-muted transition-colors hover:border-accent hover:text-accent"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
-              <table className="w-full min-w-[560px] text-sm">
+              <table className={cn("w-full min-w-[560px] text-sm", !open && "hidden")}>
                 <thead>
                   <tr className="text-left text-[11px] uppercase tracking-tight text-ink-subtle">
                     <th className="px-4 py-2.5 font-normal">Комплектация</th>
@@ -249,7 +317,8 @@ function Catalog({ items, missing }: { items: PriceItem[]; missing: MissingPosit
                 </tbody>
               </table>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -451,7 +520,19 @@ function DealerPrices({
             label="Представитель"
             value={dealerId}
             onChange={setDealerId}
-            options={dealers.map((d) => ({ value: d.id, label: `${dealerName(d)} · ${d.email}` }))}
+            searchable
+            searchPlaceholder="Имя, почта или телефон"
+            options={dealers.map((d) => {
+              const phone = d.phone ? formatPhone(d.phone) : "";
+              return {
+                value: d.id,
+                label: dealerName(d),
+                hint: [d.email, phone].filter(Boolean).join(" · "),
+                search: [dealerName(d), d.email, d.phone ?? "", phone, d.organization ?? ""]
+                  .filter(Boolean)
+                  .join(" "),
+              };
+            })}
           />
           <Select
             label="Правило для всех продуктов"

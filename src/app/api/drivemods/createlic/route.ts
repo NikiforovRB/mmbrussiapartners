@@ -37,6 +37,8 @@ const schema = z.object({
   customerRegion: z.string().optional().or(z.literal("")),
   customerCity: z.string().optional().or(z.literal("")),
   issuedWithoutPayment: z.boolean().optional(),
+  /** Признак прошлой выдачи из ответа /licinfo. */
+  recoverable: z.boolean().optional(),
 });
 
 export const POST = route(async (req: Request) => {
@@ -160,6 +162,15 @@ export const POST = route(async (req: Request) => {
     const resolved = issuedWithoutPayment ? null : await resolvePrice(actor.id, position);
     const price = resolved?.price ?? 0;
 
+    // Повторная генерация: так сказал DRIVEMODS в /licinfo либо по этому же
+    // ШГУ лицензия уже выдавалась через портал.
+    const deviceId = generated.device_id || p.deviceId || "";
+    const repeatGeneration =
+      p.recoverable === true ||
+      (deviceId
+        ? (await db.license.count({ where: { deviceId, deletedAt: null } })) > 0
+        : false);
+
     const license = await db.$transaction(async (tx) => {
       const created = await tx.license.create({
         data: {
@@ -171,7 +182,7 @@ export const POST = route(async (req: Request) => {
           features: {},
           termStart,
           termEnd,
-          deviceId: generated.device_id || p.deviceId || "",
+          deviceId,
           deviceIdKey: deviceIdUpload.key,
           licenseKey: licenseUpload.key,
           product: p.product,
@@ -181,6 +192,7 @@ export const POST = route(async (req: Request) => {
           versionCustom: p.versionCustom || null,
           dealerComment,
           issuedWithoutPayment,
+          repeatGeneration,
           customerFio: (p.customerFio || dealerComment).trim(),
           customerOrganization: p.customerOrganization || null,
           customerEmail: p.customerEmail || null,

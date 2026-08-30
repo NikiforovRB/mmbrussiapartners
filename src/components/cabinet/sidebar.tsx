@@ -22,7 +22,7 @@ export function Sidebar({
 }) {
   const pathname = usePathname();
   return (
-    <aside className="hidden lg:flex flex-col w-64 shrink-0 sticky top-0 h-screen bg-card-light">
+    <aside className="hidden lg:flex flex-col w-[276px] shrink-0 sticky top-0 h-screen bg-card-light">
       <div className="flex flex-col flex-1 px-4 py-5">
         <div className="px-2 mb-6">
           <Logo height={30} />

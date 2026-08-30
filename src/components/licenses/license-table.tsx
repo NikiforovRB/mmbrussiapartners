@@ -42,6 +42,7 @@ type License = {
   deletedAt?: Date | string | null;
   dealerId: string;
   issuedWithoutPayment?: boolean;
+  repeatGeneration?: boolean;
 };
 
 export function LicenseTable({
@@ -256,7 +257,10 @@ export function LicenseTable({
                     ) : null}
                   </td>
                   <td className="px-4 py-3">
-                    <Tag tone={l.type === "Генерация" ? "accent" : "neutral"}>{l.type}</Tag>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <Tag tone={l.type === "Генерация" ? "accent" : "neutral"}>{l.type}</Tag>
+                      {l.repeatGeneration ? <Tag tone="warning">Повторная генерация</Tag> : null}
+                    </div>
                     {l.product ? (
                       <div className="text-xs text-ink-muted mt-1">{l.product}</div>
                     ) : null}

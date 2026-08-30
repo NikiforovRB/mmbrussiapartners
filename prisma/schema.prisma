@@ -227,6 +227,9 @@ model License {
   vehicleModel          String?
   platform              String?
   issuedWithoutPayment  Boolean       @default(false)
+  /// Для этого ШГУ лицензия уже выдавалась: DRIVEMODS вернул recoverable
+  /// либо генерация по такому device_id уже была у нас.
+  repeatGeneration      Boolean       @default(false)
   price                 Decimal?      @db.Decimal(12, 2)
   cancelledAt           DateTime?
   cancellationReason    String?
