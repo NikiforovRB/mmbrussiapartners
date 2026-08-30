@@ -90,7 +90,9 @@ export function startMockDriveMods(port = 3210): Promise<Server> {
       }
       const bad = badDid(body.did);
       if (bad) return json(res, bad.startsWith("Отсутствуют") ? 400 : 502, { error: bad });
-      if (!body.product || !body.bundle || !body.dealer_comment) {
+      // bundle и region по документации передаются, только если они не null,
+      // поэтому обязательными их не считаем.
+      if (!body.product || !body.dealer_comment || !body.device_id) {
         return json(res, 400, { error: "Отсутствуют обязательные параметры запроса" });
       }
       return json(res, 200, {

@@ -35,7 +35,7 @@ const ATOL_WEBHOOK_SECRET = process.env.ATOL_WEBHOOK_SECRET ?? "";
 const MARK = "ТЕСТ";
 const TEST_DEALER_EMAIL = "e2e.dealer@test.mmbrussia.local";
 const TEST_DEALER_PASSWORD = "e2e-test-12345";
-const TEST_DEALER_LIMIT = 3;
+const TEST_DEALER_LIMIT = 4;
 
 const prisma = new PrismaClient();
 const startedAt = new Date();
@@ -259,14 +259,17 @@ async function testAuthGate() {
 async function testGeneration(dealer: Session, dealerId: string) {
   section("Выдача лицензий: все типы");
 
-  for (const [type, termMonths, termLabel, bundle] of [
-    ["Генерация", 0, "бессрочная", "FULL"],
-    ["Обновление", 12, "1 год", "ECO"],
-    ["Восстановление", 36, "3 года", "FULL"],
+  // Последний случай — продукт без пакета: документация DRIVEMODS разрешает
+  // bundle = null, и такие устройства не должны упираться в нашу валидацию.
+  for (const [type, termMonths, termLabel, bundle, product] of [
+    ["Генерация", 0, "бессрочная", "FULL", "DriveMods FULL"],
+    ["Обновление", 12, "1 год", "ECO", "DriveMods FULL"],
+    ["Восстановление", 36, "3 года", "FULL", "DriveMods FULL"],
+    ["Генерация", 0, "бессрочная", null, "DriveMods LITE"],
   ] as const) {
     const res = await dealer.post(
       "/api/drivemods/createlic",
-      licensePayload(type, { termMonths, bundle }),
+      licensePayload(type, { termMonths, bundle, product }),
     );
     const body = res.body as { licenseId?: string; number?: string; payment?: { amount: number } | null; error?: string };
     if (res.status !== 200 || !body.licenseId) {
@@ -281,15 +284,16 @@ async function testGeneration(dealer: Session, dealerId: string) {
       where: { licenseId: body.licenseId, action: "CREATED" },
     });
 
+    const label = bundle ?? "без пакета";
     check(
-      `Тип «${type}» (${termLabel})`,
+      `Тип «${type}», ${label} (${termLabel})`,
       lic?.type === type && lic?.status === "ACTIVE" && termOk && audit === 1,
       `${body.number}, срок ${lic?.termEnd ? lic.termEnd.toISOString().slice(0, 10) : "бессрочно"}, счёт ${body.payment?.amount ?? "—"} ₽`,
     );
 
     const expected = licensePrice(bundle);
     check(
-      `Цена комплектации ${bundle}`,
+      `Цена комплектации ${label}`,
       Number(lic?.price ?? 0) === expected && body.payment?.amount === expected,
       `лицензия ${lic?.price ?? "—"} ₽, счёт ${body.payment?.amount ?? "—"} ₽, прайс ${expected} ₽`,
     );
