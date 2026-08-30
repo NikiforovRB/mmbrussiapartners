@@ -2,30 +2,15 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import {
-  Save,
-  Download,
-  XCircle,
-  RotateCcw,
-  History,
-  Pencil,
-  Mail,
-  Phone,
-  User as UserIcon,
-  Building2,
-  Car,
-  ShieldOff,
-} from "lucide-react";
+import { Save, Download, XCircle, History, ShieldOff } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Tag } from "@/components/ui/tag";
 import { StatusTag } from "@/components/ui/status-tag";
 import { Modal } from "@/components/ui/modal";
 import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
-import { DatePicker } from "@/components/ui/date-picker";
 import { formatRuDateTime, formatRuDate } from "@/lib/dates";
 import { usePermissions } from "@/hooks/use-permissions";
 import { LICENSE_TYPE_OPTIONS } from "@/lib/license-options";
@@ -43,17 +28,6 @@ type LicenseShape = {
   type: string;
   status: "ACTIVE" | "EXPIRED" | "CANCELLED" | "REVOKED" | "DRAFT";
   features: Record<string, boolean | string>;
-  termStart: string | Date;
-  /** null — бессрочная лицензия. */
-  termEnd: string | Date | null;
-  customerFio: string;
-  customerOrganization: string | null;
-  customerEmail: string | null;
-  customerPhone: string | null;
-  region: string | null;
-  city: string | null;
-  vehicleVin: string | null;
-  vehicleModel: string | null;
   cancellationReason: string | null;
   cancelledAt: string | Date | null;
   licenseKey: string | null;
@@ -90,9 +64,8 @@ export function LicenseDetailEditor({
   const router = useRouter();
   const { can } = usePermissions();
   const isAdmin = context === "admin";
-  const canEdit = !isAdmin || can("licenses.edit");
-  // Тип, срок, статус и набор функций — коммерческие условия лицензии;
-  // владелец правит только карточку клиента и данные установки.
+  // Тип, статус и набор функций — коммерческие условия лицензии: их меняет
+  // только администратор с соответствующим правом.
   const canEditTerms = can("licenses.manageTerms");
   const canDownload = !isAdmin || can("licenses.view");
   const canCancel = !isAdmin || can("licenses.cancel");
@@ -139,21 +112,9 @@ export function LicenseDetailEditor({
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        ...(canEditTerms && {
-          type: data.type,
-          features: data.features,
-          termStart: new Date(data.termStart).toISOString(),
-          termEnd: data.termEnd ? new Date(data.termEnd).toISOString() : null,
-          ...(data.status ? { status: data.status } : {}),
-        }),
-        customerFio: data.customerFio,
-        customerOrganization: data.customerOrganization || null,
-        customerEmail: data.customerEmail || null,
-        customerPhone: data.customerPhone || null,
-        region: data.region || null,
-        city: data.city || null,
-        vehicleVin: data.vehicleVin || null,
-        vehicleModel: data.vehicleModel || null,
+        type: data.type,
+        features: data.features,
+        ...(data.status ? { status: data.status } : {}),
       }),
     });
     setSaving(false);
@@ -312,7 +273,7 @@ export function LicenseDetailEditor({
         </Card>
 
         <Card>
-          <div className="font-display text-lg  tracking-tight mb-4">Тип лицензии</div>
+          <div className="font-display text-lg  tracking-tight mb-4">Параметры лицензии</div>
           <div className="grid sm:grid-cols-3 gap-3">
             <Select
               label="Тип лицензии"
@@ -331,114 +292,31 @@ export function LicenseDetailEditor({
                   { value: "CANCELLED", label: "Аннулирована" },
                 ]}
               />
-            ) : (
-              <ReadonlyField label="Срок действия" value={termLabel(data.termEnd)} />
-            )}
+            ) : null}
           </div>
-          {canEditTerms ? (
-            <div className="mt-3 grid sm:grid-cols-3 gap-3">
-              <Select
-                label="Срок действия"
-                value={data.termEnd ? "fixed" : "perpetual"}
-                onChange={(v) =>
-                  setData({
-                    ...data,
-                    termEnd: v === "perpetual" ? null : (data.termEnd ?? defaultFixedTerm()),
-                  })
-                }
-                options={[
-                  { value: "perpetual", label: "Бессрочная" },
-                  { value: "fixed", label: "До даты" },
-                ]}
-              />
-              {data.termEnd ? (
-                <DatePicker
-                  label="Действует до"
-                  value={new Date(data.termEnd)}
-                  onChange={(d) => setData({ ...data, termEnd: d })}
-                />
-              ) : null}
-            </div>
-          ) : null}
           <div className="divider my-5" />
           <div className="grid sm:grid-cols-2 gap-3">
             <ReadonlyField label="Продукт" value={data.product} />
             <ReadonlyField label="Версия ПО" value={data.versionSoftware} />
             <ReadonlyField label="Версия кастома" value={data.versionCustom} />
-            <ReadonlyField label="ID устройства" value={data.deviceId ?? null} />
+            {/* ID ШГУ — служебные данные: представителю он в карточке не нужен. */}
+            {isAdmin ? (
+              <ReadonlyField
+                label="ID устройства (виден только администраторам)"
+                value={data.deviceId ?? null}
+              />
+            ) : null}
             <ReadonlyField label="Комментарий дилера" value={data.dealerComment} />
           </div>
+          {canEditTerms ? (
+            <div className="mt-5 flex justify-end">
+              <Button loading={saving} icon={<Save className="h-4 w-4" />} onClick={save}>
+                Сохранить изменения
+              </Button>
+            </div>
+          ) : null}
         </Card>
 
-        <Card>
-          <div className="font-display text-lg  tracking-tight mb-4">Клиент</div>
-          <div className="grid sm:grid-cols-2 gap-3">
-            <Input
-              label="ФИО"
-              disabled={!canEdit}
-              icon={<UserIcon className="h-4 w-4" />}
-              value={data.customerFio}
-              onChange={(e) => setData({ ...data, customerFio: e.target.value })}
-            />
-            <Input
-              label="Организация"
-              disabled={!canEdit}
-              icon={<Building2 className="h-4 w-4" />}
-              value={data.customerOrganization ?? ""}
-              onChange={(e) => setData({ ...data, customerOrganization: e.target.value })}
-            />
-            <Input
-              label="Email"
-              disabled={!canEdit}
-              icon={<Mail className="h-4 w-4" />}
-              value={data.customerEmail ?? ""}
-              onChange={(e) => setData({ ...data, customerEmail: e.target.value })}
-            />
-            <Input
-              label="Телефон"
-              disabled={!canEdit}
-              icon={<Phone className="h-4 w-4" />}
-              value={data.customerPhone ?? ""}
-              onChange={(e) => setData({ ...data, customerPhone: e.target.value })}
-            />
-            <Input
-              label="Регион"
-              disabled={!canEdit}
-              value={data.region ?? ""}
-              onChange={(e) => setData({ ...data, region: e.target.value })}
-            />
-            <Input
-              label="Город"
-              disabled={!canEdit}
-              value={data.city ?? ""}
-              onChange={(e) => setData({ ...data, city: e.target.value })}
-            />
-            <Input
-              label="VIN"
-              disabled={!canEdit}
-              icon={<Car className="h-4 w-4" />}
-              value={data.vehicleVin ?? ""}
-              onChange={(e) => setData({ ...data, vehicleVin: e.target.value })}
-            />
-            <Input
-              label="Модель"
-              disabled={!canEdit}
-              value={data.vehicleModel ?? ""}
-              onChange={(e) => setData({ ...data, vehicleModel: e.target.value })}
-            />
-          </div>
-          <div className="mt-5 flex justify-end">
-            <Button
-              loading={saving}
-              disabled={!canEdit}
-              title={canEdit ? undefined : "Нет права на редактирование"}
-              icon={<Save className="h-4 w-4" />}
-              onClick={save}
-            >
-              Сохранить изменения
-            </Button>
-          </div>
-        </Card>
       </div>
 
       <Card className="h-fit">
@@ -533,17 +411,6 @@ export function LicenseDetailEditor({
   );
 }
 
-function termLabel(termEnd: string | Date | null): string {
-  return termEnd ? `до ${formatRuDate(termEnd)}` : "Бессрочная";
-}
-
-/** По умолчанию срочная лицензия предлагается на год вперёд. */
-function defaultFixedTerm(): Date {
-  const d = new Date();
-  d.setFullYear(d.getFullYear() + 1);
-  return d;
-}
-
 function ReadonlyField({ label, value }: { label: string; value: string | null }) {
   return (
     <div className="rounded-panel border border-hairline p-3">
@@ -594,6 +461,3 @@ function mapAuditTone(action: string): "neutral" | "accent" | "warning" | "dange
       return "neutral";
   }
 }
-
-void Pencil;
-void RotateCcw;

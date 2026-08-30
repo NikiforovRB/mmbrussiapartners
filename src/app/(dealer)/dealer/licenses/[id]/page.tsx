@@ -43,7 +43,7 @@ export default async function LicenseDetailDealerPage({
     <>
       <Topbar
         title={`Лицензия ${license.number}`}
-        subtitle="Редактирование, скачивание, аннулирование"
+        subtitle="Скачивание и аннулирование"
         user={{
           name: fio || user?.email || session.user.email || "",
           email: user?.email ?? session.user.email ?? "",
@@ -52,7 +52,9 @@ export default async function LicenseDetailDealerPage({
       />
       <div className="mt-6">
         <LicenseDetailEditor
-          license={JSON.parse(JSON.stringify(license))}
+          // ID ШГУ вообще не уезжает в браузер представителя: его видят только
+          // администраторы.
+          license={JSON.parse(JSON.stringify({ ...license, deviceId: null }))}
           context="dealer"
           latestRequest={latestRequest ? JSON.parse(JSON.stringify(latestRequest)) : null}
         />

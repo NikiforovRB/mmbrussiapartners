@@ -6,7 +6,6 @@ const DEMO_EMAIL_DOMAIN = "@demo.mmbrussia.ru";
 const DEMO_LICENSE_PREFIX = "MMB-DEMO-";
 const DEMO_PASSWORD = "demo12345";
 
-const PLATFORMS = ["Android", "Linux", "QNX", "WinCE", "Универсальная"];
 const REGIONS: [string, string][] = [
   ["Москва", "Москва"],
   ["Санкт-Петербург", "Санкт-Петербург"],
@@ -15,17 +14,6 @@ const REGIONS: [string, string][] = [
   ["Новосибирская обл.", "Новосибирск"],
   ["Краснодарский край", "Краснодар"],
 ];
-const CUSTOMER_NAMES = [
-  "Иванов Иван Иванович",
-  "Петров Пётр Петрович",
-  "Сидорова Анна Сергеевна",
-  "Кузнецов Дмитрий Олегович",
-  "Смирнова Елена Викторовна",
-  "Волков Артём Николаевич",
-  "Морозов Илья Андреевич",
-  "Новикова Мария Павловна",
-];
-
 function daysAgo(n: number): Date {
   return new Date(Date.now() - n * 24 * 60 * 60 * 1000);
 }
@@ -253,7 +241,6 @@ async function main() {
       dealer3: [],
     };
 
-    let custIdx = 0;
     for (const key of approvedKeys) {
       const dealer = dealers[key];
       const plans = perDealerPlans[key];
@@ -261,13 +248,6 @@ async function main() {
       for (let i = 0; i < plans.length; i++) {
         const plan = plans[i];
         const created = atTime(daysAgo(plan.createdDaysAgo), 10 + (i % 8), (i * 7) % 60);
-        const termStart = created;
-        // Каждая четвёртая лицензия срочная — чтобы в демо были видны
-        // и бессрочные записи, и напоминания об истечении.
-        const termEnd =
-          i % 4 === 3
-            ? new Date(created.getFullYear() + 1, created.getMonth(), created.getDate())
-            : null;
         const [region, city] = pick(REGIONS, i + Number(key.length));
         const number = licenseNumber(seq++);
         const dealerCityComment = `${dealers[key].email.split("@")[0]}, ${city}`;
@@ -278,8 +258,6 @@ async function main() {
             type: plan.type,
             status: plan.status,
             features: {},
-            termStart,
-            termEnd,
             deviceId: deviceHex(),
             licenseKey: `partners-portal/licenses/${number}-device-license.bin`,
             product: pick(PRODUCTS, i).product,
@@ -288,15 +266,8 @@ async function main() {
             versionSoftware: pick(VERSIONS_SW, i),
             versionCustom: pick(VERSIONS_CUSTOM, i),
             dealerComment: dealerCityComment,
-            customerFio: pick(CUSTOMER_NAMES, custIdx++),
-            customerOrganization: i % 2 === 0 ? 'ООО "Клиент"' : null,
-            customerEmail: `client${custIdx}@example.ru`,
-            customerPhone: `+7 90${i} 000-00-0${i % 10}`,
             region,
             city,
-            vehicleVin: `WDB${100000 + seq}`,
-            vehicleModel: pick(["Mercedes E-class", "Toyota Camry", "Kia K5", "BMW X5"], i),
-            platform: pick(PLATFORMS, i),
             issuedWithoutPayment: !!plan.withoutPayment,
             price: plan.withoutPayment ? null : 3000 + (i % 5) * 900,
             cancelledAt:

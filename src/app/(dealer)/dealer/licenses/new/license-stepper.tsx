@@ -17,14 +17,15 @@ import {
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card } from "@/components/ui/card";
 import { Tag } from "@/components/ui/tag";
 import { usePermissions } from "@/hooks/use-permissions";
-import { LICENSE_TYPE_OPTIONS } from "@/lib/license-options";
 
 type Step = 1 | 2 | 3 | 4;
+
+/** Мастер выдаёт только новые лицензии, поэтому тип здесь не выбирают. */
+const LICENSE_TYPE_GENERATION = "Генерация";
 
 type LicItem = {
   index: number;
@@ -86,7 +87,6 @@ export function LicenseStepper({
   const [loadingInfo, setLoadingInfo] = React.useState(false);
   const [info, setInfo] = React.useState<LicInfo | null>(null);
 
-  const [type, setType] = React.useState<string>("Генерация");
   const [productIndex, setProductIndex] = React.useState<string>("");
   const [dealerComment, setDealerComment] = React.useState<string>(dealerName);
   const [withoutPayment, setWithoutPayment] = React.useState<boolean>(false);
@@ -167,7 +167,9 @@ export function LicenseStepper({
       body: JSON.stringify({
         deviceBase64,
         deviceId: info.deviceId,
-        type,
+        // Мастер всегда выдаёт новую лицензию; обновление и восстановление
+        // делаются из карточки уже выданной.
+        type: LICENSE_TYPE_GENERATION,
         product: selectedItem.product,
         bundle: selectedItem.bundle,
         region: selectedItem.region,
@@ -290,7 +292,13 @@ export function LicenseStepper({
                       label="Версия кастома"
                       value={info.versionCustom || "—"}
                     />
-                    <Info label="ID устройства" value={info.deviceId || "—"} />
+                    {/* ID ШГУ — служебное поле: дилеру его не показываем. */}
+                    {isAdmin ? (
+                      <Info
+                        label="ID устройства (виден только администраторам)"
+                        value={info.deviceId || "—"}
+                      />
+                    ) : null}
                   </div>
                   <div className="mt-3 flex flex-wrap items-center gap-2">
                     {info.repeat ? (
@@ -313,15 +321,9 @@ export function LicenseStepper({
 
                 <Card>
                   <div className="font-display text-lg  tracking-tight mb-4">
-                    Продукт и тип
+                    Продукт и комплектация
                   </div>
                   <div className="grid sm:grid-cols-2 gap-3">
-                    <Select
-                      label="Тип лицензии"
-                      value={type}
-                      onChange={setType}
-                      options={LICENSE_TYPE_OPTIONS}
-                    />
                     <ReadonlyField
                       label="Продукт"
                       value={productNames.join(", ") || "—"}
@@ -396,7 +398,7 @@ export function LicenseStepper({
                     label="Тип лицензии"
                     value={
                       <span className="flex flex-wrap items-center gap-1.5">
-                        <Tag tone="accent">{type}</Tag>
+                        <Tag tone="accent">{LICENSE_TYPE_GENERATION}</Tag>
                         {info.repeat ? <Tag tone="warning">Повторная генерация</Tag> : null}
                       </span>
                     }
@@ -415,7 +417,12 @@ export function LicenseStepper({
                     label="Версия кастома"
                     value={info.versionCustom || "—"}
                   />
-                  <Row label="ID устройства" value={info.deviceId || "—"} />
+                  {isAdmin ? (
+                    <Row
+                      label="ID устройства (виден только администраторам)"
+                      value={info.deviceId || "—"}
+                    />
+                  ) : null}
                   <Row
                     label="Комментарий дилера"
                     value={dealerComment || "—"}

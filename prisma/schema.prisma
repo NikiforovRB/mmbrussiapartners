@@ -205,9 +205,6 @@ model License {
   type                  String        @default("Генерация")
   status                LicenseStatus @default(DRAFT)
   features              Json          @default("{}")
-  termStart             DateTime
-  /** null — бессрочная лицензия; крон истечения такие не трогает. */
-  termEnd               DateTime?
   deviceId              String
   deviceIdKey           String?
   licenseKey            String?
@@ -217,15 +214,10 @@ model License {
   versionSoftware       String?
   versionCustom         String?
   dealerComment         String?
-  customerFio           String
-  customerOrganization  String?
-  customerEmail         String?
-  customerPhone         String?
+  /// Город и регион представителя на момент выдачи: по ним строится
+  /// гео-аналитика, и переезд дилера не должен переписывать прошлое.
   city                  String?
   region                String?
-  vehicleVin            String?
-  vehicleModel          String?
-  platform              String?
   issuedWithoutPayment  Boolean       @default(false)
   /// Для этого ШГУ лицензия уже выдавалась: DRIVEMODS вернул recoverable
   /// либо генерация по такому device_id уже была у нас.
@@ -244,9 +236,6 @@ model License {
 
   @@index([dealerId])
   @@index([status])
-  @@index([termEnd])
-  @@index([customerEmail])
-  @@index([customerPhone])
   @@index([region])
   @@index([deletedAt])
   // Списки лицензий всегда сортируются по createdAt: в админке в пределах

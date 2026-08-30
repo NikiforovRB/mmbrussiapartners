@@ -29,11 +29,13 @@ export const mockState: MockState = {
 
 // Повторяет то, что боевой сервис отдаёт на реальные device_id.bin: у одного
 // продукта две комплектации без региона, у другого — комплектация с регионом.
+// Названия заведомо тестовые: прогон трогает боевой справочник цен, и
+// совпадение с настоящей позицией ломало бы проверки прайса.
 const PRODUCTS = [
-  { product: "MB-S5WM", bundle: "FULL", region: null },
-  { product: "MB-S5WM", bundle: "ECO", region: null },
-  { product: "MB-S5WM-A9", bundle: "FULL", region: "RUS" },
-  { product: "MB-LITE", bundle: null, region: null },
+  { product: "ТЕСТ-S5WM", bundle: "FULL", region: null },
+  { product: "ТЕСТ-S5WM", bundle: "ECO", region: null },
+  { product: "ТЕСТ-A9", bundle: "FULL", region: "RUS" },
+  { product: "ТЕСТ-LITE", bundle: null, region: null },
 ];
 
 /**

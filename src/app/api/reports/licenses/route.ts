@@ -63,15 +63,11 @@ export const POST = route(async (req: Request) => {
     { header: "Без оплаты", key: "issuedWithoutPayment", width: 12 },
     { header: "Статус", key: "status", width: 14 },
     { header: "Создана", key: "createdAt", width: 18 },
-    { header: "Действует до", key: "termEnd", width: 18 },
     { header: "Дилер", key: "dealer", width: 28 },
     { header: "Email дилера", key: "dealerEmail", width: 26 },
-    { header: "Клиент ФИО", key: "customerFio", width: 26 },
-    { header: "Клиент Email", key: "customerEmail", width: 26 },
-    { header: "Клиент телефон", key: "customerPhone", width: 18 },
+    { header: "Комментарий дилера", key: "dealerComment", width: 26 },
     { header: "Регион", key: "region", width: 18 },
     { header: "Город", key: "city", width: 18 },
-    { header: "VIN", key: "vin", width: 22 },
   ];
   ws.getRow(1).font = { bold: true };
 
@@ -85,19 +81,15 @@ export const POST = route(async (req: Request) => {
       issuedWithoutPayment: l.issuedWithoutPayment ? "Да" : "",
       status: statusLabel("license", l.status),
       createdAt: formatRuDate(l.createdAt),
-      termEnd: l.termEnd ? formatRuDate(l.termEnd) : "Бессрочная",
       dealer: fioFromParts({
         firstName: l.dealer.dealerProfile?.firstName,
         lastName: l.dealer.dealerProfile?.lastName,
         middleName: l.dealer.dealerProfile?.middleName,
       }),
       dealerEmail: l.dealer.email,
-      customerFio: l.customerFio,
-      customerEmail: l.customerEmail ?? "",
-      customerPhone: l.customerPhone ?? "",
+      dealerComment: l.dealerComment ?? "",
       region: l.region ?? "",
       city: l.city ?? "",
-      vin: l.vehicleVin ?? "",
     });
   }
 

@@ -92,10 +92,9 @@ function buildWhere(sp: { q?: string; status?: string; type?: string }) {
     Object.assign(where, {
       OR: [
         { number: { contains: q, mode: "insensitive" } },
-        { customerFio: { contains: q, mode: "insensitive" } },
-        { customerEmail: { contains: q, mode: "insensitive" } },
-        { customerPhone: { contains: q } },
-        { customerOrganization: { contains: q, mode: "insensitive" } },
+        { product: { contains: q, mode: "insensitive" } },
+        { dealerComment: { contains: q, mode: "insensitive" } },
+        { versionSoftware: { contains: q, mode: "insensitive" } },
         { dealer: { email: { contains: q, mode: "insensitive" } } },
       ],
     });

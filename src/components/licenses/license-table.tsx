@@ -28,15 +28,9 @@ type License = {
   number: string;
   type: string;
   status: "ACTIVE" | "EXPIRED" | "CANCELLED" | "REVOKED" | "DRAFT";
-  termStart: Date | string;
-  /** null — бессрочная лицензия. */
-  termEnd: Date | string | null;
   product?: string | null;
   versionSoftware?: string | null;
-  customerFio: string;
-  customerOrganization?: string | null;
-  customerEmail?: string | null;
-  customerPhone?: string | null;
+  dealerComment?: string | null;
   cancellationReason?: string | null;
   licenseKey?: string | null;
   deletedAt?: Date | string | null;
@@ -181,7 +175,7 @@ export function LicenseTable({
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Номер, ФИО, email, телефон, организация..."
+              placeholder="Номер, продукт, комментарий дилера, версия ПО..."
               className="bg-transparent w-full text-sm placeholder:text-ink-subtle"
             />
           </div>
@@ -229,17 +223,15 @@ export function LicenseTable({
               <tr className="text-left text-[11.5px] uppercase tracking-tight text-ink-subtle">
                 <th className="px-4 py-3">Номер</th>
                 <th className="px-4 py-3">Тип</th>
-                <th className="px-4 py-3">Клиент</th>
-                <th className="px-4 py-3">Email / Тел.</th>
-                <th className="px-4 py-3">Статус</th>
-                <th className="px-4 py-3">Версия ПО</th>
+                <th className="px-4 py-3">Комментарий дилера</th>
+                <th className="px-4 py-3">Статус и версия ПО</th>
                 <th className="px-4 py-3 text-right">Действия</th>
               </tr>
             </thead>
             <tbody>
               {licenses.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-ink-muted">
+                  <td colSpan={5} className="px-4 py-12 text-center text-ink-muted">
                     Лицензий по фильтру не найдено
                   </td>
                 </tr>
@@ -265,77 +257,83 @@ export function LicenseTable({
                       <div className="text-xs text-ink-muted mt-1">{l.product}</div>
                     ) : null}
                   </td>
-                  <td className="px-4 py-3">
-                    <div className="">{l.customerFio}</div>
-                    {l.customerOrganization ? (
-                      <div className="text-xs text-ink-muted">{l.customerOrganization}</div>
-                    ) : null}
-                  </td>
-                  <td className="px-4 py-3 text-ink-muted text-xs">
-                    {l.customerEmail ? <div>{l.customerEmail}</div> : null}
-                    {l.customerPhone ? <div>{l.customerPhone}</div> : null}
-                  </td>
+                  <td className="px-4 py-3 text-ink-muted">{l.dealerComment || "—"}</td>
                   <td className="px-4 py-3">
                     <StatusTag kind="license" status={l.status} />
-                  </td>
-                  <td className="px-4 py-3 text-ink-muted text-xs break-all">
-                    {l.versionSoftware || "—"}
+                    <div className="mt-1 text-xs text-ink-muted break-all">
+                      {l.versionSoftware || "—"}
+                    </div>
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center justify-end gap-1.5">
-                      {l.licenseKey ? (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          disabled={!canDownload}
-                          title={canDownload ? undefined : "Нет права на скачивание"}
-                          icon={<Download className="h-4 w-4" />}
-                          onClick={() => onDownload(l)}
-                        >
-                          Скачать
-                        </Button>
-                      ) : null}
-                      {canEdit ? (
-                        <Link href={`${basePath}/${l.id}`}>
-                          <Button size="sm" variant="ghost" icon={<Pencil className="h-4 w-4" />}>
+                    {/* Действия идут парами в столбик: так строка не растягивается
+                        на четыре кнопки в ряд. */}
+                    <div className="flex items-start justify-end gap-1.5">
+                      <div className="flex flex-col items-stretch gap-1.5">
+                        {l.licenseKey ? (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="w-full justify-start"
+                            disabled={!canDownload}
+                            title={canDownload ? undefined : "Нет права на скачивание"}
+                            icon={<Download className="h-4 w-4" />}
+                            onClick={() => onDownload(l)}
+                          >
+                            Скачать
+                          </Button>
+                        ) : null}
+                        {canEdit ? (
+                          <Link href={`${basePath}/${l.id}`}>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="w-full justify-start"
+                              icon={<Pencil className="h-4 w-4" />}
+                            >
+                              Редактировать
+                            </Button>
+                          </Link>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="w-full justify-start"
+                            disabled
+                            title="Нет права на редактирование"
+                            icon={<Pencil className="h-4 w-4" />}
+                          >
                             Редактировать
                           </Button>
-                        </Link>
-                      ) : (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          disabled
-                          title="Нет права на редактирование"
-                          icon={<Pencil className="h-4 w-4" />}
-                        >
-                          Редактировать
-                        </Button>
-                      )}
-                      {l.status === "ACTIVE" ? (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          disabled={!canCancel}
-                          title={canCancel ? undefined : "Нет права на аннулирование"}
-                          icon={<XCircle className="h-4 w-4" />}
-                          onClick={() => setCancelTarget(l)}
-                        >
-                          {isAdmin ? "Аннулировать" : "Запросить аннулирование"}
-                        </Button>
-                      ) : null}
-                      {isAdmin ? (
-                        <Button
-                          size="sm"
-                          variant="ghostDanger"
-                          disabled={!canDelete}
-                          title={canDelete ? undefined : "Нет права на удаление"}
-                          icon={<Trash2 className="h-4 w-4" />}
-                          onClick={() => setDeleteTarget(l)}
-                        >
-                          Удалить
-                        </Button>
-                      ) : null}
+                        )}
+                      </div>
+                      <div className="flex flex-col items-stretch gap-1.5">
+                        {l.status === "ACTIVE" ? (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="w-full justify-start"
+                            disabled={!canCancel}
+                            title={canCancel ? undefined : "Нет права на аннулирование"}
+                            icon={<XCircle className="h-4 w-4" />}
+                            onClick={() => setCancelTarget(l)}
+                          >
+                            {isAdmin ? "Аннулировать" : "Запросить аннулирование"}
+                          </Button>
+                        ) : null}
+                        {isAdmin ? (
+                          <Button
+                            size="sm"
+                            variant="ghostDanger"
+                            className="w-full justify-start"
+                            disabled={!canDelete}
+                            title={canDelete ? undefined : "Нет права на удаление"}
+                            icon={<Trash2 className="h-4 w-4" />}
+                            onClick={() => setDeleteTarget(l)}
+                          >
+                            Удалить
+                          </Button>
+                        ) : null}
+                      </div>
                     </div>
                   </td>
                 </tr>
