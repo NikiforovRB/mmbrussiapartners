@@ -25,3 +25,6 @@ next-env.d.ts
 *.tsbuildinfo
 
 prisma/migrations/dev.db*
+
+# Файлы device_id.bin для ручных прогонов: это идентификаторы реальных ШГУ.
+tests/
