@@ -17,7 +17,6 @@ import { Sidebar, type SidebarItem } from "@/components/cabinet/sidebar";
 import { MobileNavProvider } from "@/components/cabinet/mobile-nav";
 import { CommandPalette } from "@/components/cabinet/command-palette";
 import { CabinetUserProvider } from "@/components/cabinet/cabinet-user";
-import { Avatar } from "@/components/ui/avatar";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { hasPermission, hasAdminScope } from "@/lib/permissions";
@@ -79,16 +78,6 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   if (user.isSuperAdmin || hasPermission(user.role.permissions, "settings.edit", user.isSuperAdmin))
     items.push({ href: "/admin/settings", label: "Настройки", icon: <Settings className="h-4 w-4" /> });
 
-  const footer = (
-    <div className="rounded-panel bg-bg-dark text-white p-3.5 flex items-center gap-3">
-      <Avatar name={displayName} src={avatarUrl} size={40} className="shrink-0" />
-      <div className="min-w-0">
-        <div className="text-[11px] uppercase tracking-widest text-white/60">Роль</div>
-        <div className="mt-0.5 font-display tracking-tight truncate">{user.role.name}</div>
-      </div>
-    </div>
-  );
-
   const unreadCount = await db.appNotification.count({
     where: { userId: user.id, readAt: null },
   });
@@ -106,9 +95,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         isSuperAdmin: user.isSuperAdmin,
       }}
     >
-      <MobileNavProvider items={items} footer={footer}>
+      <MobileNavProvider items={items}>
         <div className="cabinet min-h-screen flex bg-bg-default">
-          <Sidebar items={items} footer={footer} />
+          <Sidebar items={items} />
           <div className="flex-1 min-w-0 px-4 lg:px-6 pb-12">{children}</div>
           <CommandPalette />
         </div>

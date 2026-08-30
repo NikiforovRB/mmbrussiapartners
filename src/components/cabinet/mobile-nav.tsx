@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
 import { cn } from "@/lib/utils";
-import type { SidebarItem } from "./sidebar";
+import { activeNavHref, type SidebarItem } from "./sidebar";
 
 type MobileNavContextValue = {
   open: boolean;
@@ -35,6 +35,7 @@ export function MobileNavProvider({
 }) {
   const [open, setOpen] = React.useState(false);
   const pathname = usePathname();
+  const activeHref = activeNavHref(pathname, items);
 
   React.useEffect(() => {
     setOpen(false);
@@ -83,9 +84,7 @@ export function MobileNavProvider({
 
               <nav className="flex-1 space-y-1 overflow-y-auto scrollbar-clean">
                 {items.map((item) => {
-                  const active =
-                    pathname === item.href ||
-                    pathname.startsWith(item.href + "/");
+                  const active = item.href === activeHref;
                   return (
                     <Link
                       key={item.href}

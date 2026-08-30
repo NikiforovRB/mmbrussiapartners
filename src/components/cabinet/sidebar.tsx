@@ -13,6 +13,20 @@ export type SidebarItem = {
   badge?: React.ReactNode;
 };
 
+/**
+ * Подсвечиваем пункт с самым длинным совпадающим адресом. Простая проверка
+ * «путь начинается с href» держала бы «Дашборд» (/admin) активным на всех
+ * внутренних страницах разом с нужным пунктом.
+ */
+export function activeNavHref(pathname: string, items: SidebarItem[]): string | null {
+  let best: string | null = null;
+  for (const { href } of items) {
+    if (pathname !== href && !pathname.startsWith(href + "/")) continue;
+    if (best === null || href.length > best.length) best = href;
+  }
+  return best;
+}
+
 export function Sidebar({
   items,
   footer,
@@ -21,6 +35,7 @@ export function Sidebar({
   footer?: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const activeHref = activeNavHref(pathname, items);
   return (
     <aside className="hidden lg:flex flex-col w-[276px] shrink-0 sticky top-0 h-screen bg-card-light">
       <div className="flex flex-col flex-1 px-4 py-5">
@@ -30,7 +45,7 @@ export function Sidebar({
 
         <nav className="flex-1 space-y-1">
           {items.map((item) => {
-            const active = pathname === item.href || pathname.startsWith(item.href + "/");
+            const active = item.href === activeHref;
             return (
               <Link
                 key={item.href}
