@@ -44,19 +44,26 @@ npm run dev
 | `npm run db:studio` | Prisma Studio |
 | `npm run test:integrations` | Проверка DRIVEMODS и АТОЛ Онлайн (можно передать `-- ./device_id.bin`) |
 | `npm run test:payments` | Прогон цикла платежа: счёт → оплата → чек |
-| `npm run vercel-build` | `prisma generate && prisma migrate deploy && next build` |
+| `npm run build:deploy` | Сборка для платформы: `prisma generate && prisma migrate deploy && next build` |
 
-## Деплой на Vercel
+## Деплой на Timeweb Cloud App Platform
 
-1. Создайте проект и подключите репозиторий.
-2. В Project Settings → Environment Variables — заполните всё из `.env.example`. Обязательные: `DATABASE_URL`, `DIRECT_URL`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL`, S3-блок, `PUBLIC_SITE_ORIGIN`.
+Приложение работает как обычный Node-сервер (SSR), без serverless-специфики.
+
+1. Создайте приложение типа Node.js и подключите репозиторий (ветка `main`). Зависимости ставятся полностью, вместе с dev: без `prisma`, `typescript` и `tailwindcss` сборка не пройдёт.
+2. Команда сборки — `npm run build:deploy`, команда запуска — `npm start`. Миграции применяются на этапе сборки, поэтому переменные окружения должны быть доступны и сборке, и рантайму.
+3. Node.js 20 или новее (`engines` в `package.json`). Порт приложение берёт из `PORT`, слушает `0.0.0.0`. Health-check — `GET /api/health` (базу не трогает).
+4. В переменных окружения — всё из `.env.example`. Обязательные: `DATABASE_URL`, `DIRECT_URL`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL`, S3-блок, `PUBLIC_SITE_ORIGIN`.
 
    Генерация лицензий (мастер-аккаунт DRIVEMODS): `DRIVEMODS_STORE_API_URL`, `DRIVEMODS_USERNAME`, `DRIVEMODS_PASSWORD`, `DRIVEMODS_CLIENT_TOKEN`.
 
    Касса и оплата: `ATOL_LOGIN`, `ATOL_PASSWORD`, `ATOL_GROUP`, `ATOL_BASE_URL`, `ATOL_COMPANY_INN`, `ATOL_COMPANY_EMAIL`, `ATOL_COMPANY_PAYMENT_ADDRESS`, `ATOL_COMPANY_SNO`, `ATOL_VAT_TYPE`, `PAYMENT_PROVIDER` — и `ATOL_PAY_API_TOKEN`, если включаете АТОЛ Pay.
 
    Цены лицензий ведутся в админке, раздел «Справочник цен»: DRIVEMODS их не отдаёт, его API возвращает только продукт, комплектацию и регион. Переменные `PAYMENT_BUNDLE_PRICES` и `PAYMENT_LICENSE_PRICE` остаются запасным вариантом на случай, если позиции нет в справочнике.
-3. Build Command — `npm run vercel-build`. Миграции применятся автоматически.
+5. `NEXTAUTH_URL` — адрес кабинета целиком, со схемой: `https://cabinet.mmbrussia.ru`. По нему определяется имя cookie сессии, поэтому http вместо https разлогинит всех при первом же переходе. Переменные с префиксом `NEXT_PUBLIC_` вшиваются в клиентский бандл на сборке — задавайте их до первого деплоя, иначе придётся пересобирать.
+6. Домен и сертификат — в настройках приложения; TLS терминирует прокси платформы, приложение получает обычный http и доверяет заголовкам `X-Forwarded-*`.
+
+Если сборке недоступна база (миграции падают на `prisma migrate deploy`), перенесите их в команду запуска: `npx prisma migrate deploy && npm start`.
 
 ## Структура
 
@@ -121,7 +128,7 @@ prisma/
 Пример клиента на mmbrussia.ru:
 
 ```js
-const res = await fetch("https://<your-vercel-domain>/api/public/representatives");
+const res = await fetch("https://cabinet.mmbrussia.ru/api/public/representatives");
 const reps = await res.json();
 ```
 

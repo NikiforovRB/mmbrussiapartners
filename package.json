@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",
-    "start": "next start",
+    "build:deploy": "prisma generate && prisma migrate deploy && next build",
+    "start": "next start -H 0.0.0.0",
     "lint": "next lint",
     "postinstall": "prisma generate",
     "db:push": "prisma db push",
@@ -19,8 +20,10 @@
     "test:e2e": "tsx --conditions=react-server --env-file=.env scripts/test-e2e.ts",
     "mock:drivemods": "tsx scripts/mock-drivemods.ts",
     "db:local:init": "tsx scripts/dev-db.ts init",
-    "db:local:start": "tsx scripts/dev-db.ts start",
-    "vercel-build": "prisma generate && prisma migrate deploy && next build"
+    "db:local:start": "tsx scripts/dev-db.ts start"
+  },
+  "engines": {
+    "node": ">=20"
   },
   "prisma": {
     "seed": "tsx --env-file=.env prisma/seed.ts"
