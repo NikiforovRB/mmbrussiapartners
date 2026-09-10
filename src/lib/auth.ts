@@ -38,7 +38,11 @@ const credentialsSchema = z.object({
 export const { handlers, auth, signIn, signOut } = NextAuth({
   secret: process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET,
   session: { strategy: "jwt", maxAge: 60 * 60 * 24 * 7 },
+  // За обратным прокси приложение видит http, поэтому признак защищённого
+  // соединения берём из NEXTAUTH_URL: иначе имя cookie сессии зависело бы от
+  // того, прислал ли прокси X-Forwarded-Proto.
   trustHost: true,
+  useSecureCookies: (process.env.NEXTAUTH_URL ?? "").startsWith("https://"),
   pages: { signIn: "/login" },
   providers: [
     Credentials({

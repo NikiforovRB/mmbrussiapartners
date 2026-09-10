@@ -21,7 +21,6 @@ yarn-error.log*
 .idea/
 
 next-env.d.ts
-.vercel
 *.tsbuildinfo
 
 prisma/migrations/dev.db*
