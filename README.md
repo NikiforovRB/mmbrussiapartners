@@ -46,7 +46,13 @@ npm run dev
 | `npm run test:payments` | Прогон цикла платежа: счёт → оплата → чек |
 | `npm run build:deploy` | Сборка для платформы: `prisma generate && prisma migrate deploy && next build` |
 
-## Деплой на Timeweb Cloud App Platform
+## Деплой на виртуальную машину (Yandex Cloud) — основной вариант
+
+Приложение работает как обычный Node-сервер (SSR): процесс под systemd, снаружи nginx с TLS (Let's Encrypt). База данных и S3 — внешние. Пошаговый runbook и готовые конфиги — в [`deploy/`](deploy/README.md) (`systemd/`, `nginx/`, `update.sh`).
+
+Кратко: Ubuntu 24.04 → Node 20 + nginx + certbot → deploy key (read-only) и `git clone` → `.env` с `NEXTAUTH_URL=https://cabinet.mmbrussia.ru` → `npm ci && npx prisma migrate deploy && npm run build` → `systemctl enable --now mmbrussia-cabinet` → `certbot` + nginx-прокси на `127.0.0.1:3000`. Health-check — `GET /api/health` (базу не трогает). Обновление после пуша — `bash deploy/update.sh`.
+
+## Деплой на Timeweb Cloud App Platform (запасной вариант)
 
 Приложение работает как обычный Node-сервер (SSR), без serverless-специфики.
 

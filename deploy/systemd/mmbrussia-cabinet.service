@@ -1,0 +1,31 @@
+[Unit]
+# Личный кабинет MMB RUSSIA (Next.js SSR) на виртуальной машине.
+Description=MMB RUSSIA cabinet (Next.js)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=deploy
+Group=deploy
+WorkingDirectory=/opt/mmbrussia-partners
+
+# next start сам выставляет NODE_ENV=production и читает переменные из .env
+# в корне проекта. Слушаем только localhost — наружу трафик пускает nginx.
+Environment=NODE_ENV=production
+Environment=PORT=3000
+ExecStart=/opt/mmbrussia-partners/node_modules/.bin/next start -H 127.0.0.1 -p 3000
+
+Restart=always
+RestartSec=5
+# Плавная перезагрузка при деплое.
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+# Базовая изоляция процесса.
+NoNewPrivileges=true
+ProtectSystem=full
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
