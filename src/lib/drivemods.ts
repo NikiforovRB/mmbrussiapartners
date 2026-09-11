@@ -285,6 +285,36 @@ export async function createLic(params: CreateLicParams): Promise<CreateLicRespo
   };
 }
 
+export type HuPassResponse = {
+  huSerial: string;
+  huPass: string;
+};
+
+/**
+ * Генерация пароля для ШГУ HUMAX (метод /hupass). На вход — серийный номер
+ * устройства (huSerial) и необязательный комментарий; на выходе — пароль
+ * (huPass). sessionToken / uid / clientToken подставляет callAuthed.
+ */
+export async function huPass(huSerial: string, comment?: string): Promise<HuPassResponse> {
+  const serial = huSerial.trim();
+  if (!serial) {
+    throw new DriveModsError("Не указан серийный номер ШГУ HUMAX", 400);
+  }
+  const note = comment?.trim();
+  const data = await callAuthed("/hupass", {
+    huSerial: serial,
+    ...(note ? { comment: note } : {}),
+  });
+  const huPassValue = data.huPass as string | undefined;
+  if (!huPassValue) {
+    throw new DriveModsError("DRIVEMODS не вернул пароль для ШГУ HUMAX", 502);
+  }
+  return {
+    huSerial: (data.huSerial as string) || serial,
+    huPass: huPassValue,
+  };
+}
+
 export async function health(): Promise<boolean> {
   try {
     const res = await fetch(`${BASE_URL}/health`, {

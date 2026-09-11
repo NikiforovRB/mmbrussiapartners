@@ -3,6 +3,7 @@ import {
   LayoutDashboard,
   Users,
   KeyRound,
+  Cpu,
   Shield,
   FileSpreadsheet,
   MapPinned,
@@ -51,6 +52,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     items.push({ href: "/admin/dealers", label: "Представители", icon: <Users className="h-4 w-4" /> });
   if (user.isSuperAdmin || hasPermission(user.role.permissions, "licenses.view", user.isSuperAdmin))
     items.push({ href: "/admin/licenses", label: "Лицензии", icon: <KeyRound className="h-4 w-4" /> });
+  if (user.isSuperAdmin || hasPermission(user.role.permissions, "licenses.view", user.isSuperAdmin))
+    items.push({ href: "/admin/humax", label: "Пароли HUMAX", icon: <Cpu className="h-4 w-4" /> });
   if (user.isSuperAdmin || hasPermission(user.role.permissions, "licenses.cancel", user.isSuperAdmin))
     items.push({
       href: "/admin/cancellation-requests",

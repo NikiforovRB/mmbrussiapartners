@@ -139,6 +139,7 @@ model User {
   requestedCancellations CancellationRequest[] @relation("RequestedCancellations")
   reviewedCancellations  CancellationRequest[] @relation("ReviewedCancellations")
   prices                 DealerPrice[]         @relation("DealerPrices")
+  humaxPasswords         HumaxPassword[]       @relation("DealerHumaxPasswords")
 
   @@index([status])
   @@index([roleId])
@@ -440,6 +441,24 @@ model DealerPrice {
 
   @@unique([dealerId, itemId])
   @@index([dealerId])
+}
+
+/// Пароль для ШГУ HUMAX. Генерируется методом /hupass DRIVEMODS по
+/// серийному номеру устройства; историю ведём у себя, чтобы её можно
+/// было посмотреть и повторно скопировать без обращения к API.
+model HumaxPassword {
+  id        String   @id @default(cuid())
+  dealerId  String
+  serial    String
+  password  String
+  comment   String?
+  createdAt DateTime @default(now())
+
+  dealer User @relation("DealerHumaxPasswords", fields: [dealerId], references: [id])
+
+  @@index([dealerId])
+  @@index([serial])
+  @@index([dealerId, createdAt])
 }
 
 model CompanySettings {
