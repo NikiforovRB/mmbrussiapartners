@@ -1,0 +1,67 @@
+import { redirect } from "next/navigation";
+import { Topbar } from "@/components/cabinet/topbar";
+import { auth } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { hasPermission } from "@/lib/permissions";
+import { HumaxPanel } from "@/components/humax/humax-panel";
+import { Pagination, parsePage } from "@/components/cabinet/pagination";
+
+export const dynamic = "force-dynamic";
+
+const PAGE_SIZE = 20;
+
+export default async function AdminHumaxPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
+  const session = await auth();
+  if (!session?.user) redirect("/login");
+  const canView =
+    session.user.isSuperAdmin ||
+    hasPermission(session.user.permissions, "licenses.view", session.user.isSuperAdmin);
+  if (!canView) redirect("/admin");
+
+  const user = await db.user.findUnique({
+    where: { id: session.user.id },
+    include: { role: true },
+  });
+  if (!user) redirect("/login");
+
+  const sp = await searchParams;
+  const page = parsePage(sp.page);
+
+  const [total, rows] = await Promise.all([
+    db.humaxPassword.count(),
+    db.humaxPassword.findMany({
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
+      include: { dealer: { select: { email: true } } },
+    }),
+  ]);
+
+  return (
+    <>
+      <Topbar
+        title="Пароли HUMAX"
+        subtitle="Генерация паролей для ШГУ HUMAX"
+        user={{ name: user.email, email: user.email, role: user.role.name }}
+      />
+      <div className="mt-6">
+        <HumaxPanel
+          context="admin"
+          records={rows.map((r) => ({
+            id: r.id,
+            serial: r.serial,
+            password: r.password,
+            comment: r.comment,
+            createdAt: r.createdAt.toISOString(),
+            dealerEmail: r.dealer?.email ?? null,
+          }))}
+        />
+        <Pagination page={page} pageSize={PAGE_SIZE} total={total} basePath="/admin/humax" />
+      </div>
+    </>
+  );
+}

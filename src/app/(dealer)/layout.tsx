@@ -6,6 +6,7 @@ import {
   CreditCard,
   UserCircle,
   FileSpreadsheet,
+  Cpu,
 } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
 import { Sidebar, type SidebarItem } from "@/components/cabinet/sidebar";
@@ -42,6 +43,7 @@ export default async function DealerLayout({ children }: { children: React.React
     { href: "/dealer", label: "Дашборд", icon: <LayoutDashboard className="h-4 w-4" /> },
     { href: "/dealer/licenses", label: "Мои лицензии", icon: <KeyRound className="h-4 w-4" /> },
     { href: "/dealer/licenses/new", label: "Новая лицензия", icon: <Plus className="h-4 w-4" /> },
+    { href: "/dealer/humax", label: "Пароли HUMAX", icon: <Cpu className="h-4 w-4" /> },
     { href: "/dealer/payments", label: "Платежи", icon: <CreditCard className="h-4 w-4" /> },
     { href: "/dealer/reports", label: "Отчёты", icon: <FileSpreadsheet className="h-4 w-4" /> },
     { href: "/dealer/profile", label: "Профиль", icon: <UserCircle className="h-4 w-4" /> },
