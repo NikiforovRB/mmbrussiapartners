@@ -13,7 +13,12 @@ export const metadata: Metadata = {
   applicationName: "MMB RUSSIA Partners",
   manifest: "/manifest.webmanifest",
   icons: {
-    icon: "/favicon.svg",
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/favicon.png", type: "image/png", sizes: "169x169" },
+    ],
+    shortcut: "/favicon.ico",
+    apple: "/favicon.png",
   },
   openGraph: {
     title: "MMB RUSSIA — Кабинет представителей",

@@ -44,12 +44,21 @@ type LicInfo = {
   recoverable: boolean;
   /** Признак повторной выдачи: по данным DRIVEMODS или по нашей базе. */
   repeat: boolean;
+  /** Отметки времени первой и последней генерации по данным DRIVEMODS (ISO). */
+  firstGeneratedAt: string | null;
+  lastGeneratedAt: string | null;
   previous: { id: string; number: string; type: string; createdAt: string } | null;
   versionSoftware: string;
   versionCustom: string;
   deviceId: string;
   items: LicItem[];
 };
+
+function formatRuDate(iso: string | null): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? null : d.toLocaleDateString("ru-RU");
+}
 
 async function fileToBase64(file: File): Promise<string> {
   const buf = await file.arrayBuffer();
@@ -177,6 +186,8 @@ export function LicenseStepper({
         versionCustom: info.versionCustom,
         dealerComment: dealerComment.trim(),
         recoverable: info.recoverable,
+        // Дата прошлой генерации из DRIVEMODS — для уведомления о повторной выдаче.
+        previousGeneratedAt: info.lastGeneratedAt ?? info.firstGeneratedAt ?? null,
         ...(canIssueFree ? { issuedWithoutPayment: withoutPayment } : {}),
       }),
     });
@@ -315,6 +326,19 @@ export function LicenseStepper({
                       По этому ШГУ уже выдавалась лицензия {info.previous.number} (
                       {info.previous.type.toLowerCase()},{" "}
                       {new Date(info.previous.createdAt).toLocaleDateString("ru-RU")}).
+                    </p>
+                  ) : null}
+                  {info.firstGeneratedAt || info.lastGeneratedAt ? (
+                    <p className="mt-1 text-xs text-ink-muted">
+                      Данные DRIVEMODS по этому ШГУ:
+                      {info.firstGeneratedAt
+                        ? ` первая генерация ${formatRuDate(info.firstGeneratedAt)}`
+                        : ""}
+                      {info.firstGeneratedAt && info.lastGeneratedAt ? "," : ""}
+                      {info.lastGeneratedAt
+                        ? ` последняя генерация ${formatRuDate(info.lastGeneratedAt)}`
+                        : ""}
+                      .
                     </p>
                   ) : null}
                 </Card>

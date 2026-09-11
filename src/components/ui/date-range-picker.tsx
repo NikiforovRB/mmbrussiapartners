@@ -20,7 +20,9 @@ export function DateRangePicker({
   toLabel?: string;
 }) {
   return (
-    <div className="grid grid-cols-2 gap-3">
+    // На мобильной ширине два поля даты не помещаются в ряд (кнопка «очистить»
+    // не влезает) — складываем их в столбик, поле «По» уезжает на вторую строку.
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
       <DatePicker
         label={fromLabel}
         value={value.from}

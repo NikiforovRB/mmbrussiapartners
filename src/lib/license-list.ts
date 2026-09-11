@@ -20,4 +20,19 @@ export const LICENSE_LIST_SELECT = {
   dealerId: true,
   issuedWithoutPayment: true,
   repeatGeneration: true,
+  // Заявка на аннулирование «на рассмотрении»: по ней в таблице показываем
+  // метку и блокируем повторную отправку заявки.
+  cancellationRequests: {
+    where: { status: "PENDING" },
+    select: { id: true },
+    take: 1,
+  },
 } satisfies Prisma.LicenseSelect;
+
+/** Строка таблицы: заявку сворачиваем в булев признак ещё на сервере. */
+export function toLicenseRow<T extends { cancellationRequests: { id: string }[] }>(
+  license: T,
+): Omit<T, "cancellationRequests"> & { pendingCancellation: boolean } {
+  const { cancellationRequests, ...rest } = license;
+  return { ...rest, pendingCancellation: cancellationRequests.length > 0 };
+}

@@ -6,7 +6,7 @@ import { hasPermission } from "@/lib/permissions";
 import { Topbar } from "@/components/cabinet/topbar";
 import { Button } from "@/components/ui/button";
 import { LicenseTable } from "@/components/licenses/license-table";
-import { LICENSE_LIST_SELECT } from "@/lib/license-list";
+import { LICENSE_LIST_SELECT, toLicenseRow } from "@/lib/license-list";
 import { Pagination, parsePage } from "@/components/cabinet/pagination";
 import { LICENSE_TYPES } from "@/lib/license-options";
 
@@ -53,7 +53,7 @@ export default async function AdminLicensesPage({
       />
       <div className="mt-6">
         <LicenseTable
-          licenses={licenses}
+          licenses={licenses.map(toLicenseRow)}
           basePath="/admin/licenses"
           context="admin"
           initialQuery={sp.q ?? ""}

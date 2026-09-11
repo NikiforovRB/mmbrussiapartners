@@ -2,12 +2,13 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, Receipt, RefreshCw, XCircle } from "lucide-react";
+import { CheckCircle2, Receipt, RefreshCw, Undo2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Modal } from "@/components/ui/modal";
 import { usePermissions } from "@/hooks/use-permissions";
 
-type Action = "confirm" | "cancel" | "fiscalize" | "refresh-receipt";
+type Action = "confirm" | "cancel" | "fiscalize" | "refresh-receipt" | "refund";
 
 export function PaymentActions({
   id,
@@ -22,6 +23,7 @@ export function PaymentActions({
   const { can } = usePermissions();
   const canManage = can("payments.manage");
   const [busy, setBusy] = React.useState<Action | null>(null);
+  const [refundOpen, setRefundOpen] = React.useState(false);
 
   async function run(action: Action) {
     setBusy(action);
@@ -41,8 +43,11 @@ export function PaymentActions({
         ? "Оплата подтверждена, чек отправлен в кассу"
         : action === "cancel"
           ? "Платёж отменён"
-          : "Статус чека обновлён",
+          : action === "refund"
+            ? "Возврат средств зафиксирован"
+            : "Статус чека обновлён",
     );
+    setRefundOpen(false);
     router.refresh();
   }
 
@@ -96,6 +101,38 @@ export function PaymentActions({
           Обновить
         </Button>
       ) : null}
+      {paid ? (
+        <Button
+          size="sm"
+          variant="ghost"
+          loading={busy === "refund"}
+          icon={<Undo2 className="h-3.5 w-3.5" />}
+          onClick={() => setRefundOpen(true)}
+        >
+          Вернуть средства
+        </Button>
+      ) : null}
+
+      <Modal
+        open={refundOpen}
+        onClose={() => setRefundOpen(false)}
+        title="Вернуть средства"
+        description="Деньги возвращаются вручную (в банке/эквайринге). В портале платёж получит статус «Возвращён», дилер получит уведомление. Обычно применяется при аннулировании лицензии."
+      >
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" onClick={() => setRefundOpen(false)}>
+            Отмена
+          </Button>
+          <Button
+            variant="danger"
+            loading={busy === "refund"}
+            icon={<Undo2 className="h-4 w-4" />}
+            onClick={() => run("refund")}
+          >
+            Подтвердить возврат
+          </Button>
+        </div>
+      </Modal>
     </div>
   );
 }

@@ -32,6 +32,8 @@ const schema = z.object({
   issuedWithoutPayment: z.boolean().optional(),
   /** Признак прошлой выдачи из ответа /licinfo. */
   recoverable: z.boolean().optional(),
+  /** Дата прошлой генерации по данным DRIVEMODS (ISO) — для уведомления. */
+  previousGeneratedAt: z.string().optional().nullable(),
 });
 
 export const POST = route(async (req: Request) => {
@@ -233,6 +235,22 @@ export const POST = route(async (req: Request) => {
         type: "LICENSE_ISSUED",
         title: `Лицензия ${license.number} выдана без оплаты`,
         body: `Выдал ${actor.email}`,
+        link: `/admin/licenses/${license.id}`,
+      });
+    }
+
+    // Повторная генерация по уже засвеченному ШГУ — повод оповестить админов:
+    // это либо восстановление лицензии, либо потенциальное задвоение выдачи.
+    if (repeatGeneration) {
+      const prevDate = p.previousGeneratedAt ? new Date(p.previousGeneratedAt) : null;
+      const prevLabel =
+        prevDate && !Number.isNaN(prevDate.getTime())
+          ? ` · прошлая генерация ${prevDate.toLocaleDateString("ru-RU")}`
+          : "";
+      await notifyAdmins(["licenses.view"], {
+        type: "LICENSE_ISSUED",
+        title: `Повторная генерация лицензии ${license.number}`,
+        body: `${actor.email} · ${p.product}${prevLabel}`,
         link: `/admin/licenses/${license.id}`,
       });
     }
