@@ -67,6 +67,11 @@ ssh ubuntu@<PUBLIC_IP_ВМ>
 
 sudo apt update && sudo apt -y upgrade
 
+# Swap: на 2 ГБ RAM сборка Next падает по OOM. Добавляем 4 ГБ подкачки.
+sudo fallocate -l 4G /swapfile && sudo chmod 600 /swapfile
+sudo mkswap /swapfile && sudo swapon /swapfile
+grep -q /swapfile /etc/fstab || echo "/swapfile none swap sw 0 0" | sudo tee -a /etc/fstab
+
 # Отдельный пользователь под приложение. Домашний каталог /home/deploy нужен
 # для ключа деплоя, а код приложения лежит отдельно в /opt/mmbrussia-partners.
 sudo adduser --system --group --shell /bin/bash --home /home/deploy deploy
@@ -93,6 +98,12 @@ sudo apt -y install nodejs
 # nginx + certbot.
 sudo apt -y install nginx certbot python3-certbot-nginx git
 node -v   # ожидаем v20.x
+
+# npm приводим к мажорной версии, которой собран package-lock.json (11.x):
+# npm 10 из Node 20 иначе разбирает опциональные peer-зависимости next-auth
+# (nodemailer) и роняет `npm ci` мнимым рассинхроном lock-файла.
+sudo npm install -g npm@11
+npm -v    # ожидаем 11.x
 ```
 
 ---
@@ -163,9 +174,10 @@ sudo chown deploy:deploy /opt/mmbrussia-partners/.env
 
 ```bash
 cd /opt/mmbrussia-partners
-sudo -u deploy npm ci                 # dev-зависимости нужны для сборки
-sudo -u deploy npx prisma migrate deploy
-sudo -u deploy npm run build
+# -H даёт пользователю deploy собственный HOME (кэш npm). dev-зависимости нужны для сборки.
+sudo -H -u deploy npm ci
+sudo -H -u deploy npx prisma migrate deploy
+sudo -H -u deploy npm run build
 ```
 
 Если сборке недоступна БД (миграции падают на `prisma migrate deploy`) —
@@ -192,28 +204,52 @@ curl -fsS http://127.0.0.1:3000/api/health   # → {"ok":true,...}
 
 ## 9. nginx + HTTPS (Let's Encrypt)
 
-Сначала подготовим webroot и выпустим сертификат, затем включим прокси-конфиг:
+Полный конфиг с TLS нельзя включить, пока нет сертификата (`nginx -t` упадёт на
+отсутствующем файле). Поэтому: сначала временный HTTP-конфиг отдаёт ACME-проверку,
+затем выпускаем сертификат и переключаемся на конфиг из репозитория.
 
 ```bash
 # 1. Каталог для ACME-проверки.
 sudo mkdir -p /var/www/certbot
 
-# 2. Выпуск сертификата (DNS уже должен указывать на ВМ, п.2).
-sudo certbot certonly --webroot -w /var/www/certbot -d cabinet.mmbrussia.ru \
-  --agree-tos -m marat@mmbrussia.ru --no-eff-email
-
-# 3. Подключаем конфиг сайта.
-sudo cp deploy/nginx/cabinet.mmbrussia.ru.conf /etc/nginx/sites-available/
-sudo ln -sf /etc/nginx/sites-available/cabinet.mmbrussia.ru.conf /etc/nginx/sites-enabled/
+# 2. Временный HTTP-конфиг: ACME-челлендж + прокси в приложение.
+sudo tee /etc/nginx/sites-available/cabinet.conf >/dev/null <<'EOF'
+server {
+    listen 80;
+    server_name cabinet.mmbrussia.ru;
+    location /.well-known/acme-challenge/ { root /var/www/certbot; }
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto http;
+    }
+}
+EOF
+sudo ln -sf /etc/nginx/sites-available/cabinet.conf /etc/nginx/sites-enabled/cabinet.conf
 sudo rm -f /etc/nginx/sites-enabled/default
+sudo nginx -t && sudo systemctl reload nginx
 
-# 4. Проверка и перезапуск.
+# 3. Выпуск сертификата (DNS уже должен указывать на ВМ, п.2; порт 80 открыт).
+sudo certbot certonly --webroot -w /var/www/certbot -d cabinet.mmbrussia.ru \
+  --agree-tos -m marat@mmbrussia.ru --no-eff-email --non-interactive
+
+# 4. Переключаемся на полный конфиг с TLS из репозитория.
+sudo cp deploy/nginx/cabinet.mmbrussia.ru.conf /etc/nginx/sites-available/cabinet.conf
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
-Автопродление сертификата уже настроено пакетом certbot
-(`systemctl list-timers | grep certbot`). После продления nginx перечитывает
-конфиг сам; при желании добавьте `--deploy-hook "systemctl reload nginx"`.
+Автопродление уже включено таймером certbot (`systemctl list-timers | grep certbot`).
+Так как сертификат выпущен режимом `certonly` (без плагина nginx), после продления
+nginx сам не перечитает конфиг — добавляем deploy-hook:
+
+```bash
+sudo mkdir -p /etc/letsencrypt/renewal-hooks/deploy
+printf '#!/bin/sh\nsystemctl reload nginx\n' \
+  | sudo tee /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh >/dev/null
+sudo chmod +x /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh
+sudo certbot renew --dry-run   # проверка продления
+```
 
 ---
 
@@ -234,7 +270,7 @@ curl -sI  http://cabinet.mmbrussia.ru/ | grep -i location  # 308 → https
 
 ```bash
 cd /opt/mmbrussia-partners
-sudo -u deploy bash deploy/update.sh
+sudo -H -u deploy bash deploy/update.sh
 ```
 
 Скрипт подтянет код, поставит зависимости, применит миграции, пересоберёт и
