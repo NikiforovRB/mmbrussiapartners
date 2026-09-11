@@ -37,6 +37,8 @@ type License = {
   dealerId: string;
   issuedWithoutPayment?: boolean;
   repeatGeneration?: boolean;
+  /** По лицензии есть заявка на аннулирование «на рассмотрении». */
+  pendingCancellation?: boolean;
 };
 
 export function LicenseTable({
@@ -259,7 +261,12 @@ export function LicenseTable({
                   </td>
                   <td className="px-4 py-3 text-ink-muted">{l.dealerComment || "—"}</td>
                   <td className="px-4 py-3">
-                    <StatusTag kind="license" status={l.status} />
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <StatusTag kind="license" status={l.status} />
+                      {l.pendingCancellation ? (
+                        <Tag tone="warning">Заявка на аннулирование</Tag>
+                      ) : null}
+                    </div>
                     <div className="mt-1 text-xs text-ink-muted break-all">
                       {l.versionSoftware || "—"}
                     </div>
@@ -308,17 +315,36 @@ export function LicenseTable({
                       </div>
                       <div className="flex flex-col items-stretch gap-1.5">
                         {l.status === "ACTIVE" ? (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="w-full justify-start"
-                            disabled={!canCancel}
-                            title={canCancel ? undefined : "Нет права на аннулирование"}
-                            icon={<XCircle className="h-4 w-4" />}
-                            onClick={() => setCancelTarget(l)}
-                          >
-                            {isAdmin ? "Аннулировать" : "Запросить аннулирование"}
-                          </Button>
+                          (() => {
+                            // Дилеру нельзя слать вторую заявку, пока первая на
+                            // рассмотрении: иначе статус «не меняется» и заявку
+                            // можно отправлять бесконечно.
+                            const dealerBlocked = !isAdmin && Boolean(l.pendingCancellation);
+                            const disabled = !canCancel || dealerBlocked;
+                            const title = !canCancel
+                              ? "Нет права на аннулирование"
+                              : dealerBlocked
+                                ? "Заявка уже на рассмотрении"
+                                : undefined;
+                            const label = dealerBlocked
+                              ? "Заявка на рассмотрении"
+                              : isAdmin
+                                ? "Аннулировать"
+                                : "Запросить аннулирование";
+                            return (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="w-full justify-start"
+                                disabled={disabled}
+                                title={title}
+                                icon={<XCircle className="h-4 w-4" />}
+                                onClick={() => setCancelTarget(l)}
+                              >
+                                {label}
+                              </Button>
+                            );
+                          })()
                         ) : null}
                         {isAdmin ? (
                           <Button

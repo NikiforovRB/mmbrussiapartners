@@ -11,7 +11,7 @@ import { notifyUser, notifyAdmins } from "@/lib/app-notifications";
 export const runtime = "nodejs";
 
 const schema = z.object({
-  action: z.enum(["confirm", "cancel", "fiscalize", "refresh-receipt"]),
+  action: z.enum(["confirm", "cancel", "fiscalize", "refresh-receipt", "refund"]),
 });
 
 export const POST = route(async (req: Request, ctx: { params: Promise<{ id: string }> }) => {
@@ -85,6 +85,31 @@ export const POST = route(async (req: Request, ctx: { params: Promise<{ id: stri
       }
       case "refresh-receipt": {
         const updated = await refreshReceipt(id);
+        return NextResponse.json({ ok: true, payment: updated });
+      }
+      case "refund": {
+        // Деньги возвращает администратор вручную (в банке/эквайринге), в
+        // портале лишь фиксируем факт возврата — обычно при аннулировании.
+        if (payment.status !== "PAID") {
+          throw badRequest("Вернуть можно только оплаченный платёж");
+        }
+        const updated = await db.payment.update({
+          where: { id },
+          data: { status: "REFUNDED" },
+        });
+        await recordAdminAction({
+          actorId: session.user.id,
+          entity: "PAYMENT",
+          entityId: id,
+          action: "REFUNDED",
+          summary: `${licenseLabel} · ${amountLabel}`,
+        });
+        await notifyUser(payment.dealerId, {
+          type: "PAYMENT_PAID",
+          title: `Возврат средств: ${amountLabel}`,
+          body: licenseLabel,
+          link: `/dealer/payments/${id}`,
+        });
         return NextResponse.json({ ok: true, payment: updated });
       }
     }

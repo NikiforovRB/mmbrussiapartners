@@ -59,11 +59,19 @@ export const POST = route(async (req: Request) => {
       select: { id: true, number: true, createdAt: true, type: true },
     });
 
+    // Обновление API DRIVEMODS: first_gen/last_gen — unix-секунды первой и
+    // последней генерации по этому ШГУ на стороне DRIVEMODS. Это авторитетнее
+    // нашей базы: покрывает выдачи, сделанные вне портала.
+    const firstGeneratedAt = info.firstGen ? new Date(info.firstGen * 1000).toISOString() : null;
+    const lastGeneratedAt = info.lastGen ? new Date(info.lastGen * 1000).toISOString() : null;
+
     return NextResponse.json({
-      // DRIVEMODS отдаёт единственный признак прошлой выдачи: recoverable
-      // означает, что лицензия для этого ШГУ у него уже есть.
+      // DRIVEMODS отдаёт признак прошлой выдачи: recoverable означает, что
+      // лицензия для этого ШГУ у него уже есть.
       recoverable: info.recoverable,
       repeat: info.recoverable || previous !== null,
+      firstGeneratedAt,
+      lastGeneratedAt,
       previous: previous
         ? {
             id: previous.id,

@@ -6,7 +6,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { fioFromParts } from "@/lib/utils";
 import { LicenseTable } from "@/components/licenses/license-table";
-import { LICENSE_LIST_SELECT } from "@/lib/license-list";
+import { LICENSE_LIST_SELECT, toLicenseRow } from "@/lib/license-list";
 import { Pagination, parsePage } from "@/components/cabinet/pagination";
 import { LICENSE_TYPES } from "@/lib/license-options";
 
@@ -57,7 +57,7 @@ export default async function DealerLicensesPage({
       />
       <div className="mt-6">
         <LicenseTable
-          licenses={licenses}
+          licenses={licenses.map(toLicenseRow)}
           basePath="/dealer/licenses"
           context="dealer"
           initialQuery={sp.q ?? ""}

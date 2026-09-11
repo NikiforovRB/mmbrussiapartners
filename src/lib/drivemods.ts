@@ -31,6 +31,13 @@ export type LicInfoResponse = {
   version_custom: string;
   device_id: string;
   items: LicInfoItem[];
+  /**
+   * Отметки времени генерации из DRIVEMODS (обновление API 2026): unix-время
+   * в секундах первой и последней выдачи лицензии по этому ШГУ. Отсутствуют
+   * или 0 — генераций ещё не было (тогда null).
+   */
+  firstGen: number | null;
+  lastGen: number | null;
 };
 
 export type CreateLicResponse = {
@@ -218,7 +225,15 @@ export async function licInfo(deviceIdBase64: string): Promise<LicInfoResponse> 
       bundle: (it.bundle as string) ?? null,
       region: (it.region as string) ?? null,
     })),
+    firstGen: toUnixOrNull(data.first_gen),
+    lastGen: toUnixOrNull(data.last_gen),
   };
+}
+
+/** Отметку времени берём только как положительное число секунд, иначе null. */
+function toUnixOrNull(value: unknown): number | null {
+  const n = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(n) && n > 0 ? n : null;
 }
 
 export type CreateLicParams = {
