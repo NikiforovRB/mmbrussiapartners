@@ -67,8 +67,11 @@ ssh ubuntu@<PUBLIC_IP_ВМ>
 
 sudo apt update && sudo apt -y upgrade
 
-# Отдельный непривилегированный пользователь под приложение.
-sudo adduser --system --group --home /opt/mmbrussia-partners deploy
+# Отдельный пользователь под приложение. Домашний каталог /home/deploy нужен
+# для ключа деплоя, а код приложения лежит отдельно в /opt/mmbrussia-partners.
+sudo adduser --system --group --shell /bin/bash --home /home/deploy deploy
+sudo mkdir -p /opt/mmbrussia-partners
+sudo chown deploy:deploy /opt/mmbrussia-partners
 
 # Локальный firewall (в дополнение к группе безопасности).
 sudo apt -y install ufw
@@ -98,11 +101,13 @@ node -v   # ожидаем v20.x
 
 Репозиторий приватный, поэтому даём ВМ **read-only** доступ через deploy key.
 
-На ВМ сгенерируйте ключ от имени `deploy`:
+На ВМ сгенерируйте ключ от имени `deploy` (это отдельный ключ, не тот, что для
+входа на ВМ):
 
 ```bash
-sudo -u deploy ssh-keygen -t ed25519 -C "mmbrussia-vm" -f /opt/mmbrussia-partners/.ssh/id_ed25519 -N ""
-sudo -u deploy cat /opt/mmbrussia-partners/.ssh/id_ed25519.pub
+sudo -u deploy mkdir -p /home/deploy/.ssh && sudo -u deploy chmod 700 /home/deploy/.ssh
+sudo -u deploy ssh-keygen -t ed25519 -C "mmbrussia-vm-deploy" -f /home/deploy/.ssh/id_ed25519 -N ""
+sudo cat /home/deploy/.ssh/id_ed25519.pub
 ```
 
 Скопируйте вывод (`ssh-ed25519 …`) и в GitHub → репозиторий
@@ -112,18 +117,21 @@ sudo -u deploy cat /opt/mmbrussia-partners/.ssh/id_ed25519.pub
 - Key: вставьте публичный ключ;
 - **Allow write access — не включать** (деплой только читает код).
 
-Клонируйте проект:
+Проверьте доступ и клонируйте проект. Ключ указываем явно, потому что при
+`sudo -u deploy` домашний каталог (а значит и `~/.ssh`) не подставляется:
 
 ```bash
-sudo -u deploy git clone git@github.com:NikiforovRB/mmbrussiapartners.git /opt/mmbrussia-partners/app
-# Приводим к ожидаемому пути /opt/mmbrussia-partners:
-sudo rsync -a /opt/mmbrussia-partners/app/ /opt/mmbrussia-partners/
-sudo rm -rf /opt/mmbrussia-partners/app
-sudo chown -R deploy:deploy /opt/mmbrussia-partners
-```
+# Проверка: должно ответить "Hi NikiforovRB/mmbrussiapartners! ..."
+sudo -u deploy ssh -i /home/deploy/.ssh/id_ed25519 -o IdentitiesOnly=yes \
+  -o StrictHostKeyChecking=accept-new -T git@github.com
 
-> Проще: сделайте домашним каталогом `deploy` именно `/opt/mmbrussia-partners`
-> и клонируйте прямо в него (`git clone … .`). Держите `.ssh` вне дерева git.
+sudo -u deploy git -c core.sshCommand="ssh -i /home/deploy/.ssh/id_ed25519 -o IdentitiesOnly=yes" \
+  clone git@github.com:NikiforovRB/mmbrussiapartners.git /opt/mmbrussia-partners
+
+# Закрепляем ключ для будущих git fetch/pull (их делает deploy/update.sh):
+sudo -u deploy git -C /opt/mmbrussia-partners config \
+  core.sshCommand "ssh -i /home/deploy/.ssh/id_ed25519 -o IdentitiesOnly=yes"
+```
 
 ---
 
