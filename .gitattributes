@@ -1,0 +1,5 @@
+# Файлы деплоя исполняются на Linux — принудительно храним и выгружаем с LF,
+# иначе bash-скрипт с CRLF падает с "bad interpreter".
+*.sh text eol=lf
+deploy/systemd/*.service text eol=lf
+deploy/nginx/*.conf text eol=lf
