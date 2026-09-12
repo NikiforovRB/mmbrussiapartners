@@ -7,11 +7,12 @@ import {
   Mail,
   Lock,
   Phone,
-  User as UserIcon,
+  User as   UserIcon,
   Building2,
   MapPin,
   ArrowRight,
   CheckCircle2,
+  AlertCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -26,22 +27,28 @@ export function RegisterForm() {
   const [password, setPassword] = React.useState("");
   const [confirm, setConfirm] = React.useState("");
   const [agreed, setAgreed] = React.useState(false);
+  const [passwordError, setPasswordError] = React.useState<string | undefined>();
+  const [agreeError, setAgreeError] = React.useState<string | null>(null);
+  const [formError, setFormError] = React.useState<string | null>(null);
 
   const passwordsMatch = password.length > 0 && password === confirm;
   const passwordsMismatch = confirm.length > 0 && password !== confirm;
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    setFormError(null);
+    setPasswordError(undefined);
+    setAgreeError(null);
     if (password.length < 8) {
-      toast.error("Пароль должен содержать минимум 8 символов");
+      setPasswordError("Пароль должен содержать минимум 8 символов");
       return;
     }
     if (!passwordsMatch) {
-      toast.error("Пароли не совпадают");
+      setPasswordError("Пароли не совпадают");
       return;
     }
     if (!agreed) {
-      toast.error("Необходимо согласие на обработку персональных данных");
+      setAgreeError("Необходимо согласие на обработку персональных данных");
       return;
     }
     setLoading(true);
@@ -52,13 +59,22 @@ export function RegisterForm() {
       toast.success("Заявка отправлена. Ожидайте одобрения администратора.");
       router.push("/login?registered=1");
     } else {
-      toast.error(res.error ?? "Не удалось зарегистрироваться");
+      setFormError(res.error ?? "Не удалось зарегистрироваться");
     }
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-4">
+    <form onSubmit={onSubmit} className="space-y-4" noValidate>
       <GeoNotice />
+      {formError ? (
+        <div
+          role="alert"
+          className="flex items-start gap-2 rounded-btn border border-danger/30 bg-danger/5 px-3 py-2.5 text-sm text-danger"
+        >
+          <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+          <span>{formError}</span>
+        </div>
+      ) : null}
       <div className="grid md:grid-cols-2 gap-3">
         <Input
           label="Фамилия *"
@@ -105,7 +121,11 @@ export function RegisterForm() {
         placeholder="Минимум 8 символов"
         icon={<Lock className="h-4 w-4" />}
         value={password}
-        onChange={(e) => setPassword(e.target.value)}
+        onChange={(e) => {
+          setPassword(e.target.value);
+          if (passwordError) setPasswordError(undefined);
+        }}
+        error={passwordError}
       />
       <div className="space-y-1.5">
         <Input
@@ -116,7 +136,10 @@ export function RegisterForm() {
           placeholder="Повторите пароль"
           icon={<Lock className="h-4 w-4" />}
           value={confirm}
-          onChange={(e) => setConfirm(e.target.value)}
+          onChange={(e) => {
+            setConfirm(e.target.value);
+            if (passwordError) setPasswordError(undefined);
+          }}
         />
         {passwordsMatch ? (
           <p className="flex items-center gap-1.5 text-xs text-success">
@@ -129,7 +152,10 @@ export function RegisterForm() {
 
       <Checkbox
         checked={agreed}
-        onChange={setAgreed}
+        onChange={(v) => {
+          setAgreed(v);
+          if (agreeError) setAgreeError(null);
+        }}
         label={
           <span>
             Я согласен с политикой обработки{" "}
@@ -144,6 +170,9 @@ export function RegisterForm() {
           </span>
         }
       />
+      {agreeError ? (
+        <p className="text-xs text-danger">{agreeError}</p>
+      ) : null}
 
       <Button
         type="submit"

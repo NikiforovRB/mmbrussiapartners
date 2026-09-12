@@ -41,6 +41,7 @@ export function ProfileForm({
   const [uploadingAvatar, setUploadingAvatar] = React.useState(false);
   const fileRef = React.useRef<HTMLInputElement>(null);
   const [pwd, setPwd] = React.useState({ current: "", next: "", confirm: "" });
+  const [pwdErr, setPwdErr] = React.useState<{ next?: string; confirm?: string }>({});
   const [saving, setSaving] = React.useState(false);
   const [savingPwd, setSavingPwd] = React.useState(false);
 
@@ -91,14 +92,11 @@ export function ProfileForm({
   }
 
   async function savePassword() {
-    if (pwd.next.length < 8) {
-      toast.error("Минимум 8 символов");
-      return;
-    }
-    if (pwd.next !== pwd.confirm) {
-      toast.error("Пароли не совпадают");
-      return;
-    }
+    const next: { next?: string; confirm?: string } = {};
+    if (pwd.next.length < 8) next.next = "Минимум 8 символов";
+    if (pwd.next !== pwd.confirm) next.confirm = "Пароли не совпадают";
+    setPwdErr(next);
+    if (Object.keys(next).length > 0) return;
     setSavingPwd(true);
     const res = await fetch("/api/profile/password", {
       method: "PATCH",
@@ -143,8 +141,8 @@ export function ProfileForm({
           <div className="font-display text-lg  tracking-tight mb-4">Смена пароля</div>
           <div className="grid sm:grid-cols-3 gap-3">
             <Input label="Текущий пароль" type="password" icon={<Lock className="h-4 w-4" />} value={pwd.current} onChange={(e) => setPwd({ ...pwd, current: e.target.value })} />
-            <Input label="Новый пароль" type="password" value={pwd.next} onChange={(e) => setPwd({ ...pwd, next: e.target.value })} />
-            <Input label="Повторите" type="password" value={pwd.confirm} onChange={(e) => setPwd({ ...pwd, confirm: e.target.value })} />
+            <Input label="Новый пароль" type="password" value={pwd.next} error={pwdErr.next} onChange={(e) => { setPwd({ ...pwd, next: e.target.value }); if (pwdErr.next) setPwdErr((p) => ({ ...p, next: undefined })); }} />
+            <Input label="Повторите" type="password" value={pwd.confirm} error={pwdErr.confirm} onChange={(e) => { setPwd({ ...pwd, confirm: e.target.value }); if (pwdErr.confirm) setPwdErr((p) => ({ ...p, confirm: undefined })); }} />
           </div>
           <div className="mt-5 flex justify-end">
             <Button loading={savingPwd} onClick={savePassword} icon={<Lock className="h-4 w-4" />}>

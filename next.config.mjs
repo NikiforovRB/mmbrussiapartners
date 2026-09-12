@@ -13,7 +13,7 @@ const nextConfig = {
   experimental: {
     optimizePackageImports: ["lucide-react"],
   },
-  serverExternalPackages: ["@prisma/client", "bcryptjs", "exceljs"],
+  serverExternalPackages: ["@prisma/client", "bcryptjs", "exceljs", "sanitize-html"],
   async headers() {
     return [
       {

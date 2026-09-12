@@ -58,6 +58,7 @@ export async function createPayment(input: CreatePaymentInput) {
     email: input.email,
     phone: input.phone,
     returnUrl: absolute(`/dealer/payments/${payment.id}`),
+    notifyUrl: atolPayCallbackUrl(),
   });
 
   return db.payment.update({
@@ -168,6 +169,18 @@ export function atolWebhookSecret(): string {
   return process.env.ATOL_WEBHOOK_SECRET ?? "";
 }
 
+/** Секрет для callback АТОЛ Pay (эквайринг). По умолчанию — общий с кассой. */
+export function atolPayWebhookSecret(): string {
+  return process.env.ATOL_PAY_WEBHOOK_SECRET ?? process.env.ATOL_WEBHOOK_SECRET ?? "";
+}
+
+/** Адрес callback АТОЛ Pay о смене статуса оплаты (null — если секрет пуст). */
+export function atolPayCallbackUrl(): string | null {
+  const secret = atolPayWebhookSecret();
+  if (!secret) return null;
+  return `${siteOrigin()}/api/atolpay/webhook?token=${encodeURIComponent(secret)}`;
+}
+
 function atolCallbackUrl(): string | null {
   const secret = atolWebhookSecret();
   if (!secret) return null;
@@ -212,4 +225,26 @@ export async function handleAtolCallback(payload: Record<string, unknown>) {
   const payment = await db.payment.findFirst({ where: { receiptUuid: report.uuid } });
   if (!payment) return null;
   return applyReceiptReport(payment.id, report);
+}
+
+/**
+ * Обработка callback от АТОЛ Pay (эквайринг). При успешной оплате отмечает
+ * платёж оплаченным и запускает фискализацию через кассу АТОЛ Онлайн.
+ */
+export async function handleAtolPayCallback(payload: Record<string, unknown>) {
+  const type = typeof payload.type === "string" ? payload.type : "";
+  const status = typeof payload.status === "string" ? payload.status : "";
+  const orderId = typeof payload.orderId === "string" ? payload.orderId : "";
+  if (!orderId) return null;
+
+  if (type === "payment" && status === "success") {
+    const payment = await db.payment.findFirst({
+      where: { OR: [{ id: orderId }, { externalId: orderId }] },
+      select: { id: true, status: true },
+    });
+    if (!payment) return null;
+    if (payment.status === "PAID") return payment;
+    return markPaymentPaid(payment.id, null);
+  }
+  return null;
 }

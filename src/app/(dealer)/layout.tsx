@@ -7,10 +7,14 @@ import {
   UserCircle,
   FileSpreadsheet,
   Cpu,
+  BookOpen,
 } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
 import { Sidebar, type SidebarItem } from "@/components/cabinet/sidebar";
 import { MobileNavProvider } from "@/components/cabinet/mobile-nav";
+import { AnnouncementBar } from "@/components/cabinet/announcement-bar";
+import { LoginNoticeGate } from "@/components/cabinet/login-notice-gate";
+import { mergeAnnouncement } from "@/lib/site-settings";
 import { CommandPalette } from "@/components/cabinet/command-palette";
 import { CabinetUserProvider } from "@/components/cabinet/cabinet-user";
 import { SignOutButton } from "@/components/cabinet/sign-out-button";
@@ -46,6 +50,7 @@ export default async function DealerLayout({ children }: { children: React.React
     { href: "/dealer/humax", label: "Пароли HUMAX", icon: <Cpu className="h-4 w-4" /> },
     { href: "/dealer/payments", label: "Платежи", icon: <CreditCard className="h-4 w-4" /> },
     { href: "/dealer/reports", label: "Отчёты", icon: <FileSpreadsheet className="h-4 w-4" /> },
+    { href: "/dealer/knowledge", label: "База знаний", icon: <BookOpen className="h-4 w-4" /> },
     { href: "/dealer/profile", label: "Профиль", icon: <UserCircle className="h-4 w-4" /> },
   ];
 
@@ -63,10 +68,17 @@ export default async function DealerLayout({ children }: { children: React.React
     </div>
   );
 
-  const [avatarUrl, unreadCount] = await Promise.all([
+  const [avatarUrl, unreadCount, settings, loginNotices] = await Promise.all([
     getUserAvatarUrl(user.id),
     db.appNotification.count({ where: { userId: user.id, readAt: null } }),
+    db.companySettings.findUnique({ where: { id: "singleton" }, select: { announcement: true } }),
+    db.loginNotice.findMany({
+      where: { active: true, acknowledgements: { none: { userId: user.id } } },
+      orderBy: { createdAt: "asc" },
+      select: { id: true, title: true, body: true },
+    }),
   ]);
+  const announcement = mergeAnnouncement(settings?.announcement);
 
   return (
     <CabinetUserProvider
@@ -89,7 +101,13 @@ export default async function DealerLayout({ children }: { children: React.React
       <MobileNavProvider items={items} footer={footer}>
         <div className="cabinet min-h-screen flex bg-bg-default">
           <Sidebar items={items} footer={footer} />
-          <div className="flex-1 min-w-0 px-4 lg:px-6 pb-12">{children}</div>
+          <div className="flex-1 min-w-0 px-4 lg:px-6 pb-12">
+            {announcement.enabled ? (
+              <AnnouncementBar text={announcement.text} updatedAt={announcement.updatedAt ?? null} />
+            ) : null}
+            {children}
+          </div>
+          <LoginNoticeGate notices={loginNotices} />
           <CommandPalette />
         </div>
       </MobileNavProvider>

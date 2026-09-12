@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { hashPassword } from "@/lib/auth";
 import { normalizePhone } from "@/lib/utils";
 import { notifyAdmins } from "@/lib/app-notifications";
+import { rateLimit, clientIp } from "@/lib/rate-limit";
 
 async function lookupSignupGeo(): Promise<{ ip: string | null; country: string | null; city: string | null }> {
   try {
@@ -37,6 +38,12 @@ const schema = z.object({
 });
 
 export async function registerDealerAction(formData: FormData) {
+  // Анти-спам: не более 5 регистраций с одного IP в час.
+  const ip = clientIp(await headers());
+  if (!rateLimit(`register:${ip}`, { limit: 5, windowMs: 60 * 60 * 1000 }).ok) {
+    return { ok: false as const, error: "Слишком много попыток регистрации. Попробуйте позже." };
+  }
+
   const raw = Object.fromEntries(formData.entries()) as Record<string, string>;
   const parsed = schema.safeParse(raw);
   if (!parsed.success) {

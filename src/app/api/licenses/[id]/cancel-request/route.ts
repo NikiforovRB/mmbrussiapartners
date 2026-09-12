@@ -55,3 +55,39 @@ export const POST = route(async (req: Request, ctx: { params: Promise<{ id: stri
 
   return NextResponse.json({ ok: true, requestId: request.id });
 });
+
+// Отзыв заявки представителем, пока она «на рассмотрении». Забираем именно
+// свою активную заявку — так дилер может передумать и подать её заново.
+export const DELETE = route(async (_req: Request, ctx: { params: Promise<{ id: string }> }) => {
+  const session = await auth();
+  if (!session?.user) throw unauthenticated();
+
+  const { id } = await ctx.params;
+  const license = await db.license.findUnique({ where: { id }, include: { dealer: true } });
+  if (!license) throw notFound("Лицензия не найдена");
+
+  const isOwner = license.dealerId === session.user.id;
+  const canManage = hasPermission(session.user.permissions, "licenses.cancel", session.user.isSuperAdmin);
+  if (!isOwner && !canManage) throw forbidden();
+
+  const pending = await db.cancellationRequest.findFirst({
+    where: {
+      licenseId: license.id,
+      status: "PENDING",
+      // Владелец отзывает только собственную заявку.
+      ...(isOwner && !canManage ? { requestedById: session.user.id } : {}),
+    },
+  });
+  if (!pending) throw notFound("Активная заявка не найдена");
+
+  await db.cancellationRequest.delete({ where: { id: pending.id } });
+
+  await notifyAdmins(["licenses.cancel"], {
+    type: "CANCELLATION_REQUESTED",
+    title: `Заявка на аннулирование ${license.number} отозвана`,
+    body: `${license.dealer.email} отозвал заявку`,
+    link: "/admin/cancellation-requests",
+  });
+
+  return NextResponse.json({ ok: true });
+});

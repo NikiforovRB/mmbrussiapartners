@@ -22,7 +22,7 @@ export const POST = route(async (req: Request) => {
   if (!isDriveModsConfigured()) {
     throw new ApiError(
       "NOT_CONFIGURED",
-      "Интеграция DRIVEMODS не настроена. Обратитесь к администратору.",
+      "Интеграция генерации не настроена. Обратитесь к администратору.",
     );
   }
 
@@ -38,7 +38,7 @@ export const POST = route(async (req: Request) => {
     const info = await licInfo(buf.toString("base64"));
     if (info.items.length === 0) {
       throw badRequest(
-        "DRIVEMODS не нашёл доступных продуктов для этого устройства. " +
+        "Не найдено доступных продуктов для этого устройства. " +
           "Проверьте, что загружен device_id.bin от нужного ШГУ.",
       );
     }
@@ -92,6 +92,8 @@ export const POST = route(async (req: Request) => {
         price: prices[index].price,
         /** Цена взята из справочника, а не из запасной настройки. */
         priced: prices[index].itemId !== null,
+        /** Первая генерация позиции идёт по клиентской цене. */
+        firstAtClientPrice: prices[index].basis === "client_first",
       })),
     });
   } catch (err) {

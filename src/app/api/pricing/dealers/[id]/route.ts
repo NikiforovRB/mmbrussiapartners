@@ -12,6 +12,10 @@ const schema = z.object({
   adjustKind: z.enum(["NONE", "PERCENT", "FIXED"]),
   /** Процент или сумма — может быть отрицательной, это скидка. */
   adjustValue: z.number().nullable().optional(),
+  /** Ценовой тариф: DEALER (обычный) или CLIENT (субдилер). */
+  priceTier: z.enum(["DEALER", "CLIENT"]).optional(),
+  /** Предоплатный расчёт: генерация только после погашения счетов. */
+  prepaid: z.boolean().optional(),
   /** price = null снимает личную цену: позиция вернётся к справочнику. */
   overrides: z
     .array(z.object({ itemId: z.string().min(1), price: z.number().nonnegative().nullable() }))
@@ -28,7 +32,7 @@ export const PUT = route(async (req: Request, ctx: { params: Promise<{ id: strin
   const { id } = await ctx.params;
   const profile = await db.dealerProfile.findUnique({
     where: { userId: id },
-    select: { priceAdjustKind: true, priceAdjustValue: true },
+    select: { priceAdjustKind: true, priceAdjustValue: true, priceTier: true, prepaid: true },
   });
   if (!profile) throw notFound("Представитель не найден");
 
@@ -54,7 +58,12 @@ export const PUT = route(async (req: Request, ctx: { params: Promise<{ id: strin
   await db.$transaction(async (tx) => {
     await tx.dealerProfile.update({
       where: { userId: id },
-      data: { priceAdjustKind: data.adjustKind, priceAdjustValue: value },
+      data: {
+        priceAdjustKind: data.adjustKind,
+        priceAdjustValue: value,
+        ...(data.priceTier !== undefined && { priceTier: data.priceTier }),
+        ...(data.prepaid !== undefined && { prepaid: data.prepaid }),
+      },
     });
     for (const o of overrides) {
       if (o.price === null) {

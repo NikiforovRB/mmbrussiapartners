@@ -20,7 +20,7 @@ export const POST = route(async (req: Request) => {
   if (!isDriveModsConfigured()) {
     throw new ApiError(
       "NOT_CONFIGURED",
-      "Интеграция DRIVEMODS не настроена. Обратитесь к администратору.",
+      "Интеграция генерации не настроена. Обратитесь к администратору.",
     );
   }
 

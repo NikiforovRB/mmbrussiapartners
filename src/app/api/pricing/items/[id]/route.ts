@@ -14,6 +14,8 @@ const schema = z.object({
   bundle: z.string().max(60).optional(),
   region: z.string().max(60).optional(),
   price: z.number().nonnegative().optional(),
+  myPrice: z.number().nonnegative().nullable().optional(),
+  clientPrice: z.number().nonnegative().nullable().optional(),
 });
 
 function label(item: { product: string; bundle: string; region: string }) {
@@ -45,7 +47,14 @@ export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: str
 
   const updated = await db.priceListItem.update({
     where: { id },
-    data: { product, bundle, region, ...(data.price !== undefined && { price: data.price }) },
+    data: {
+      product,
+      bundle,
+      region,
+      ...(data.price !== undefined && { price: data.price }),
+      ...(data.myPrice !== undefined && { myPrice: data.myPrice }),
+      ...(data.clientPrice !== undefined && { clientPrice: data.clientPrice }),
+    },
   });
 
   await recordAdminAction({

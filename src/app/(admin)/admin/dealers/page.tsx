@@ -7,6 +7,7 @@ import { StatusTag } from "@/components/ui/status-tag";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { ChevronRight, Search } from "lucide-react";
+import { getDownloadUrl } from "@/lib/s3";
 import { fioFromParts } from "@/lib/utils";
 import { DealersFilters } from "./dealers-filters";
 import { Pagination, parsePage } from "@/components/cabinet/pagination";
@@ -59,6 +60,13 @@ export default async function AdminDealersPage({
     }),
   ]);
 
+  // Ссылки на фото профилей (presigned) — по одному на представителя.
+  const avatarUrls = await Promise.all(
+    dealers.map((u) =>
+      u.dealerProfile?.avatarKey ? getDownloadUrl(u.dealerProfile.avatarKey, 3600) : Promise.resolve(null),
+    ),
+  );
+
   return (
     <>
       <Topbar
@@ -94,7 +102,7 @@ export default async function AdminDealersPage({
                     </td>
                   </tr>
                 ) : null}
-                {dealers.map((u) => {
+                {dealers.map((u, idx) => {
                   const fio = fioFromParts({
                     firstName: u.dealerProfile?.firstName,
                     lastName: u.dealerProfile?.lastName,
@@ -104,7 +112,7 @@ export default async function AdminDealersPage({
                     <tr key={u.id} className="transition-colors hover:bg-surface-muted">
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
-                          <Avatar name={fio || u.email} size={36} />
+                          <Avatar name={fio || u.email} src={avatarUrls[idx]} size={36} />
                           <div>
                             <div className="">{fio || "—"}</div>
                             <div className="text-xs text-ink-muted">{u.dealerProfile?.organization ?? "—"}</div>

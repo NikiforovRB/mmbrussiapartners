@@ -18,12 +18,16 @@ export type PriceQuery = {
   region?: string | null;
 };
 
+export type PriceBasis = "personal" | "client_first" | "client_tier" | "dealer" | "fallback";
+
 export type ResolvedPrice = {
   price: number;
   /** Позиция справочника, по которой посчитали; null — сработала запасная цена. */
   itemId: string | null;
   /** Цена назначена этому представителю лично. */
   personal: boolean;
+  /** Как получена цена — для подсказок в интерфейсе. */
+  basis: PriceBasis;
 };
 
 /**
@@ -81,35 +85,70 @@ export async function resolvePrices(
 
   // В справочнике продукт хранится нормализованным, поэтому и ищем по такому же.
   const products = [...new Set(queries.map((q) => normalizeKey(q.product)).filter(Boolean))];
-  const [items, profile, personal] = await Promise.all([
+  const [items, profile, personal, priorLicenses] = await Promise.all([
     products.length > 0
       ? db.priceListItem.findMany({ where: { product: { in: products } } })
       : Promise.resolve([]),
     dealerId
       ? db.dealerProfile.findUnique({
           where: { userId: dealerId },
-          select: { priceAdjustKind: true, priceAdjustValue: true },
+          select: { priceAdjustKind: true, priceAdjustValue: true, priceTier: true },
         })
       : Promise.resolve(null),
     dealerId
       ? db.dealerPrice.findMany({ where: { dealerId }, select: { itemId: true, price: true } })
+      : Promise.resolve([]),
+    // Позиции, по которым у представителя уже была выдача: нужны, чтобы
+    // отличить первую генерацию каждой позиции (идёт по клиентской цене).
+    dealerId && products.length > 0
+      ? db.license.findMany({
+          where: { dealerId, deletedAt: null, product: { in: products } },
+          select: { product: true, bundle: true, productRegion: true },
+        })
       : Promise.resolve([]),
   ]);
 
   const personalById = new Map(personal.map((p) => [p.itemId, toNumber(p.price)]));
   const kind: PriceAdjustKind = profile?.priceAdjustKind ?? "NONE";
   const adjust = profile?.priceAdjustValue == null ? null : toNumber(profile.priceAdjustValue);
+  const tier = profile?.priceTier === "CLIENT" ? "CLIENT" : "DEALER";
+  const seenPositions = new Set(
+    priorLicenses.map((l) =>
+      priceKey({ product: l.product ?? "", bundle: l.bundle, region: l.productRegion }),
+    ),
+  );
 
   return queries.map((q) => {
     const item = matchItem(items, q);
     if (!item) {
       // Позиции в справочнике нет: берём запасную цену из настроек, иначе
       // выдача лицензий встала бы из-за незаполненного прайса.
-      return { price: licensePrice(q.bundle) || defaultLicensePrice(), itemId: null, personal: false };
+      return {
+        price: licensePrice(q.bundle) || defaultLicensePrice(),
+        itemId: null,
+        personal: false,
+        basis: "fallback" as const,
+      };
     }
+
+    // Личная цена представителя — высший приоритет, перекрывает всё.
     const own = personalById.get(item.id);
-    if (own !== undefined) return { price: own, itemId: item.id, personal: true };
-    return { price: applyAdjust(toNumber(item.price), kind, adjust), itemId: item.id, personal: false };
+    if (own !== undefined) return { price: own, itemId: item.id, personal: true, basis: "personal" as const };
+
+    const dealerPrice = applyAdjust(toNumber(item.price), kind, adjust);
+    const clientPrice = item.clientPrice == null ? null : toNumber(item.clientPrice);
+
+    // Субдилер (тариф CLIENT) всегда платит по клиентской цене.
+    if (tier === "CLIENT" && clientPrice !== null) {
+      return { price: clientPrice, itemId: item.id, personal: false, basis: "client_tier" as const };
+    }
+
+    // Первая генерация этой позиции — по клиентской цене (если она задана).
+    if (clientPrice !== null && !seenPositions.has(priceKey(q))) {
+      return { price: clientPrice, itemId: item.id, personal: false, basis: "client_first" as const };
+    }
+
+    return { price: dealerPrice, itemId: item.id, personal: false, basis: "dealer" as const };
   });
 }
 

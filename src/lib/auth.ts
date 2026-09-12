@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { db } from "./db";
 import type { PermissionKey } from "./permissions";
+import { rateLimit, clientIp } from "./rate-limit";
 
 declare module "next-auth" {
   interface Session {
@@ -50,10 +51,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
-      authorize: async (creds) => {
+      authorize: async (creds, req) => {
+        // Анти-брутфорс: ограничиваем попытки по IP и по email (10 минут).
+        const ip = req?.headers ? clientIp(req.headers) : "unknown";
+        if (!rateLimit(`login-ip:${ip}`, { limit: 15, windowMs: 10 * 60_000 }).ok) {
+          throw new Error("TOO_MANY_ATTEMPTS");
+        }
+
         const parsed = credentialsSchema.safeParse(creds);
         if (!parsed.success) return null;
         const { email, password } = parsed.data;
+
+        if (!rateLimit(`login-email:${email.toLowerCase().trim()}`, { limit: 8, windowMs: 10 * 60_000 }).ok) {
+          throw new Error("TOO_MANY_ATTEMPTS");
+        }
 
         const user = await db.user.findUnique({
           where: { email: email.toLowerCase().trim() },

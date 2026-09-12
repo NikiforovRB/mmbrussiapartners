@@ -140,6 +140,7 @@ model User {
   reviewedCancellations  CancellationRequest[] @relation("ReviewedCancellations")
   prices                 DealerPrice[]         @relation("DealerPrices")
   humaxPasswords         HumaxPassword[]       @relation("DealerHumaxPasswords")
+  loginNoticeAcks        LoginNoticeAck[]
 
   @@index([status])
   @@index([roleId])
@@ -181,9 +182,20 @@ model DealerProfile {
   signupIp            String?
   licenseLimit        Int      @default(0)
   licensesUsed        Int      @default(0)
+  /// Есть ли у представителя доступ к личному кабинету DriveMods (видно
+  /// только администраторам). Часть типов лицензий выдаётся только там.
+  driveModsAccess      Boolean  @default(false)
+  /// Когда представитель отправил заявку на подключение к ЛК DriveMods.
+  driveModsRequestedAt DateTime?
   /// Общее правило пересчёта цен справочника для этого представителя.
   priceAdjustKind     PriceAdjustKind @default(NONE)
   priceAdjustValue    Decimal? @db.Decimal(12, 2)
+  /// Ценовой тариф представителя: DEALER — по дилерской цене (обычный),
+  /// CLIENT — по клиентской (субдилеры/реселлеры, «своя цена»).
+  priceTier           String   @default("DEALER")
+  /// Предоплатный расчёт: до генерации нужно погасить неоплаченные счета.
+  /// Доверенным представителям оставляют postpaid (false) — генерируют сразу.
+  prepaid             Boolean  @default(false)
   approvedAt          DateTime?
   approvedById        String?
   rejectionReason     String?
@@ -371,6 +383,58 @@ model AppNotification {
 }
 
 /**
+ * Уведомление, которое показывается пользователю при входе и требует явного
+ * подтверждения «Ознакомился». Пока пользователь не подтвердил активное
+ * уведомление, окно нельзя закрыть обычным способом.
+ */
+model LoginNotice {
+  id         String   @id @default(cuid())
+  title      String
+  body       String
+  active     Boolean  @default(true)
+  requireAck Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  acknowledgements LoginNoticeAck[]
+
+  @@index([active])
+}
+
+/**
+ * Статья базы знаний. Контент хранится структурированными блоками (blocks),
+ * а не сырым HTML: так безопаснее рендерить и проще редактировать.
+ */
+model KnowledgeArticle {
+  id        String   @id @default(cuid())
+  title     String
+  slug      String   @unique
+  category  String?
+  excerpt   String?
+  coverKey  String?
+  blocks    Json     @default("[]")
+  published Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([published, createdAt])
+}
+
+/** Факт ознакомления пользователя с конкретным уведомлением входа. */
+model LoginNoticeAck {
+  id        String   @id @default(cuid())
+  noticeId  String
+  userId    String
+  createdAt DateTime @default(now())
+
+  notice LoginNotice @relation(fields: [noticeId], references: [id], onDelete: Cascade)
+  user   User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([noticeId, userId])
+  @@index([userId])
+}
+
+/**
  * Журнал действий администратора вне карточки лицензии: представители,
  * роли, платежи, настройки. По лицензиям история пишется в LicenseAuditLog.
  */
@@ -417,7 +481,12 @@ model PriceListItem {
   bundle    String   @default("")
   /// Регион продукта (RUS, CHN). Пусто — цена общая для всех регионов.
   region    String   @default("")
+  /// Дилерская цена (базовая, по которой платит представитель).
   price     Decimal  @db.Decimal(12, 2)
+  /// Наша цена/себестоимость — видна только администраторам, для маржи.
+  myPrice     Decimal? @db.Decimal(12, 2)
+  /// Клиентская (розничная) цена. По ней идёт первая генерация позиции.
+  clientPrice Decimal? @db.Decimal(12, 2)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -468,6 +537,12 @@ model CompanySettings {
   address      String?
   publicPhones Json    @default("[]")
   homepage     Json?
+  /// Оранжевое объявление под шапкой кабинета: { enabled, text, updatedAt }.
+  announcement Json?
+  /// Раздел «Техподдержка»: { intro, requirements, channels: [{label,url,icon,iconUrl,iconHoverUrl}] }.
+  support      Json?
+  /// Ограничения генерации: окно запрета (blackout) и список устаревших версий кастома.
+  generation   Json?
   updatedAt    DateTime @updatedAt
 }
 

@@ -13,7 +13,6 @@ import { Topbar } from "@/components/cabinet/topbar";
 import { Card } from "@/components/ui/card";
 import { StatusTag } from "@/components/ui/status-tag";
 import { Button } from "@/components/ui/button";
-import { ScrollReveal } from "@/components/animations/scroll-reveal";
 import { addDays, formatRuDate } from "@/lib/dates";
 import { fioFromParts, formatCurrency } from "@/lib/utils";
 
@@ -63,27 +62,7 @@ export default async function AdminDashboard() {
         subtitle={formatRuDate(new Date())}
         user={{ name: fio || user.email, email: user.email, role: user.role.name }}
       />
-      <ScrollReveal className="mt-6">
-        <Card tone="dark" className="relative overflow-hidden">
-          <div className="absolute -top-32 -right-20 h-80 w-80 rounded-full blob"
-            style={{ background: "radial-gradient(closest-side, rgba(42,159,255,0.6), transparent)" }} />
-          <div className="relative grid sm:grid-cols-[1fr_auto] gap-6 items-end">
-            <div>
-              <h2 className="font-display text-3xl  tracking-tightest">
-                Управление сетью дилеров
-              </h2>
-              <p className="mt-3 text-white/70">
-                Одобряйте дилеров, редактируйте лицензии, выгружайте отчёты и следите за гео-распределением сети.
-              </p>
-            </div>
-            <Link href="/admin/dealers">
-              <Button variant="primary">Перейти к представителям</Button>
-            </Link>
-          </div>
-        </Card>
-      </ScrollReveal>
-
-      <div className="mt-5 grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="mt-6 grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <Kpi icon={<Users className="h-4 w-4" />} label="Заявок на одобрение" value={String(pendingDealers)} />
         <Kpi icon={<ShieldCheck className="h-4 w-4" />} label="Активных лицензий" value={String(activeLicenses)} />
         <Kpi icon={<KeyRound className="h-4 w-4" />} label="Лицензий всего" value={String(recentLicenses)} />

@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Save, Download, XCircle, History, ShieldOff } from "lucide-react";
+import { Save, Download, XCircle, History, ShieldOff, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -81,7 +81,25 @@ export function LicenseDetailEditor({
   const [requestOpen, setRequestOpen] = React.useState(false);
   const [requestReason, setRequestReason] = React.useState("");
   const [requestLoading, setRequestLoading] = React.useState(false);
+  const [withdrawOpen, setWithdrawOpen] = React.useState(false);
+  const [withdrawLoading, setWithdrawLoading] = React.useState(false);
   const hasPendingRequest = latestRequest?.status === "PENDING";
+
+  async function withdrawRequest() {
+    setWithdrawLoading(true);
+    const res = await fetch(`/api/licenses/${data.id}/cancel-request`, {
+      method: "DELETE",
+    });
+    setWithdrawLoading(false);
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      toast.error(j.error ?? "Не удалось отозвать заявку");
+      return;
+    }
+    toast.success("Заявка отозвана");
+    setWithdrawOpen(false);
+    router.refresh();
+  }
 
   async function requestCancellation() {
     if (requestReason.trim().length < 10) {
@@ -196,8 +214,11 @@ export function LicenseDetailEditor({
               <div className="mt-1 font-display text-3xl  tracking-tightest">{data.number}</div>
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <StatusTag kind="license" status={data.status} />
-                <Tag tone={data.type === "Генерация" ? "accent" : "neutral"}>{data.type}</Tag>
-                {data.repeatGeneration ? <Tag tone="warning">Повторная генерация</Tag> : null}
+                {data.repeatGeneration ? (
+                  <Tag tone="warning">Повторная генерация</Tag>
+                ) : (
+                  <Tag tone={data.type === "Генерация" ? "accent" : "neutral"}>{data.type}</Tag>
+                )}
                 {data.issuedWithoutPayment ? <Tag tone="warning">Без оплаты</Tag> : null}
               </div>
             </div>
@@ -213,15 +234,22 @@ export function LicenseDetailEditor({
                   Скачать .bin
                 </Button>
               ) : null}
-              {!isAdmin && data.status === "ACTIVE" ? (
+              {!isAdmin && data.status === "ACTIVE" && !hasPendingRequest ? (
                 <Button
                   variant="ghost"
-                  disabled={hasPendingRequest}
-                  title={hasPendingRequest ? "Заявка уже на рассмотрении" : undefined}
                   icon={<XCircle className="h-4 w-4" />}
                   onClick={() => setRequestOpen(true)}
                 >
                   Запросить аннулирование
+                </Button>
+              ) : null}
+              {!isAdmin && data.status === "ACTIVE" && hasPendingRequest ? (
+                <Button
+                  variant="ghost"
+                  icon={<RotateCcw className="h-4 w-4" />}
+                  onClick={() => setWithdrawOpen(true)}
+                >
+                  Отозвать заявку
                 </Button>
               ) : null}
               {isAdmin && data.status === "ACTIVE" ? (
@@ -384,6 +412,25 @@ export function LicenseDetailEditor({
             onClick={requestCancellation}
           >
             Отправить заявку
+          </Button>
+        </div>
+      </Modal>
+
+      <Modal
+        open={withdrawOpen}
+        onClose={() => setWithdrawOpen(false)}
+        title="Отозвать заявку на аннулирование"
+        description="Заявка будет снята с рассмотрения. Позже вы сможете подать её заново."
+      >
+        <div className="mt-6 flex justify-end gap-2">
+          <Button variant="ghost" onClick={() => setWithdrawOpen(false)}>Отмена</Button>
+          <Button
+            variant="danger"
+            loading={withdrawLoading}
+            icon={<RotateCcw className="h-4 w-4" />}
+            onClick={withdrawRequest}
+          >
+            Отозвать заявку
           </Button>
         </div>
       </Modal>

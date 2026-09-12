@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
+import { rateLimit, clientIp } from "./rate-limit";
 
 /**
  * Единый формат ответа об ошибке для всех роутов:
@@ -17,6 +18,7 @@ export type ApiErrorCode =
   | "CONFLICT"
   | "UPSTREAM"
   | "NOT_CONFIGURED"
+  | "TOO_MANY"
   | "INTERNAL";
 
 const DEFAULT_STATUS: Record<ApiErrorCode, number> = {
@@ -27,6 +29,7 @@ const DEFAULT_STATUS: Record<ApiErrorCode, number> = {
   CONFLICT: 409,
   UPSTREAM: 502,
   NOT_CONFIGURED: 503,
+  TOO_MANY: 429,
   INTERNAL: 500,
 };
 
@@ -47,6 +50,8 @@ export const forbidden = (message = "Недостаточно прав") => new 
 export const notFound = (message = "Не найдено") => new ApiError("NOT_FOUND", message);
 export const badRequest = (message: string) => new ApiError("VALIDATION", message);
 export const conflict = (message: string) => new ApiError("CONFLICT", message);
+export const tooManyRequests = (message = "Слишком много запросов. Повторите позже.") =>
+  new ApiError("TOO_MANY", message);
 
 export function apiError(error: ApiError) {
   return NextResponse.json({ error: error.message, code: error.code }, { status: error.status });
@@ -57,11 +62,31 @@ export function apiError(error: ApiError) {
  * непредвиденные — логирует на сервере и отдаёт нейтральный текст, чтобы
  * наружу не утекали детали инфраструктуры.
  */
+export type RouteOptions = {
+  /**
+   * Ограничение частоты по IP: не более `limit` запросов за `windowMs`.
+   * Ключ строится из имени (или пути), метода и IP клиента.
+   */
+  rateLimit?: { limit: number; windowMs: number; name?: string };
+};
+
 export function route<Args extends unknown[]>(
   handler: (req: Request, ...args: Args) => Promise<Response>,
+  options?: RouteOptions,
 ) {
   return async (req: Request, ...args: Args): Promise<Response> => {
     try {
+      if (options?.rateLimit) {
+        const ip = clientIp(req.headers);
+        const path = new URL(req.url).pathname;
+        const key = `${options.rateLimit.name ?? path}:${req.method}:${ip}`;
+        const rl = rateLimit(key, options.rateLimit);
+        if (!rl.ok) {
+          const res = apiError(tooManyRequests());
+          res.headers.set("Retry-After", String(Math.ceil(rl.retryAfterMs / 1000)));
+          return res;
+        }
+      }
       return await handler(req, ...args);
     } catch (err) {
       if (err instanceof ApiError) return apiError(err);

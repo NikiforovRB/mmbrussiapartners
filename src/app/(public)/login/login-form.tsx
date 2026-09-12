@@ -3,10 +3,12 @@
 import * as React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
-import { Mail, Lock, ArrowRight } from "lucide-react";
+import { Mail, Lock, ArrowRight, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function LoginForm() {
   const router = useRouter();
@@ -15,13 +17,25 @@ export function LoginForm() {
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [loading, setLoading] = React.useState(false);
+  const [fieldErrors, setFieldErrors] = React.useState<{
+    email?: string;
+    password?: string;
+  }>({});
+  const [formError, setFormError] = React.useState<string | null>(null);
+
+  function validate() {
+    const next: { email?: string; password?: string } = {};
+    if (!email.trim()) next.email = "Укажите email";
+    else if (!EMAIL_RE.test(email.trim())) next.email = "Некорректный email";
+    if (!password) next.password = "Укажите пароль";
+    setFieldErrors(next);
+    return Object.keys(next).length === 0;
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!email || !password) {
-      toast.error("Заполните email и пароль");
-      return;
-    }
+    setFormError(null);
+    if (!validate()) return;
     setLoading(true);
     const res = await signIn("credentials", {
       email: email.trim().toLowerCase(),
@@ -31,13 +45,15 @@ export function LoginForm() {
     setLoading(false);
     if (!res || res.error) {
       const code = res?.error;
-      if (code === "ACCOUNT_SUSPENDED") {
-        toast.error("Аккаунт заблокирован администратором");
-      } else if (code === "ACCOUNT_REJECTED") {
-        toast.error("Заявка отклонена. Свяжитесь с администратором");
-      } else {
-        toast.error("Неверный email или пароль");
-      }
+      const message =
+        code === "ACCOUNT_SUSPENDED"
+          ? "Аккаунт заблокирован администратором"
+          : code === "ACCOUNT_REJECTED"
+            ? "Заявка отклонена. Свяжитесь с администратором"
+            : code === "TOO_MANY_ATTEMPTS"
+              ? "Слишком много попыток входа. Попробуйте позже"
+              : "Неверный email или пароль";
+      setFormError(message);
       return;
     }
     toast.success("Добро пожаловать");
@@ -46,16 +62,30 @@ export function LoginForm() {
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-4">
+    <form onSubmit={onSubmit} className="space-y-4" noValidate>
+      {formError ? (
+        <div
+          role="alert"
+          className="flex items-start gap-2 rounded-btn border border-danger/30 bg-danger/5 px-3 py-2.5 text-sm text-danger"
+        >
+          <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+          <span>{formError}</span>
+        </div>
+      ) : null}
       <Input
         label="Email"
         type="email"
         autoComplete="email"
         placeholder="example@mmbrussia.ru"
         value={email}
-        onChange={(e) => setEmail(e.target.value)}
+        onChange={(e) => {
+          setEmail(e.target.value);
+          if (fieldErrors.email)
+            setFieldErrors((p) => ({ ...p, email: undefined }));
+          if (formError) setFormError(null);
+        }}
         icon={<Mail className="h-4 w-4" />}
-        required
+        error={fieldErrors.email}
       />
       <Input
         label="Пароль"
@@ -63,9 +93,14 @@ export function LoginForm() {
         autoComplete="current-password"
         placeholder="••••••••"
         value={password}
-        onChange={(e) => setPassword(e.target.value)}
+        onChange={(e) => {
+          setPassword(e.target.value);
+          if (fieldErrors.password)
+            setFieldErrors((p) => ({ ...p, password: undefined }));
+          if (formError) setFormError(null);
+        }}
         icon={<Lock className="h-4 w-4" />}
-        required
+        error={fieldErrors.password}
       />
       <Button
         type="submit"

@@ -22,6 +22,7 @@ const profileSchema = z.object({
   address: z.string().nullable().optional(),
   licenseLimit: z.number().int().min(0).optional(),
   phoneVisibleOnSite: z.boolean().optional(),
+  driveModsAccess: z.boolean().optional(),
 });
 
 const schema = z.object({
@@ -43,6 +44,7 @@ const PLAIN_PROFILE_FIELDS = [
   "region",
   "address",
   "phoneVisibleOnSite",
+  "driveModsAccess",
 ] as const;
 
 const STATUS_LABEL: Record<string, string> = {
@@ -108,6 +110,9 @@ export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: str
       if (d.profile.address !== undefined) profileUpdate.address = d.profile.address || null;
       if (d.profile.phoneVisibleOnSite !== undefined) {
         profileUpdate.phoneVisibleOnSite = d.profile.phoneVisibleOnSite;
+      }
+      if (d.profile.driveModsAccess !== undefined) {
+        profileUpdate.driveModsAccess = d.profile.driveModsAccess;
       }
     }
     if (wantsLimit) profileUpdate.licenseLimit = d.profile.licenseLimit;
