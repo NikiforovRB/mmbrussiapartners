@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, XCircle, Save, Ban, Eye, ShieldOff, ShieldCheck } from "lucide-react";
+import { CheckCircle2, XCircle, Save, Ban, Eye, ShieldOff, ShieldCheck, KeyRound, Camera, Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -35,11 +35,13 @@ type Dealer = {
     licenseLimit: number;
     licensesUsed: number;
     phoneVisibleOnSite: boolean;
+    driveModsAccess: boolean;
+    driveModsRequestedAt: string | null;
   } | null;
   role: { name: string };
 };
 
-export function DealerEditor({ dealer }: { dealer: Dealer }) {
+export function DealerEditor({ dealer, avatarUrl }: { dealer: Dealer; avatarUrl?: string | null }) {
   const router = useRouter();
   const { can } = usePermissions();
   const canApprove = can("dealers.approve");
@@ -50,6 +52,38 @@ export function DealerEditor({ dealer }: { dealer: Dealer }) {
   const [rejectOpen, setRejectOpen] = React.useState(false);
   const [rejectReason, setRejectReason] = React.useState("");
   const [busy, setBusy] = React.useState<string | null>(null);
+  const [photo, setPhoto] = React.useState<string | null>(avatarUrl ?? null);
+  const [photoBusy, setPhotoBusy] = React.useState(false);
+
+  async function uploadPhoto(file: File) {
+    setPhotoBusy(true);
+    const form = new FormData();
+    form.append("avatar", file);
+    const res = await fetch(`/api/dealers/${data.id}/avatar`, { method: "POST", body: form });
+    setPhotoBusy(false);
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      toast.error(j.error ?? "Не удалось загрузить фото");
+      return;
+    }
+    const j = await res.json();
+    setPhoto((j.url as string) ?? null);
+    toast.success("Фото обновлено");
+    router.refresh();
+  }
+
+  async function removePhoto() {
+    setPhotoBusy(true);
+    const res = await fetch(`/api/dealers/${data.id}/avatar`, { method: "DELETE" });
+    setPhotoBusy(false);
+    if (!res.ok) {
+      toast.error("Не удалось удалить фото");
+      return;
+    }
+    setPhoto(null);
+    toast.success("Фото удалено");
+    router.refresh();
+  }
 
   async function update(payload: Record<string, unknown>) {
     setBusy("update");
@@ -113,7 +147,32 @@ export function DealerEditor({ dealer }: { dealer: Dealer }) {
         <Card>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="flex items-center gap-4">
-              <Avatar name={fio || data.email} size={56} />
+              <div className="relative shrink-0">
+                <Avatar name={fio || data.email} src={photo} size={56} />
+                {canEdit ? (
+                  <label
+                    title="Изменить фото"
+                    className="absolute -bottom-1 -right-1 grid h-6 w-6 place-items-center rounded-full border-2 border-white bg-accent text-white cursor-pointer transition-opacity hover:opacity-90"
+                  >
+                    {photoBusy ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Camera className="h-3 w-3" />
+                    )}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      disabled={photoBusy}
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) void uploadPhoto(f);
+                        e.target.value = "";
+                      }}
+                    />
+                  </label>
+                ) : null}
+              </div>
               <div>
                 <div className="font-display text-2xl  tracking-tightest">
                   {fio || "—"}
@@ -123,6 +182,16 @@ export function DealerEditor({ dealer }: { dealer: Dealer }) {
                   <StatusTag kind="user" status={data.status} />
                   <Tag tone="muted">Заявка от {formatRuDate(data.createdAt)}</Tag>
                 </div>
+                {photo && canEdit ? (
+                  <button
+                    type="button"
+                    onClick={removePhoto}
+                    disabled={photoBusy}
+                    className="mt-2 inline-flex items-center gap-1 text-xs text-ink-muted transition-colors hover:text-danger disabled:opacity-50"
+                  >
+                    <Trash2 className="h-3 w-3" /> Удалить фото
+                  </button>
+                ) : null}
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -299,6 +368,34 @@ export function DealerEditor({ dealer }: { dealer: Dealer }) {
             }
             description="Сразу же отражается в публичном API /api/public/representatives."
           />
+        </Card>
+
+        <Card>
+          <div className="font-display text-lg  tracking-tight mb-4">Доступ к ЛК DriveMods</div>
+          <Toggle
+            checked={!!data.dealerProfile?.driveModsAccess}
+            disabled={!canEdit}
+            onChange={async (v) => {
+              if (!canEdit) return;
+              setData({
+                ...data,
+                dealerProfile: data.dealerProfile && { ...data.dealerProfile, driveModsAccess: v },
+              });
+              await update({ profile: { driveModsAccess: v } });
+              router.refresh();
+            }}
+            label={
+              <span className="flex items-center gap-2">
+                <KeyRound className="h-4 w-4" /> Есть доступ к ЛК DriveMods
+              </span>
+            }
+            description="Видно только администраторам. Часть типов лицензий выдаётся только там."
+          />
+          {data.dealerProfile?.driveModsRequestedAt && !data.dealerProfile?.driveModsAccess ? (
+            <div className="mt-3 rounded-panel border border-hairline p-3 text-xs text-ink-muted">
+              Представитель запросил доступ {formatRuDate(data.dealerProfile.driveModsRequestedAt)}.
+            </div>
+          ) : null}
         </Card>
 
         <Card>

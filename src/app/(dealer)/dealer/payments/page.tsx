@@ -90,7 +90,39 @@ export default async function DealerPaymentsPage() {
           {payments.length === 0 ? (
             <div className="text-sm text-ink-muted py-10 text-center">Пока платежей нет</div>
           ) : (
-            <div className="overflow-x-auto scrollbar-clean">
+            <>
+            <ul className="md:hidden divide-y divide-hairline">
+              {payments.map((p) => (
+                <li key={p.id} className="p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="font-display tracking-tight">{formatCurrency(Number(p.amount))}</div>
+                    <StatusTag kind="payment" status={p.status} />
+                  </div>
+                  <div className="mt-1 text-xs text-ink-muted">{formatRuDate(p.createdAt)}</div>
+                  {p.description ? <div className="mt-1 text-sm">{p.description}</div> : null}
+                  <div className="mt-3 flex items-center justify-between gap-2">
+                    {p.receiptUrl ? (
+                      <a
+                        href={p.receiptUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-accent inline-flex items-center gap-1 text-xs"
+                      >
+                        Чек <ExternalLink className="h-3 w-3" />
+                      </a>
+                    ) : (
+                      <span />
+                    )}
+                    {p.status === "PENDING" ? (
+                      <Link href={`/dealer/payments/${p.id}`}>
+                        <Button size="sm" variant="secondary">Оплатить</Button>
+                      </Link>
+                    ) : null}
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <div className="hidden md:block overflow-x-auto scrollbar-clean">
               <table className="w-full min-w-[720px] text-sm">
                 <thead>
                   <tr className="text-left text-[11.5px] uppercase tracking-tight text-ink-subtle">
@@ -137,6 +169,7 @@ export default async function DealerPaymentsPage() {
                 </tbody>
               </table>
             </div>
+            </>
           )}
         </div>
       </div>

@@ -21,7 +21,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { fileSafeName } from "@/components/licenses/utils";
 import { toast } from "sonner";
 import { usePermissions } from "@/hooks/use-permissions";
-import { LICENSE_TYPE_FILTER_OPTIONS } from "@/lib/license-options";
+import { LICENSE_KIND_FILTER_OPTIONS } from "@/lib/license-options";
 
 type License = {
   id: string;
@@ -101,6 +101,26 @@ export function LicenseTable({
   const [deleteTarget, setDeleteTarget] = React.useState<License | null>(null);
   const [deleteReason, setDeleteReason] = React.useState("");
   const [deleteLoading, setDeleteLoading] = React.useState(false);
+
+  const [withdrawTarget, setWithdrawTarget] = React.useState<License | null>(null);
+  const [withdrawLoading, setWithdrawLoading] = React.useState(false);
+
+  async function onWithdraw() {
+    if (!withdrawTarget) return;
+    setWithdrawLoading(true);
+    const res = await fetch(`/api/licenses/${withdrawTarget.id}/cancel-request`, {
+      method: "DELETE",
+    });
+    setWithdrawLoading(false);
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      toast.error(j.error ?? "Не удалось отозвать заявку");
+      return;
+    }
+    toast.success("Заявка отозвана");
+    setWithdrawTarget(null);
+    router.refresh();
+  }
 
   async function onCancel() {
     if (!cancelTarget) return;
@@ -212,14 +232,106 @@ export function LicenseTable({
               value={type}
               onChange={(v) => setType(v)}
               placeholder="Все типы лицензий"
-              options={LICENSE_TYPE_FILTER_OPTIONS}
+              options={LICENSE_KIND_FILTER_OPTIONS}
             />
           </div>
         ) : null}
       </div>
 
       <div className="rounded-panel border border-hairline overflow-hidden">
-        <div className="overflow-x-auto scrollbar-clean">
+        {/* Мобильное представление: карточки вместо горизонтальной прокрутки. */}
+        <ul className="md:hidden divide-y divide-hairline">
+          {licenses.length === 0 ? (
+            <li className="px-4 py-12 text-center text-ink-muted">Лицензий по фильтру не найдено</li>
+          ) : null}
+          {licenses.map((l) => (
+            <li key={l.id} className="p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <Link
+                    href={`${basePath}/${l.id}`}
+                    className="font-display tracking-tight text-ink hover:text-accent"
+                  >
+                    {l.number}
+                  </Link>
+                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                    {l.repeatGeneration ? (
+                      <Tag tone="warning">Повторная генерация</Tag>
+                    ) : (
+                      <Tag tone={l.type === "Генерация" ? "accent" : "neutral"}>{l.type}</Tag>
+                    )}
+                    {l.issuedWithoutPayment ? <Tag tone="warning">Без оплаты</Tag> : null}
+                  </div>
+                </div>
+                <div className="flex flex-col items-end gap-1.5">
+                  <StatusTag kind="license" status={l.status} />
+                  {l.pendingCancellation ? <Tag tone="warning">Заявка на аннулирование</Tag> : null}
+                </div>
+              </div>
+              {l.product ? <div className="mt-2 text-xs text-ink-muted">{l.product}</div> : null}
+              {l.dealerComment ? (
+                <div className="mt-1 text-xs text-ink-muted">{l.dealerComment}</div>
+              ) : null}
+              {l.versionSoftware ? (
+                <div className="mt-1 text-xs text-ink-muted break-all">Версия ПО: {l.versionSoftware}</div>
+              ) : null}
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {l.licenseKey ? (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={!canDownload}
+                    icon={<Download className="h-4 w-4" />}
+                    onClick={() => onDownload(l)}
+                  >
+                    Скачать
+                  </Button>
+                ) : null}
+                {canEdit ? (
+                  <Link href={`${basePath}/${l.id}`}>
+                    <Button size="sm" variant="ghost" icon={<Pencil className="h-4 w-4" />}>
+                      Редактировать
+                    </Button>
+                  </Link>
+                ) : null}
+                {l.status === "ACTIVE" && !isAdmin && l.pendingCancellation ? (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    icon={<RotateCcw className="h-4 w-4" />}
+                    onClick={() => setWithdrawTarget(l)}
+                  >
+                    Отозвать заявку
+                  </Button>
+                ) : null}
+                {l.status === "ACTIVE" && !(!isAdmin && l.pendingCancellation) ? (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={!canCancel}
+                    icon={<XCircle className="h-4 w-4" />}
+                    onClick={() => setCancelTarget(l)}
+                  >
+                    {isAdmin ? "Аннулировать" : "Запросить аннулирование"}
+                  </Button>
+                ) : null}
+                {isAdmin ? (
+                  <Button
+                    size="sm"
+                    variant="ghostDanger"
+                    disabled={!canDelete}
+                    icon={<Trash2 className="h-4 w-4" />}
+                    onClick={() => setDeleteTarget(l)}
+                  >
+                    Удалить
+                  </Button>
+                ) : null}
+              </div>
+            </li>
+          ))}
+        </ul>
+
+        <div className="hidden md:block overflow-x-auto scrollbar-clean">
           <table className="w-full min-w-[760px] text-sm">
             <thead>
               <tr className="text-left text-[11.5px] uppercase tracking-tight text-ink-subtle">
@@ -252,8 +364,11 @@ export function LicenseTable({
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap items-center gap-1.5">
-                      <Tag tone={l.type === "Генерация" ? "accent" : "neutral"}>{l.type}</Tag>
-                      {l.repeatGeneration ? <Tag tone="warning">Повторная генерация</Tag> : null}
+                      {l.repeatGeneration ? (
+                        <Tag tone="warning">Повторная генерация</Tag>
+                      ) : (
+                        <Tag tone={l.type === "Генерация" ? "accent" : "neutral"}>{l.type}</Tag>
+                      )}
                     </div>
                     {l.product ? (
                       <div className="text-xs text-ink-muted mt-1">{l.product}</div>
@@ -316,28 +431,29 @@ export function LicenseTable({
                       <div className="flex flex-col items-stretch gap-1.5">
                         {l.status === "ACTIVE" ? (
                           (() => {
-                            // Дилеру нельзя слать вторую заявку, пока первая на
-                            // рассмотрении: иначе статус «не меняется» и заявку
-                            // можно отправлять бесконечно.
-                            const dealerBlocked = !isAdmin && Boolean(l.pendingCancellation);
-                            const disabled = !canCancel || dealerBlocked;
-                            const title = !canCancel
-                              ? "Нет права на аннулирование"
-                              : dealerBlocked
-                                ? "Заявка уже на рассмотрении"
-                                : undefined;
-                            const label = dealerBlocked
-                              ? "Заявка на рассмотрении"
-                              : isAdmin
-                                ? "Аннулировать"
-                                : "Запросить аннулирование";
+                            // Пока заявка на рассмотрении, дилер не шлёт вторую, а
+                            // может отозвать текущую (иначе статус «не меняется»).
+                            if (!isAdmin && l.pendingCancellation) {
+                              return (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="w-full justify-start"
+                                  icon={<RotateCcw className="h-4 w-4" />}
+                                  onClick={() => setWithdrawTarget(l)}
+                                >
+                                  Отозвать заявку
+                                </Button>
+                              );
+                            }
+                            const label = isAdmin ? "Аннулировать" : "Запросить аннулирование";
                             return (
                               <Button
                                 size="sm"
                                 variant="ghost"
                                 className="w-full justify-start"
-                                disabled={disabled}
-                                title={title}
+                                disabled={!canCancel}
+                                title={canCancel ? undefined : "Нет права на аннулирование"}
                                 icon={<XCircle className="h-4 w-4" />}
                                 onClick={() => setCancelTarget(l)}
                               >
@@ -399,6 +515,27 @@ export function LicenseTable({
       </Modal>
 
       <Modal
+        open={!!withdrawTarget}
+        onClose={() => setWithdrawTarget(null)}
+        title={`Отозвать заявку ${withdrawTarget?.number ?? ""}`}
+        description="Заявка на аннулирование будет снята с рассмотрения. Позже её можно подать заново."
+      >
+        <div className="mt-6 flex justify-end gap-2">
+          <Button variant="ghost" onClick={() => setWithdrawTarget(null)}>
+            Отмена
+          </Button>
+          <Button
+            variant="danger"
+            loading={withdrawLoading}
+            icon={<RotateCcw className="h-4 w-4" />}
+            onClick={onWithdraw}
+          >
+            Отозвать заявку
+          </Button>
+        </div>
+      </Modal>
+
+      <Modal
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
         title={`Удалить ${deleteTarget?.number ?? ""}`}
@@ -425,6 +562,3 @@ export function LicenseTable({
     </>
   );
 }
-
-// re-export not used here, RotateCcw is for restore page, keep import via JSX
-void RotateCcw;

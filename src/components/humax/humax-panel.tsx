@@ -99,7 +99,7 @@ export function HumaxPanel({
       setComment("");
       router.refresh();
     } catch {
-      toast.error("Ошибка запроса к сервису DRIVEMODS");
+      toast.error("Ошибка запроса к сервису");
     } finally {
       setLoading(false);
     }
@@ -112,7 +112,7 @@ export function HumaxPanel({
           <div>
             <CardTitle>Генерация пароля HUMAX</CardTitle>
             <CardDescription>
-              Введите серийный номер ШГУ HUMAX — DRIVEMODS вернёт пароль для устройства.
+              Введите серийный номер ШГУ HUMAX — API вернёт пароль для устройства.
             </CardDescription>
           </div>
         </CardHeader>

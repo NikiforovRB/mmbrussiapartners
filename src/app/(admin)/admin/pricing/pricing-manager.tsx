@@ -15,9 +15,11 @@ import {
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { MoneyInput } from "@/components/ui/money-input";
 import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Tag } from "@/components/ui/tag";
+import { Toggle } from "@/components/ui/toggle";
 import { Modal } from "@/components/ui/modal";
 import { cn, formatPhone, plural } from "@/lib/utils";
 
@@ -26,7 +28,12 @@ export type PriceItem = {
   product: string;
   bundle: string;
   region: string;
+  /** Дилерская цена (базовая). */
   price: number;
+  /** Наша цена/себестоимость (для маржи). */
+  myPrice: number | null;
+  /** Клиентская (розничная) цена — первая генерация и субдилеры. */
+  clientPrice: number | null;
 };
 
 type AdjustKind = "NONE" | "PERCENT" | "FIXED";
@@ -41,6 +48,8 @@ export type PricingDealer = {
   organization: string | null;
   adjustKind: AdjustKind;
   adjustValue: number | null;
+  priceTier: "DEALER" | "CLIENT";
+  prepaid: boolean;
   overrides: { itemId: string; price: number }[];
 };
 
@@ -174,8 +183,8 @@ function Catalog({ items, missing }: { items: PriceItem[]; missing: MissingPosit
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-ink-muted max-w-2xl">
           Цена привязана к тройке «продукт + комплектация + регион» — ровно к той, что присылает
-          DRIVEMODS. MB-S5WM FULL RUS, MB-S5WM FULL CHN и MB-S5WM ECO считаются разными товарами.
-          Если комплектации или региона у продукта нет, поле оставьте пустым.
+          сервис генерации. MB-S5WM FULL RUS, MB-S5WM FULL CHN и MB-S5WM ECO считаются разными
+          товарами. Если комплектации или региона у продукта нет, поле оставьте пустым.
         </p>
         <div className="flex items-center gap-2">
           <div className="relative">
@@ -271,12 +280,15 @@ function Catalog({ items, missing }: { items: PriceItem[]; missing: MissingPosit
                   </button>
                 </div>
               </div>
-              <table className={cn("w-full min-w-[560px] text-sm", !open && "hidden")}>
+              <div className={cn("overflow-x-auto scrollbar-clean", !open && "hidden")}>
+              <table className="w-full min-w-[680px] text-sm">
                 <thead>
                   <tr className="text-left text-[11px] uppercase tracking-tight text-ink-subtle">
                     <th className="px-4 py-2.5 font-normal">Комплектация</th>
                     <th className="px-4 py-2.5 font-normal">Регион</th>
-                    <th className="px-4 py-2.5 font-normal">Цена</th>
+                    <th className="px-4 py-2.5 font-normal">Наша</th>
+                    <th className="px-4 py-2.5 font-normal">Дилерская</th>
+                    <th className="px-4 py-2.5 font-normal">Клиентская</th>
                     <th className="px-4 py-2.5" />
                   </tr>
                 </thead>
@@ -291,7 +303,13 @@ function Catalog({ items, missing }: { items: PriceItem[]; missing: MissingPosit
                         )}
                       </td>
                       <td className="px-4 py-3 text-ink-muted">{item.region || "Без региона"}</td>
+                      <td className="px-4 py-3 text-ink-muted">
+                        {item.myPrice == null ? "—" : rub(item.myPrice)}
+                      </td>
                       <td className="px-4 py-3 font-display tracking-tight">{rub(item.price)}</td>
+                      <td className="px-4 py-3 text-ink-muted">
+                        {item.clientPrice == null ? "—" : rub(item.clientPrice)}
+                      </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-1.5">
                           <Button
@@ -316,6 +334,7 @@ function Catalog({ items, missing }: { items: PriceItem[]; missing: MissingPosit
                   ))}
                 </tbody>
               </table>
+              </div>
             </div>
             );
           })}
@@ -351,6 +370,8 @@ function ItemModal({
   const [bundle, setBundle] = React.useState("");
   const [region, setRegion] = React.useState("");
   const [price, setPrice] = React.useState("");
+  const [myPrice, setMyPrice] = React.useState("");
+  const [clientPrice, setClientPrice] = React.useState("");
   const [saving, setSaving] = React.useState(false);
 
   React.useEffect(() => {
@@ -358,7 +379,15 @@ function ItemModal({
     setBundle(source?.bundle ?? "");
     setRegion(source?.region ?? "");
     setPrice(item ? String(item.price) : "");
+    setMyPrice(item && item.myPrice != null ? String(item.myPrice) : "");
+    setClientPrice(item && item.clientPrice != null ? String(item.clientPrice) : "");
   }, [source, item]);
+
+  function optionalAmount(raw: string): number | null | "invalid" {
+    if (raw.trim() === "") return null;
+    const n = Number(raw.replace(",", "."));
+    return Number.isFinite(n) && n >= 0 ? n : "invalid";
+  }
 
   async function save() {
     const amount = Number(price.replace(",", "."));
@@ -367,14 +396,27 @@ function ItemModal({
       return;
     }
     if (!Number.isFinite(amount) || amount < 0) {
-      toast.error("Укажите цену");
+      toast.error("Укажите дилерскую цену");
+      return;
+    }
+    const my = optionalAmount(myPrice);
+    const client = optionalAmount(clientPrice);
+    if (my === "invalid" || client === "invalid") {
+      toast.error("Наша и клиентская цены указаны неверно");
       return;
     }
     setSaving(true);
     const res = await fetch(item ? `/api/pricing/items/${item.id}` : "/api/pricing/items", {
       method: item ? "PATCH" : "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ product: product.trim(), bundle, region, price: amount }),
+      body: JSON.stringify({
+        product: product.trim(),
+        bundle,
+        region,
+        price: amount,
+        myPrice: my,
+        clientPrice: client,
+      }),
     });
     setSaving(false);
     if (!res.ok) {
@@ -399,7 +441,7 @@ function ItemModal({
           value={product}
           onChange={(e) => setProduct(e.target.value)}
           placeholder="MB-S5WM"
-          hint="Ровно так, как продукт называется в DRIVEMODS"
+          hint="Ровно так, как продукт называется в сервисе генерации"
         />
         <div className="grid sm:grid-cols-2 gap-3">
           <Input
@@ -407,23 +449,39 @@ function ItemModal({
             value={bundle}
             onChange={(e) => setBundle(e.target.value)}
             placeholder="FULL"
-            hint="Пусто — DRIVEMODS не присылает комплектацию"
+            hint="Пусто — комплектация не присылается"
           />
           <Input
             label="Регион"
             value={region}
             onChange={(e) => setRegion(e.target.value)}
             placeholder="RUS"
-            hint="Пусто — DRIVEMODS не присылает регион"
+            hint="Пусто — регион не присылается"
           />
         </div>
-        <Input
-          label="Цена, ₽ *"
+        <MoneyInput
+          label="Дилерская цена, ₽ *"
           value={price}
-          inputMode="decimal"
-          onChange={(e) => setPrice(e.target.value)}
-          placeholder="10000"
+          onChange={setPrice}
+          placeholder="10 000"
+          hint="Базовая цена, по которой платит представитель"
         />
+        <div className="grid sm:grid-cols-2 gap-3">
+          <MoneyInput
+            label="Наша цена, ₽"
+            value={myPrice}
+            onChange={setMyPrice}
+            placeholder="необязательно"
+            hint="Себестоимость — для маржи, дилеру не видна"
+          />
+          <MoneyInput
+            label="Клиентская цена, ₽"
+            value={clientPrice}
+            onChange={setClientPrice}
+            placeholder="необязательно"
+            hint="Первая генерация позиции и субдилеры"
+          />
+        </div>
       </div>
       <div className="mt-6 flex justify-end gap-2">
         <Button variant="ghost" onClick={onClose}>
@@ -456,12 +514,16 @@ function DealerPrices({
 
   const [kind, setKind] = React.useState<AdjustKind>("NONE");
   const [value, setValue] = React.useState("");
+  const [tier, setTier] = React.useState<"DEALER" | "CLIENT">("DEALER");
+  const [prepaid, setPrepaid] = React.useState(false);
   const [own, setOwn] = React.useState<Record<string, string>>({});
   const [saving, setSaving] = React.useState(false);
 
   React.useEffect(() => {
     setKind(dealer?.adjustKind ?? "NONE");
     setValue(dealer?.adjustValue == null ? "" : String(dealer.adjustValue));
+    setTier(dealer?.priceTier ?? "DEALER");
+    setPrepaid(dealer?.prepaid ?? false);
     setOwn(
       Object.fromEntries(dealer?.overrides.map((o) => [o.itemId, String(o.price)]) ?? []),
     );
@@ -500,7 +562,7 @@ function DealerPrices({
     const res = await fetch(`/api/pricing/dealers/${dealer.id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ adjustKind: kind, adjustValue, overrides }),
+      body: JSON.stringify({ adjustKind: kind, adjustValue, priceTier: tier, prepaid, overrides }),
     });
     setSaving(false);
     if (!res.ok) {
@@ -541,15 +603,41 @@ function DealerPrices({
             options={ADJUST_OPTIONS}
           />
           {kind !== "NONE" ? (
-            <Input
+            <MoneyInput
               label={kind === "PERCENT" ? "Процент" : "Сумма, ₽"}
               value={value}
-              inputMode="decimal"
-              onChange={(e) => setValue(e.target.value)}
-              placeholder={kind === "PERCENT" ? "10 или -15" : "1000 или -500"}
+              onChange={setValue}
+              placeholder={kind === "PERCENT" ? "10 или -15" : "1 000 или -500"}
               hint="Отрицательное значение — скидка"
             />
           ) : null}
+          <Select
+            label="Ценовой тариф"
+            value={tier}
+            onChange={(v) => setTier(v as "DEALER" | "CLIENT")}
+            options={[
+              { value: "DEALER", label: "Дилерская цена (обычный)" },
+              { value: "CLIENT", label: "Клиентская цена (субдилер)" },
+            ]}
+          />
+        </div>
+        <div className="mt-4 grid sm:grid-cols-2 gap-3">
+          <Toggle
+            checked={prepaid}
+            onChange={setPrepaid}
+            label="Предоплата"
+            description="Генерация только после оплаты всех счетов. Для новых/недоверенных."
+          />
+          {tier === "CLIENT" ? (
+            <p className="text-xs text-ink-muted">
+              Субдилер платит по клиентской цене на всех позициях справочника.
+            </p>
+          ) : (
+            <p className="text-xs text-ink-muted">
+              Первая генерация каждой позиции идёт по клиентской цене (если она задана), далее — по
+              дилерской.
+            </p>
+          )}
         </div>
       </Card>
 
@@ -594,11 +682,10 @@ function DealerPrices({
                         {kind === "NONE" ? "—" : rub(adjusted)}
                       </td>
                       <td className="px-4 py-3 w-[180px]">
-                        <Input
+                        <MoneyInput
                           value={raw ?? ""}
-                          inputMode="decimal"
                           placeholder="по справочнику"
-                          onChange={(e) => setOwn({ ...own, [item.id]: e.target.value })}
+                          onChange={(v) => setOwn({ ...own, [item.id]: v })}
                         />
                       </td>
                       <td className="px-4 py-3">

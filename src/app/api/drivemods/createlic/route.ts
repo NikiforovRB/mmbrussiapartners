@@ -11,6 +11,7 @@ import { isLicenseType } from "@/lib/license-options";
 import { resolvePrice, positionLabel } from "@/lib/pricing";
 import { createPayment } from "@/lib/payments/service";
 import { notifyAdmins } from "@/lib/app-notifications";
+import { mergeGenerationSettings, generationBlockReason } from "@/lib/site-settings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -43,7 +44,7 @@ export const POST = route(async (req: Request) => {
   if (!isDriveModsConfigured()) {
     throw new ApiError(
       "NOT_CONFIGURED",
-      "Интеграция DRIVEMODS не настроена. Обратитесь к администратору.",
+      "Интеграция генерации не настроена. Обратитесь к администратору.",
     );
   }
 
@@ -63,6 +64,30 @@ export const POST = route(async (req: Request) => {
     session.user.isSuperAdmin ||
     hasPermission(session.user.permissions, "dealers.setLimit", session.user.isSuperAdmin);
   if (!bypassesLimit && !actor.dealerProfile) throw badRequest("Профиль не найден");
+
+  // Ограничения генерации (окно запрета, устаревшие версии кастома) действуют
+  // на представителей; администраторы, выдающие лицензию вручную, их обходят.
+  if (!bypassesLimit) {
+    const settings = await db.companySettings.findUnique({
+      where: { id: "singleton" },
+      select: { generation: true },
+    });
+    const reason = generationBlockReason(mergeGenerationSettings(settings?.generation), p.versionCustom || "");
+    if (reason) throw badRequest(reason);
+
+    // Предоплатный расчёт: у новых/недоверенных представителей не должно быть
+    // непогашенных счетов. Доверенным ставят postpaid — их это не касается.
+    if (actor.dealerProfile?.prepaid) {
+      const outstanding = await db.payment.count({
+        where: { dealerId: actor.id, status: "PENDING" },
+      });
+      if (outstanding > 0) {
+        throw badRequest(
+          "У вас есть неоплаченные счета. Оплатите их, чтобы продолжить генерацию лицензий.",
+        );
+      }
+    }
+  }
 
   const canIssueFree = hasPermission(
     session.user.permissions,

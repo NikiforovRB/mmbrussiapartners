@@ -1,10 +1,25 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { rateLimit, clientIp } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const revalidate = 60;
 
-export async function GET() {
+export async function GET(req: Request) {
+  const rl = rateLimit(`public-representatives:${clientIp(req.headers)}`, {
+    limit: 120,
+    windowMs: 60_000,
+  });
+  if (!rl.ok) {
+    return new NextResponse(JSON.stringify({ error: "Слишком много запросов" }), {
+      status: 429,
+      headers: {
+        "Content-Type": "application/json; charset=utf-8",
+        "Retry-After": String(Math.ceil(rl.retryAfterMs / 1000)),
+      },
+    });
+  }
+
   const dealers = await db.dealerProfile.findMany({
     where: {
       phoneVisibleOnSite: true,

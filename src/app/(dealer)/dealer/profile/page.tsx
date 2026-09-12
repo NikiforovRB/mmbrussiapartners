@@ -4,7 +4,9 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getUserAvatarUrl } from "@/lib/user-avatar";
 import { fioFromParts } from "@/lib/utils";
+import { mergeSupport } from "@/lib/site-settings";
 import { ProfileForm } from "./profile-form";
+import { DriveModsAccessCard } from "./drivemods-access-card";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +24,11 @@ export default async function ProfilePage() {
     lastName: user.dealerProfile.lastName,
     middleName: user.dealerProfile.middleName,
   });
-  const avatarUrl = await getUserAvatarUrl(user.id);
+  const [avatarUrl, settings] = await Promise.all([
+    getUserAvatarUrl(user.id),
+    db.companySettings.findUnique({ where: { id: "singleton" }, select: { support: true } }),
+  ]);
+  const support = mergeSupport(settings?.support);
 
   return (
     <>
@@ -31,7 +37,16 @@ export default async function ProfilePage() {
         subtitle="Ваши контактные данные и публикация телефона"
         user={{ name: fio || user.email, email: user.email, role: user.role.name }}
       />
-      <div className="mt-6">
+      <div className="mt-6 space-y-6">
+        <DriveModsAccessCard
+          access={user.dealerProfile.driveModsAccess}
+          requestedAt={
+            user.dealerProfile.driveModsRequestedAt
+              ? user.dealerProfile.driveModsRequestedAt.toISOString()
+              : null
+          }
+          requirements={support.requirements ?? ""}
+        />
         <ProfileForm
           avatarUrl={avatarUrl}
           displayName={fio || user.email}

@@ -16,15 +16,23 @@ const schema = z.object({
   from: z.string().datetime(),
   to: z.string().datetime(),
   status: z.string().nullable().optional(),
+  // Синтетический «вид» лицензии: gen (обычная) или repeat (повторная генерация).
   type: z.string().nullable().optional(),
+  // Мультивыбор представителей (только для admin scope).
+  dealerIds: z.array(z.string()).optional(),
   scope: z.enum(["dealer", "admin"]),
+  // Если true — вернуть данные для экранного просмотра (JSON), без генерации XLSX.
+  preview: z.boolean().optional(),
 });
+
+// Лимит строк экранного просмотра, чтобы не тянуть весь список в UI.
+const PREVIEW_LIMIT = 100;
 
 export const POST = route(async (req: Request) => {
   const session = await auth();
   if (!session?.user) throw unauthenticated();
 
-  const { from, to, status, type, scope } = await parseBody(req, schema);
+  const { from, to, status, type, dealerIds, scope, preview } = await parseBody(req, schema);
 
   if (
     scope === "admin" &&
@@ -37,9 +45,48 @@ export const POST = route(async (req: Request) => {
     createdAt: { gte: new Date(from), lte: new Date(to) },
     deletedAt: null,
   };
-  if (scope === "dealer") where.dealerId = session.user.id;
+  if (scope === "dealer") {
+    where.dealerId = session.user.id;
+  } else if (dealerIds && dealerIds.length > 0) {
+    where.dealerId = { in: dealerIds };
+  }
   if (status) where.status = status;
-  if (type) where.type = type;
+  if (type === "repeat") where.repeatGeneration = true;
+  else if (type === "gen") where.repeatGeneration = false;
+
+  if (preview) {
+    const [count, rows] = await Promise.all([
+      db.license.count({ where }),
+      db.license.findMany({
+        where,
+        include: { dealer: { include: { dealerProfile: true } } },
+        orderBy: { createdAt: "desc" },
+        take: PREVIEW_LIMIT,
+      }),
+    ]);
+    return NextResponse.json({
+      count,
+      limit: PREVIEW_LIMIT,
+      rows: rows.map((l) => ({
+        id: l.id,
+        number: l.number,
+        kind: l.repeatGeneration ? "Повторная генерация" : "Генерация",
+        product: l.product ?? "",
+        versionCustom: l.versionCustom ?? "",
+        status: l.status,
+        statusLabel: statusLabel("license", l.status),
+        createdAt: formatRuDate(l.createdAt),
+        dealer:
+          fioFromParts({
+            firstName: l.dealer.dealerProfile?.firstName,
+            lastName: l.dealer.dealerProfile?.lastName,
+            middleName: l.dealer.dealerProfile?.middleName,
+          }) || l.dealer.email,
+        region: l.region ?? "",
+        city: l.city ?? "",
+      })),
+    });
+  }
 
   const licenses = await db.license.findMany({
     where,
@@ -74,7 +121,7 @@ export const POST = route(async (req: Request) => {
   for (const l of licenses) {
     ws.addRow({
       number: l.number,
-      type: l.type,
+      type: l.repeatGeneration ? "Повторная генерация" : "Генерация",
       product: l.product ?? "",
       versionSoftware: l.versionSoftware ?? "",
       versionCustom: l.versionCustom ?? "",

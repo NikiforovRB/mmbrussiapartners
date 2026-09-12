@@ -66,10 +66,10 @@ export class DriveModsError extends Error {
  */
 export function describeDriveModsFailure(err: unknown): { status: number; message: string } {
   if (!(err instanceof DriveModsError)) {
-    return { status: 502, message: "Сервис лицензий DRIVEMODS недоступен. Попробуйте позже." };
+    return { status: 502, message: "Сервис лицензий недоступен. Попробуйте позже." };
   }
   if (err.status === 504) {
-    return { status: 504, message: "Сервис DRIVEMODS не ответил вовремя. Повторите попытку." };
+    return { status: 504, message: "Сервис лицензий не ответил вовремя. Повторите попытку." };
   }
   if (err.status === 503) {
     return { status: 503, message: err.message };
@@ -77,7 +77,7 @@ export function describeDriveModsFailure(err: unknown): { status: number; messag
   if (err.status === 401 || err.status === 403) {
     return {
       status: 502,
-      message: "Портал не смог авторизоваться в DRIVEMODS. Сообщите администратору.",
+      message: "Портал не смог авторизоваться в сервисе лицензий. Сообщите администратору.",
     };
   }
   // По документации 400 — это нехватка обязательных параметров или сбой
@@ -86,7 +86,7 @@ export function describeDriveModsFailure(err: unknown): { status: number; messag
     return {
       status: 422,
       message:
-        "DRIVEMODS отклонил запрос: не хватает обязательных параметров или сервис не смог " +
+        "Сервис отклонил запрос: не хватает обязательных параметров или не смог " +
         "обратиться к личному кабинету. Проверьте выбранный продукт и комментарий дилера, " +
         "затем повторите попытку.",
     };
@@ -95,7 +95,7 @@ export function describeDriveModsFailure(err: unknown): { status: number; messag
   return {
     status: 502,
     message:
-      "DRIVEMODS не смог выдать лицензию по этому файлу device_id.bin. Убедитесь, что это " +
+      "Не удалось выдать лицензию по этому файлу device_id.bin. Убедитесь, что это " +
       "оригинальный файл, выгруженный из ШГУ и не изменённый после выгрузки, и что для " +
       "устройства доступна лицензия. Если файл верный — генератор сейчас недоступен, " +
       "попробуйте позже.",
@@ -149,8 +149,8 @@ async function post(path: string, body: unknown): Promise<Response> {
     const timedOut = err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError");
     throw new DriveModsError(
       timedOut
-        ? `DRIVEMODS не ответил за ${Math.round(REQUEST_TIMEOUT_MS / 1000)} с`
-        : "Не удалось связаться с DRIVEMODS",
+        ? `Сервис лицензий не ответил за ${Math.round(REQUEST_TIMEOUT_MS / 1000)} с`
+        : "Не удалось связаться с сервисом лицензий",
       timedOut ? 504 : 503,
       err instanceof Error ? err.message : null,
     );
@@ -159,7 +159,7 @@ async function post(path: string, body: unknown): Promise<Response> {
 
 async function login(): Promise<string> {
   if (!isDriveModsConfigured()) {
-    throw new DriveModsError("Интеграция DRIVEMODS не настроена (нет учётных данных мастер-аккаунта).", 503);
+    throw new DriveModsError("Интеграция генерации лицензий не настроена (нет учётных данных мастер-аккаунта).", 503);
   }
   const res = await post("/login", {
     username: USERNAME,
@@ -259,7 +259,7 @@ export async function createLic(params: CreateLicParams): Promise<CreateLicRespo
     !params.deviceId && "идентификатор устройства",
   ].filter(Boolean);
   if (missing.length > 0) {
-    throw new DriveModsError(`DRIVEMODS требует заполнить: ${missing.join(", ")}`, 400);
+    throw new DriveModsError(`Требуется заполнить: ${missing.join(", ")}`, 400);
   }
 
   // bundle и region документация велит передавать «если не null»: у части
@@ -276,7 +276,7 @@ export async function createLic(params: CreateLicParams): Promise<CreateLicRespo
     device_id: params.deviceId,
   });
   if (!data.lic_file) {
-    throw new DriveModsError("DRIVEMODS не вернул файл лицензии", 502);
+    throw new DriveModsError("Сервис не вернул файл лицензии", 502);
   }
   return {
     lic_file: data.lic_file as string,
@@ -307,7 +307,7 @@ export async function huPass(huSerial: string, comment?: string): Promise<HuPass
   });
   const huPassValue = data.huPass as string | undefined;
   if (!huPassValue) {
-    throw new DriveModsError("DRIVEMODS не вернул пароль для ШГУ HUMAX", 502);
+    throw new DriveModsError("Сервис не вернул пароль для ШГУ HUMAX", 502);
   }
   return {
     huSerial: (data.huSerial as string) || serial,

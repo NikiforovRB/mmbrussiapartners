@@ -14,6 +14,8 @@ const schema = z.object({
   bundle: z.string().max(60).optional(),
   region: z.string().max(60).optional(),
   price: z.number().nonnegative("Цена не может быть отрицательной"),
+  myPrice: z.number().nonnegative().nullable().optional(),
+  clientPrice: z.number().nonnegative().nullable().optional(),
 });
 
 export const POST = route(async (req: Request) => {
@@ -36,7 +38,14 @@ export const POST = route(async (req: Request) => {
   if (exists) throw badRequest("Такая позиция уже есть в справочнике");
 
   const item = await db.priceListItem.create({
-    data: { product, bundle, region, price: data.price },
+    data: {
+      product,
+      bundle,
+      region,
+      price: data.price,
+      myPrice: data.myPrice ?? null,
+      clientPrice: data.clientPrice ?? null,
+    },
   });
 
   await recordAdminAction({

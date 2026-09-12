@@ -8,7 +8,6 @@ import { fioFromParts } from "@/lib/utils";
 import { LicenseTable } from "@/components/licenses/license-table";
 import { LICENSE_LIST_SELECT, toLicenseRow } from "@/lib/license-list";
 import { Pagination, parsePage } from "@/components/cabinet/pagination";
-import { LICENSE_TYPES } from "@/lib/license-options";
 
 export const dynamic = "force-dynamic";
 
@@ -89,9 +88,9 @@ function buildWhere(
   if (sp.status && ["ACTIVE", "EXPIRED", "CANCELLED", "REVOKED", "DRAFT"].includes(sp.status)) {
     where.status = sp.status;
   }
-  if (sp.type && (LICENSE_TYPES as readonly string[]).includes(sp.type)) {
-    where.type = sp.type;
-  }
+  // Тип фильтра — синтетический: «Повторная генерация» это флаг, а не поле type.
+  if (sp.type === "repeat") where.repeatGeneration = true;
+  else if (sp.type === "gen") where.repeatGeneration = false;
   if (sp.q && sp.q.trim()) {
     const q = sp.q.trim();
     Object.assign(where, {

@@ -22,6 +22,8 @@ export type CheckoutInput = {
   email?: string | null;
   phone?: string | null;
   returnUrl: string;
+  /** Адрес для callback АТОЛ Pay о смене статуса оплаты (если задан секрет). */
+  notifyUrl?: string | null;
 };
 
 export type CheckoutResult = {
@@ -54,6 +56,26 @@ const manualProvider: PaymentProvider = {
   },
 };
 
+/** Достаёт человекочитаемый текст ошибки из ответа АТОЛ Pay. */
+function readAtolPayError(data: Record<string, unknown>): string | null {
+  const err = data.error;
+  if (err && typeof err === "object") {
+    const e = err as Record<string, unknown>;
+    if (typeof e.message === "string") return e.message;
+    if (typeof e.text === "string") return e.text;
+  }
+  if (typeof data.errorMessage === "string") return data.errorMessage;
+  if (typeof data.message === "string") return data.message;
+  return null;
+}
+
+/**
+ * АТОЛ Pay Ecom (интернет-эквайринг). Регистрируем платёж методом
+ * POST /v1/ecom/payments и перенаправляем дилера на paymentUrls.main.
+ * Токен из ЛК АТОЛ Pay (https://lk.atolpay.ru/) передаётся в заголовке
+ * Authorization без префикса Bearer. Сумма — в копейках.
+ * Документация: https://new-api-mobile.atolpay.ru/v1/ecom/documentation/
+ */
 const atolPayProvider: PaymentProvider = {
   id: "atol_pay",
   title: "АТОЛ Pay",
@@ -63,38 +85,41 @@ const atolPayProvider: PaymentProvider = {
     const token = process.env.ATOL_PAY_API_TOKEN;
     if (!token) {
       throw new Error(
-        "АТОЛ Pay не настроен: получите API-токен в личном кабинете АТОЛ Pay и задайте ATOL_PAY_API_TOKEN.",
+        "АТОЛ Pay не настроен: получите токен в личном кабинете АТОЛ Pay и задайте ATOL_PAY_API_TOKEN.",
       );
     }
-    const base = (process.env.ATOL_PAY_BASE_URL ?? "https://api.pay.atol.ru").replace(/\/+$/, "");
-    const res = await fetch(`${base}/orders`, {
+    const base = (process.env.ATOL_PAY_BASE_URL ?? "https://new-api-mobile.atolpay.ru/v1/ecom").replace(
+      /\/+$/,
+      "",
+    );
+    const res = await fetch(`${base}/payments`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
+        Authorization: token,
       },
       body: JSON.stringify({
-        order_id: input.paymentId,
-        amount: input.amount,
-        currency: "RUB",
-        description: input.description,
-        customer: { email: input.email ?? undefined, phone: input.phone ?? undefined },
-        success_url: input.returnUrl,
-        fail_url: input.returnUrl,
+        amount: Math.round(input.amount * 100), // сумма в копейках
+        orderId: input.paymentId,
+        sessionType: "oneStep",
+        additionalProps: {
+          returnUrl: input.returnUrl,
+          ...(input.notifyUrl ? { notificationUrl: input.notifyUrl } : {}),
+        },
       }),
       cache: "no-store",
     });
     const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-    const payUrl = typeof data.payment_url === "string" ? data.payment_url : "";
-    if (!res.ok || !payUrl) {
-      throw new Error(
-        typeof data.message === "string"
-          ? data.message
-          : `АТОЛ Pay не вернул ссылку на оплату (${res.status})`,
-      );
+    const payload = (data.data && typeof data.data === "object" ? data.data : {}) as Record<string, unknown>;
+    const urls = (payload.paymentUrls && typeof payload.paymentUrls === "object"
+      ? payload.paymentUrls
+      : {}) as Record<string, unknown>;
+    const payUrl = typeof urls.main === "string" ? urls.main : "";
+    if (!res.ok || data.status !== "success" || !payUrl) {
+      throw new Error(readAtolPayError(data) ?? `АТОЛ Pay не вернул ссылку на оплату (${res.status})`);
     }
     return {
-      externalId: typeof data.id === "string" ? data.id : input.paymentId,
+      externalId: typeof payload.orderId === "string" ? payload.orderId : input.paymentId,
       payUrl,
       requiresManualConfirmation: false,
     };

@@ -38,6 +38,8 @@ export default async function AdminPricingPage({
             organization: true,
             priceAdjustKind: true,
             priceAdjustValue: true,
+            priceTier: true,
+            prepaid: true,
           },
         },
         prices: { select: { itemId: true, price: true } },
@@ -51,6 +53,8 @@ export default async function AdminPricingPage({
     bundle: r.bundle,
     region: r.region,
     price: Number(r.price),
+    myPrice: r.myPrice == null ? null : Number(r.myPrice),
+    clientPrice: r.clientPrice == null ? null : Number(r.clientPrice),
   }));
 
   // Тройки, по которым лицензии уже выдавались, но цены в справочнике нет:
@@ -97,6 +101,10 @@ export default async function AdminPricingPage({
               d.dealerProfile?.priceAdjustValue == null
                 ? null
                 : Number(d.dealerProfile.priceAdjustValue),
+            priceTier: (d.dealerProfile?.priceTier === "CLIENT" ? "CLIENT" : "DEALER") as
+              | "DEALER"
+              | "CLIENT",
+            prepaid: d.dealerProfile?.prepaid ?? false,
             overrides: d.prices.map((p) => ({ itemId: p.itemId, price: Number(p.price) })),
           }))}
         />

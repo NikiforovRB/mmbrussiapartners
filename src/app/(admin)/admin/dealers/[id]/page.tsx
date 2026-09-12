@@ -4,6 +4,7 @@ import { Tags } from "lucide-react";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { hasPermission } from "@/lib/permissions";
+import { getDownloadUrl } from "@/lib/s3";
 import { Topbar } from "@/components/cabinet/topbar";
 import { Button } from "@/components/ui/button";
 import { fioFromParts } from "@/lib/utils";
@@ -36,6 +37,10 @@ export default async function AdminDealerPage({ params }: { params: Promise<{ id
     Boolean(dealer.dealerProfile) &&
     hasPermission(session.user.permissions, "pricing.manage", session.user.isSuperAdmin);
 
+  const avatarUrl = dealer.dealerProfile?.avatarKey
+    ? await getDownloadUrl(dealer.dealerProfile.avatarKey, 3600)
+    : null;
+
   return (
     <>
       <Topbar
@@ -57,7 +62,7 @@ export default async function AdminDealerPage({ params }: { params: Promise<{ id
         }
       />
       <div className="mt-6">
-        <DealerEditor dealer={JSON.parse(JSON.stringify(dealer))} />
+        <DealerEditor dealer={JSON.parse(JSON.stringify(dealer))} avatarUrl={avatarUrl} />
       </div>
     </>
   );

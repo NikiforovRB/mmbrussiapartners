@@ -37,6 +37,8 @@ type LicItem = {
   price: number;
   /** Цена нашлась в справочнике, а не взята из запасной настройки. */
   priced: boolean;
+  /** Первая генерация этой позиции идёт по клиентской цене. */
+  firstAtClientPrice?: boolean;
 };
 
 type LicInfo = {
@@ -270,8 +272,7 @@ export function LicenseStepper({
                   </div>
                 </div>
                 <p className="text-sm text-ink-muted mb-5">
-                  Файл создаётся ШГУ автоматически. Мы отправим его в сервис
-                  DRIVEMODS и покажем доступные продукты.
+                  Файл создаётся ШГУ автоматически.
                 </p>
                 <DropZone file={file} onChange={setFile} />
                 <div className="mt-6 flex justify-end gap-2">
@@ -318,7 +319,7 @@ export function LicenseStepper({
                       <Tag tone="success">Новая генерация</Tag>
                     )}
                     {info.recoverable ? (
-                      <Tag tone="muted">Лицензия уже есть в DRIVEMODS</Tag>
+                      <Tag tone="muted">Лицензия уже есть</Tag>
                     ) : null}
                   </div>
                   {info.previous ? (
@@ -330,7 +331,7 @@ export function LicenseStepper({
                   ) : null}
                   {info.firstGeneratedAt || info.lastGeneratedAt ? (
                     <p className="mt-1 text-xs text-ink-muted">
-                      Данные DRIVEMODS по этому ШГУ:
+                      Данные по этому ШГУ:
                       {info.firstGeneratedAt
                         ? ` первая генерация ${formatRuDate(info.firstGeneratedAt)}`
                         : ""}
@@ -422,8 +423,11 @@ export function LicenseStepper({
                     label="Тип лицензии"
                     value={
                       <span className="flex flex-wrap items-center gap-1.5">
-                        <Tag tone="accent">{LICENSE_TYPE_GENERATION}</Tag>
-                        {info.repeat ? <Tag tone="warning">Повторная генерация</Tag> : null}
+                        {info.repeat ? (
+                          <Tag tone="warning">Повторная генерация</Tag>
+                        ) : (
+                          <Tag tone="accent">{LICENSE_TYPE_GENERATION}</Tag>
+                        )}
                       </span>
                     }
                   />
@@ -431,9 +435,16 @@ export function LicenseStepper({
                   <Row
                     label="Комплектация"
                     value={
-                      selectedItem
-                        ? `${bundleLabel(selectedItem)} · ${formatPrice(selectedItem.price)}`
-                        : "—"
+                      selectedItem ? (
+                        <span className="flex flex-wrap items-center gap-1.5">
+                          <span>{`${bundleLabel(selectedItem)} · ${formatPrice(selectedItem.price)}`}</span>
+                          {selectedItem.firstAtClientPrice ? (
+                            <Tag tone="accent">Первая — по клиентской цене</Tag>
+                          ) : null}
+                        </span>
+                      ) : (
+                        "—"
+                      )
                     }
                   />
                   <Row label="Версия ПО" value={info.versionSoftware || "—"} />

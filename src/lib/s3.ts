@@ -29,6 +29,8 @@ export const S3_FOLDERS = {
   avatars: `${S3_PREFIX}avatars/`,
   exports: `${S3_PREFIX}exports/`,
   publicSnapshots: `${S3_PREFIX}public/`,
+  knowledge: `${S3_PREFIX}knowledge/`,
+  support: `${S3_PREFIX}support/`,
 } as const;
 
 export type S3Folder = keyof typeof S3_FOLDERS;
