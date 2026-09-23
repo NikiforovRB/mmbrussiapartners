@@ -31,6 +31,8 @@ const schema = z.object({
   versionCustom: z.string().optional().or(z.literal("")),
   dealerComment: z.string().optional().or(z.literal("")),
   issuedWithoutPayment: z.boolean().optional(),
+  /** Email получателя чека (тег 1008). По умолчанию — почта представителя. */
+  receiptEmail: z.string().email().optional().or(z.literal("")),
   /** Признак прошлой выдачи из ответа /licinfo. */
   recoverable: z.boolean().optional(),
   /** Дата прошлой генерации по данным DRIVEMODS (ISO) — для уведомления. */
@@ -237,6 +239,8 @@ export const POST = route(async (req: Request) => {
           description: `Лицензия ${license.number} · ${p.product}`,
           email: actor.email,
           phone: actor.dealerProfile?.phone,
+          // Чек уйдёт на явно указанный email, иначе — на почту представителя.
+          receiptEmail: (p.receiptEmail && p.receiptEmail.trim()) || actor.email,
         });
         payment = { id: created.id, amount: Number(created.amount), payUrl: created.payUrl };
         await notifyAdmins(["payments.manage"], {

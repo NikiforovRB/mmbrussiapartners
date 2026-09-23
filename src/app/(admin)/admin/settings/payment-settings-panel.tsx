@@ -1,5 +1,5 @@
 import * as React from "react";
-import { CreditCard, ReceiptText, ShieldCheck, Info } from "lucide-react";
+import { CreditCard, ReceiptText, ShieldCheck, Info, Mail } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Tag } from "@/components/ui/tag";
 import type { PaymentSettingsSummary } from "@/lib/payments/summary";
@@ -28,7 +28,7 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 export function PaymentSettingsPanel({ summary }: { summary: PaymentSettingsSummary }) {
-  const { acquiring, fiscalization, pricing } = summary;
+  const { acquiring, fiscalization, receiptEmail, pricing } = summary;
   return (
     <div className="grid lg:grid-cols-2 gap-5">
       <Card>
@@ -80,8 +80,10 @@ export function PaymentSettingsPanel({ summary }: { summary: PaymentSettingsSumm
           }
         />
         <Row label="Протокол" value={fiscalization.protocol} />
+        <Row label="Наименование услуги в чеке" value={fiscalization.serviceLabel} />
+        <Row label="Способ расчёта" value={fiscalization.paymentMethod} />
         <Row label="ИНН компании" value={fiscalization.company.inn || "—"} />
-        <Row label="Email для чеков" value={fiscalization.company.email || "—"} />
+        <Row label="Email компании (ОФД)" value={fiscalization.company.email || "—"} />
         <Row
           label="Система налогообложения"
           value={SNO_TITLES[fiscalization.company.sno] ?? fiscalization.company.sno}
@@ -90,7 +92,7 @@ export function PaymentSettingsPanel({ summary }: { summary: PaymentSettingsSumm
         <Row label="Предмет расчёта" value={fiscalization.company.paymentObject} />
         <Row label="Адрес расчётов" value={fiscalization.company.paymentAddress || "—"} />
         <Row
-          label="Секрет вебхука"
+          label="Секрет вебхука (авто-чек)"
           value={fiscalization.webhookConfigured ? <Tag tone="success">задан</Tag> : <Tag tone="warning">не задан</Tag>}
         />
         {fiscalization.missingEnv.length > 0 ? (
@@ -98,6 +100,29 @@ export function PaymentSettingsPanel({ summary }: { summary: PaymentSettingsSumm
             Не заданы обязательные параметры: {fiscalization.missingEnv.join(", ")}.
           </p>
         ) : null}
+      </Card>
+
+      <Card>
+        <div className="flex items-center gap-2 mb-4">
+          <Mail className="h-5 w-5 text-accent" />
+          <div className="font-display text-lg tracking-tight">Отправка чека дилеру (почта)</div>
+        </div>
+        <Row
+          label="SMTP настроен"
+          value={
+            receiptEmail.smtpConfigured ? (
+              <Tag tone="success">да</Tag>
+            ) : (
+              <Tag tone="warning">нет</Tag>
+            )
+          }
+        />
+        <Row label="Отправитель (From)" value={receiptEmail.from} />
+        <p className="mt-3 text-xs text-ink-subtle">
+          Чек об оплате уходит на Email, указанный при выставлении счёта (обязательное поле в мастере
+          генерации), и дублируется оператором фискальных данных на тот же адрес. Параметры SMTP
+          задаются в файле окружения на сервере.
+        </p>
       </Card>
 
       <Card>

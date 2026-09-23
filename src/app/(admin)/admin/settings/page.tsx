@@ -1,11 +1,17 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { mergeHomepageContent } from "@/lib/homepage-content";
-import { mergeAnnouncement, mergeSupport, mergeGenerationSettings } from "@/lib/site-settings";
+import {
+  mergeAnnouncement,
+  mergeSupport,
+  mergeGenerationSettings,
+  mergePaymentSettings,
+} from "@/lib/site-settings";
 import { getPaymentSettingsSummary } from "@/lib/payments/summary";
 import { Topbar } from "@/components/cabinet/topbar";
 import { SettingsTabs } from "./settings-tabs";
 import { PaymentSettingsPanel } from "./payment-settings-panel";
+import { PaymentSettingsForm } from "./payment-settings-form";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +41,14 @@ export default async function AdminSettingsPage() {
           announcement={mergeAnnouncement(settings?.announcement)}
           support={mergeSupport(settings?.support)}
           generation={mergeGenerationSettings(settings?.generation)}
-          payment={<PaymentSettingsPanel summary={getPaymentSettingsSummary()} />}
+          payment={
+            <div className="space-y-6">
+              <PaymentSettingsForm initial={mergePaymentSettings(settings?.payment)} />
+              <PaymentSettingsPanel
+                summary={getPaymentSettingsSummary(mergePaymentSettings(settings?.payment))}
+              />
+            </div>
+          }
         />
       </div>
     </>

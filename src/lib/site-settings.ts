@@ -140,6 +140,68 @@ export function generationBlockReason(
   return null;
 }
 
+// ── Онлайн-оплата ────────────────────────────────────────────────────────────
+/**
+ * Наименование услуги в чеке (тег 1030), ставка НДС и признак способа расчёта.
+ * Секреты кассы/эквайринга здесь НЕ хранятся — они в .env.
+ */
+export const PAYMENT_VAT_OPTIONS = [
+  { value: "none", label: "Без НДС" },
+  { value: "vat0", label: "НДС 0%" },
+  { value: "vat5", label: "НДС 5%" },
+  { value: "vat7", label: "НДС 7%" },
+  { value: "vat10", label: "НДС 10%" },
+  { value: "vat20", label: "НДС 20%" },
+] as const;
+
+export const PAYMENT_METHOD_OPTIONS = [
+  { value: "full_payment", label: "Полный расчёт (полная оплата)" },
+  { value: "full_prepayment", label: "Полная предоплата" },
+  { value: "prepayment", label: "Частичная предоплата" },
+  { value: "advance", label: "Аванс" },
+] as const;
+
+export type PaymentVatType = (typeof PAYMENT_VAT_OPTIONS)[number]["value"];
+export type PaymentMethodType = (typeof PAYMENT_METHOD_OPTIONS)[number]["value"];
+
+const VAT_VALUES = PAYMENT_VAT_OPTIONS.map((o) => o.value) as [PaymentVatType, ...PaymentVatType[]];
+const METHOD_VALUES = PAYMENT_METHOD_OPTIONS.map((o) => o.value) as [
+  PaymentMethodType,
+  ...PaymentMethodType[],
+];
+
+export const paymentSettingsSchema = z.object({
+  /** Наименование услуги в фискальном чеке (тег 1030). */
+  serviceLabel: z.string().min(1, "Укажите наименование услуги").max(200),
+  /** Ставка НДС (тег 1199). */
+  vatType: z.enum(VAT_VALUES),
+  /** Признак способа расчёта (тег 1214). */
+  paymentMethod: z.enum(METHOD_VALUES),
+});
+export type PaymentSettings = z.infer<typeof paymentSettingsSchema>;
+
+export const DEFAULT_PAYMENT_SETTINGS: PaymentSettings = {
+  serviceLabel: "Услуга по модификации программного обеспечения",
+  vatType: "vat5",
+  paymentMethod: "full_payment",
+};
+
+export function mergePaymentSettings(raw: unknown): PaymentSettings {
+  if (!raw || typeof raw !== "object") return { ...DEFAULT_PAYMENT_SETTINGS };
+  const d = raw as Partial<PaymentSettings>;
+  const vatType = VAT_VALUES.includes(d.vatType as PaymentVatType)
+    ? (d.vatType as PaymentVatType)
+    : DEFAULT_PAYMENT_SETTINGS.vatType;
+  const paymentMethod = METHOD_VALUES.includes(d.paymentMethod as PaymentMethodType)
+    ? (d.paymentMethod as PaymentMethodType)
+    : DEFAULT_PAYMENT_SETTINGS.paymentMethod;
+  const serviceLabel =
+    typeof d.serviceLabel === "string" && d.serviceLabel.trim()
+      ? d.serviceLabel.trim().slice(0, 200)
+      : DEFAULT_PAYMENT_SETTINGS.serviceLabel;
+  return { serviceLabel, vatType, paymentMethod };
+}
+
 export function mergeSupport(raw: unknown): SupportSettings {
   if (!raw || typeof raw !== "object") return { ...DEFAULT_SUPPORT, channels: [] };
   const d = raw as Partial<SupportSettings>;

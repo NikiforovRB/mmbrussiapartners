@@ -89,7 +89,7 @@ export default async function DealerPaymentPage({
                     Переведите сумму по реквизитам MMB RUSSIA, указав в назначении платежа номер счёта{" "}
                     <span className="text-ink">{payment.id.slice(-8).toUpperCase()}</span>. После
                     поступления средств администратор подтвердит оплату, и фискальный чек придёт на{" "}
-                    <span className="text-ink">{user.email}</span>.
+                    <span className="text-ink">{payment.receiptEmail || user.email}</span>.
                   </p>
                   {company ? (
                     <div className="mt-3 text-xs text-ink-muted space-y-0.5">

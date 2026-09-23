@@ -98,6 +98,7 @@ const atolPayProvider: PaymentProvider = {
         "Content-Type": "application/json",
         Authorization: token,
       },
+      signal: AbortSignal.timeout(Number(process.env.ATOL_PAY_TIMEOUT_MS ?? 20_000)),
       body: JSON.stringify({
         amount: Math.round(input.amount * 100), // сумма в копейках
         orderId: input.paymentId,

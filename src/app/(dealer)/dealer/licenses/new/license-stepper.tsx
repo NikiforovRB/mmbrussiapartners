@@ -73,16 +73,22 @@ async function fileToBase64(file: File): Promise<string> {
   return btoa(binary);
 }
 
+/** Простая проверка формата email для обязательного поля чека. */
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export function LicenseStepper({
   limit,
   used,
   context = "dealer",
   dealerName = "",
+  defaultEmail = "",
 }: {
   limit: number;
   used: number;
   context?: "dealer" | "admin";
   dealerName?: string;
+  /** Почта по умолчанию для поля «Email для чека» (обязательное). */
+  defaultEmail?: string;
 }) {
   const router = useRouter();
   const { can } = usePermissions();
@@ -100,6 +106,7 @@ export function LicenseStepper({
 
   const [productIndex, setProductIndex] = React.useState<string>("");
   const [dealerComment, setDealerComment] = React.useState<string>(dealerName);
+  const [receiptEmail, setReceiptEmail] = React.useState<string>(defaultEmail);
   const [withoutPayment, setWithoutPayment] = React.useState<boolean>(false);
 
   const [submitting, setSubmitting] = React.useState(false);
@@ -171,6 +178,14 @@ export function LicenseStepper({
 
   async function submit() {
     if (!selectedItem || !deviceBase64 || !info) return;
+    const email = receiptEmail.trim();
+    // Email обязателен, когда будет выставлен счёт (чек уйдёт на этот адрес).
+    // При выдаче без оплаты (право админа) чек не пробивается — email не нужен.
+    const needsEmail = !(canIssueFree && withoutPayment);
+    if (needsEmail && !EMAIL_RE.test(email)) {
+      toast.error("Укажите корректный Email — на него придёт чек об оплате");
+      return;
+    }
     setSubmitting(true);
     const res = await fetch("/api/drivemods/createlic", {
       method: "POST",
@@ -190,6 +205,7 @@ export function LicenseStepper({
         recoverable: info.recoverable,
         // Дата прошлой генерации из DRIVEMODS — для уведомления о повторной выдаче.
         previousGeneratedAt: info.lastGeneratedAt ?? info.firstGeneratedAt ?? null,
+        ...(EMAIL_RE.test(email) ? { receiptEmail: email } : {}),
         ...(canIssueFree ? { issuedWithoutPayment: withoutPayment } : {}),
       }),
     });
@@ -470,6 +486,18 @@ export function LicenseStepper({
                   />
                 </div>
 
+                <div className="divider my-5" />
+                <div className="max-w-md">
+                  <Input
+                    label="Email для чека"
+                    type="email"
+                    value={receiptEmail}
+                    onChange={(e) => setReceiptEmail(e.target.value)}
+                    placeholder="dealer@example.com"
+                    hint="Обязательное поле. На этот адрес придёт чек об оплате."
+                  />
+                </div>
+
                 {canIssueFree ? (
                   <>
                     <div className="divider my-5" />
@@ -561,8 +589,10 @@ export function LicenseStepper({
                         </div>
                       </div>
                       <p className="mt-1 text-sm text-ink-muted">
-                        К оплате {result.payment.amount.toLocaleString("ru-RU")}{" "}
-                        ₽. Фискальный чек придёт после подтверждения оплаты.
+                        К оплате {result.payment.amount.toLocaleString("ru-RU")} ₽.
+                        {receiptEmail.trim()
+                          ? ` Фискальный чек придёт на ${receiptEmail.trim()} после оплаты.`
+                          : " Фискальный чек придёт после оплаты."}
                       </p>
                     </div>
                     <a
