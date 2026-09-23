@@ -1,6 +1,18 @@
 import "server-only";
+import {
+  PAYMENT_METHOD_OPTIONS,
+  PAYMENT_VAT_OPTIONS,
+  type PaymentSettings,
+} from "@/lib/site-settings";
 import { isAtolConfigured, atolMissingEnv } from "./atol";
 import { defaultLicensePrice } from "./provider";
+
+function vatLabel(value: string): string {
+  return PAYMENT_VAT_OPTIONS.find((o) => o.value === value)?.label ?? value;
+}
+function methodLabel(value: string): string {
+  return PAYMENT_METHOD_OPTIONS.find((o) => o.value === value)?.label ?? value;
+}
 
 /**
  * Безопасная сводка настроек онлайн-оплаты для админки: показывает, что и как
@@ -18,6 +30,10 @@ export type PaymentSettingsSummary = {
     missingEnv: string[];
     protocol: "v4 (ФФД 1.05)" | "v5 (ФФД 1.2)";
     baseUrl: string;
+    /** Наименование услуги в чеке (тег 1030) — из настроек оплаты. */
+    serviceLabel: string;
+    /** Способ расчёта (тег 1214) — из настроек оплаты. */
+    paymentMethod: string;
     company: {
       inn: string;
       email: string;
@@ -27,6 +43,11 @@ export type PaymentSettingsSummary = {
       paymentAddress: string;
     };
     webhookConfigured: boolean;
+  };
+  /** Отправка чека дилеру по почте (SMTP). */
+  receiptEmail: {
+    smtpConfigured: boolean;
+    from: string;
   };
   pricing: {
     defaultLicensePrice: number;
@@ -49,7 +70,7 @@ function parseBundlePrices(raw: string | undefined): Record<string, number> {
   }
 }
 
-export function getPaymentSettingsSummary(): PaymentSettingsSummary {
+export function getPaymentSettingsSummary(payment: PaymentSettings): PaymentSettingsSummary {
   const configuredProvider = (process.env.PAYMENT_PROVIDER ?? "manual").trim();
   const atolPayConfigured = Boolean(process.env.ATOL_PAY_API_TOKEN);
   const activeProvider =
@@ -69,16 +90,22 @@ export function getPaymentSettingsSummary(): PaymentSettingsSummary {
       missingEnv: atolMissingEnv(),
       protocol: isV5 ? "v5 (ФФД 1.2)" : "v4 (ФФД 1.05)",
       baseUrl,
+      serviceLabel: payment.serviceLabel,
+      paymentMethod: methodLabel(payment.paymentMethod),
       company: {
         inn: process.env.ATOL_COMPANY_INN ?? "",
         email: process.env.ATOL_COMPANY_EMAIL ?? "",
         sno: process.env.ATOL_COMPANY_SNO ?? "usn_income",
-        vatType: process.env.ATOL_VAT_TYPE || "none",
+        vatType: vatLabel(payment.vatType),
         paymentObject: process.env.ATOL_PAYMENT_OBJECT ?? (isV5 ? "4" : "service"),
         paymentAddress:
           process.env.ATOL_COMPANY_PAYMENT_ADDRESS ?? process.env.PUBLIC_SITE_ORIGIN ?? "",
       },
       webhookConfigured: Boolean(process.env.ATOL_WEBHOOK_SECRET),
+    },
+    receiptEmail: {
+      smtpConfigured: Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS),
+      from: process.env.SMTP_FROM ?? "MMB RUSSIA <noreply@mmbrussia.ru>",
     },
     pricing: {
       defaultLicensePrice: defaultLicensePrice(),

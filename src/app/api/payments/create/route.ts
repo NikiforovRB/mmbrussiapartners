@@ -16,6 +16,8 @@ const schema = z.object({
   amount: z.number().positive().max(10_000_000).optional(),
   description: z.string().max(200).optional(),
   licenseId: z.string().optional(),
+  /** Email получателя чека (тег 1008). По умолчанию — почта представителя. */
+  receiptEmail: z.string().email().optional().or(z.literal("")),
 });
 
 export const POST = route(async (req: Request) => {
@@ -80,6 +82,7 @@ export const POST = route(async (req: Request) => {
       licenseId,
       email: session.user.email,
       phone: profile?.phone ?? null,
+      receiptEmail: (body.receiptEmail && body.receiptEmail.trim()) || session.user.email,
     });
   } catch (e) {
     throw new ApiError("UPSTREAM", (e as Error).message);

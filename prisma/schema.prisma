@@ -288,6 +288,10 @@ model Payment {
   payUrl         String?
   providerPayload Json?
   description    String?
+  /// Email получателя фискального чека (тег 1008). Задаётся при выставлении
+  /// счёта; по умолчанию — почта представителя. Именно на него ОФД и портал
+  /// отправляют чек об оплате.
+  receiptEmail   String?
   paidAt         DateTime?
   confirmedById  String?
 
@@ -543,6 +547,10 @@ model CompanySettings {
   support      Json?
   /// Ограничения генерации: окно запрета (blackout) и список устаревших версий кастома.
   generation   Json?
+  /// Настройки онлайн-оплаты, редактируемые из админки (не секреты):
+  /// { serviceLabel, vatType, paymentMethod }. Секреты (токены, логины кассы)
+  /// остаются в .env.
+  payment      Json?
   updatedAt    DateTime @updatedAt
 }
 

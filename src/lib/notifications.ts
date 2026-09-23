@@ -172,6 +172,44 @@ export async function notifyDealerCancellationReviewed(params: {
   await sendEmail({ to: params.dealerEmail, subject, html, userId: params.userId ?? null });
 }
 
+/**
+ * Письмо представителю с фискальным чеком после успешной оплаты.
+ * Дублирует экземпляр ОФД (тот уходит на email, указанный в самом чеке) и
+ * даёт удобную ссылку прямо в кабинете.
+ */
+export async function notifyDealerReceipt(params: {
+  to: string;
+  amount: number;
+  licenseNumber?: string | null;
+  receiptUrl?: string | null;
+  fiscalDocNumber?: string | null;
+  userId?: string | null;
+}) {
+  const amountLabel = `${params.amount.toLocaleString("ru-RU")} ₽`;
+  const subject = params.licenseNumber
+    ? `Чек об оплате · лицензия ${params.licenseNumber}`
+    : `Чек об оплате · ${amountLabel}`;
+  const rows: string[] = [`<p>Оплата на сумму <strong>${escapeHtml(amountLabel)}</strong> получена.</p>`];
+  if (params.licenseNumber) {
+    rows.push(`<p>Лицензия: <strong>${escapeHtml(params.licenseNumber)}</strong></p>`);
+  }
+  if (params.fiscalDocNumber) {
+    rows.push(`<p>Фискальный документ № <strong>${escapeHtml(params.fiscalDocNumber)}</strong></p>`);
+  }
+  if (params.receiptUrl) {
+    rows.push(
+      `<p><a href="${escapeHtml(params.receiptUrl)}" style="display:inline-block;background:#2a9fff;color:#fff;padding:10px 18px;border-radius:12px;text-decoration:none;">Открыть чек</a></p>`,
+    );
+  }
+  const html = `
+    <div style="font-family: Inter, system-ui, sans-serif; max-width: 560px;">
+      <h2 style="margin:0 0 12px;">Чек об оплате</h2>
+      ${rows.join("\n")}
+      <p style="color:#6b7280;font-size:13px;">Услуга по модификации программного обеспечения. Спасибо, что работаете с MMB RUSSIA.</p>
+    </div>`;
+  return sendEmail({ to: params.to, subject, html, userId: params.userId ?? null });
+}
+
 function escapeHtml(input: string) {
   return input
     .replace(/&/g, "&amp;")

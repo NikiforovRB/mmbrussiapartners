@@ -33,7 +33,13 @@ export default async function AdminNewLicensePage() {
         user={{ name: user.email, email: user.email, role: user.role.name }}
       />
       <div className="mt-6">
-        <LicenseStepper limit={limit} used={used} context="admin" dealerName={user.email} />
+        <LicenseStepper
+          limit={limit}
+          used={used}
+          context="admin"
+          dealerName={user.email}
+          defaultEmail={user.email}
+        />
       </div>
     </>
   );

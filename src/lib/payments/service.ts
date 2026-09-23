@@ -1,6 +1,8 @@
 import "server-only";
 
 import { db } from "@/lib/db";
+import { mergePaymentSettings, type PaymentSettings } from "@/lib/site-settings";
+import { notifyDealerReceipt } from "@/lib/notifications";
 import {
   AtolError,
   getReceiptReport,
@@ -10,6 +12,15 @@ import {
   type AtolReport,
 } from "./atol";
 import { getPaymentProvider } from "./provider";
+
+/** Настройки онлайн-оплаты из админки (наименование услуги, НДС, способ расчёта). */
+async function loadPaymentSettings(): Promise<PaymentSettings> {
+  const settings = await db.companySettings.findUnique({
+    where: { id: "singleton" },
+    select: { payment: true },
+  });
+  return mergePaymentSettings(settings?.payment);
+}
 
 /** Базовый адрес портала для return- и callback-ссылок. */
 export function siteOrigin(): string {
@@ -31,6 +42,8 @@ export type CreatePaymentInput = {
   licenseId?: string | null;
   email?: string | null;
   phone?: string | null;
+  /** Email получателя чека (тег 1008). По умолчанию — почта представителя. */
+  receiptEmail?: string | null;
 };
 
 /**
@@ -47,6 +60,7 @@ export async function createPayment(input: CreatePaymentInput) {
       status: "PENDING",
       provider: provider.id,
       description: input.description,
+      receiptEmail: input.receiptEmail ?? input.email ?? null,
       licenseId: input.licenseId ?? null,
     },
   });
@@ -131,8 +145,14 @@ export async function fiscalizePayment(paymentId: string) {
     await db.payment.findUnique({ where: { id: paymentId }, select: { receiptAttempt: true } })
   )?.receiptAttempt ?? payment.receiptAttempt + 1;
 
+  const settings = await loadPaymentSettings();
   const amount = Number(payment.amount);
-  const name = payment.description ?? "Лицензия MMB RUSSIA";
+  // Наименование позиции чека (тег 1030) — из настроек оплаты, а не из
+  // служебного описания счёта (номер лицензии оставляем для внутреннего учёта).
+  const name = settings.serviceLabel;
+  // Чек уходит на явно указанный при выставлении счёта email, иначе — на
+  // почту представителя.
+  const receiptEmail = payment.receiptEmail || payment.dealer.email;
 
   try {
     const { uuid } = await registerReceipt({
@@ -142,8 +162,10 @@ export async function fiscalizePayment(paymentId: string) {
       externalId: `${payment.id}-${attempt}`,
       items: [{ name, price: amount, quantity: 1, sum: amount }],
       total: amount,
-      customerEmail: payment.dealer.email,
+      customerEmail: receiptEmail,
       customerPhone: payment.dealer.dealerProfile?.phone ?? null,
+      vatType: settings.vatType,
+      paymentMethod: settings.paymentMethod,
       callbackUrl: atolCallbackUrl(),
     });
 
@@ -191,14 +213,21 @@ function atolCallbackUrl(): string | null {
 export async function applyReceiptReport(paymentId: string, report: AtolReport) {
   const current = await db.payment.findUnique({
     where: { id: paymentId },
-    select: { providerPayload: true },
+    select: {
+      providerPayload: true,
+      receiptStatus: true,
+      receiptEmail: true,
+      amount: true,
+      dealer: { select: { email: true } },
+      license: { select: { number: true } },
+    },
   });
   const existing =
     current?.providerPayload && typeof current.providerPayload === "object"
       ? (current.providerPayload as Record<string, unknown>)
       : {};
 
-  return db.payment.update({
+  const updated = await db.payment.update({
     where: { id: paymentId },
     data: {
       receiptStatus: report.status,
@@ -208,6 +237,25 @@ export async function applyReceiptReport(paymentId: string, report: AtolReport) 
       providerPayload: { ...existing, atolReceipt: report.raw } as never,
     },
   });
+
+  // Чек только что пробит — отправляем ссылку на него дилеру письмом (в
+  // дополнение к экземпляру, который ОФД шлёт на email из чека). Дубли не
+  // рассылаем: письмо уходит только при переходе в статус "done".
+  const becameDone = current?.receiptStatus !== "done" && report.status === "done";
+  if (becameDone) {
+    const to = current?.receiptEmail || current?.dealer?.email || null;
+    if (to) {
+      await notifyDealerReceipt({
+        to,
+        amount: Number(current?.amount ?? updated.amount),
+        licenseNumber: current?.license?.number ?? null,
+        receiptUrl: report.ofdReceiptUrl,
+        fiscalDocNumber: report.fiscalDocumentNumber,
+      }).catch((err) => console.error("[payments] не удалось отправить письмо с чеком", err));
+    }
+  }
+
+  return updated;
 }
 
 /** Опрашивает АТОЛ о судьбе чека — на случай, если колбэк не дошёл. */
@@ -240,10 +288,22 @@ export async function handleAtolPayCallback(payload: Record<string, unknown>) {
   if (type === "payment" && status === "success") {
     const payment = await db.payment.findFirst({
       where: { OR: [{ id: orderId }, { externalId: orderId }] },
-      select: { id: true, status: true },
+      select: { id: true, status: true, amount: true },
     });
     if (!payment) return null;
     if (payment.status === "PAID") return payment;
+
+    // Защита от подделанного колбэка: сумма должна совпасть с суммой счёта.
+    const paidKopecks =
+      typeof payload.amount === "number" ? payload.amount : Number(payload.amount);
+    const expectedKopecks = Math.round(Number(payment.amount) * 100);
+    if (Number.isFinite(paidKopecks) && paidKopecks > 0 && paidKopecks !== expectedKopecks) {
+      console.error(
+        `[atolpay] сумма в колбэке (${paidKopecks} коп.) не совпала со счётом (${expectedKopecks} коп.), order ${orderId}`,
+      );
+      return null;
+    }
+
     return markPaymentPaid(payment.id, null);
   }
   return null;

@@ -27,6 +27,9 @@ const IS_V5 = /\/v5$/.test(BASE_URL);
 /** Токен живёт 24 часа; обновляем заранее, чтобы не ловить 401 на границе. */
 const TOKEN_TTL_MS = 20 * 60 * 60 * 1000;
 
+/** Без таймаута зависшая касса держала бы наш роут до таймаута платформы. */
+const REQUEST_TIMEOUT_MS = Number(process.env.ATOL_TIMEOUT_MS ?? 20_000);
+
 export type AtolReceiptStatus = "wait" | "done" | "fail";
 
 export type AtolReceiptItem = {
@@ -45,6 +48,10 @@ export type AtolRegisterInput = {
   customerPhone?: string | null;
   customerName?: string | null;
   callbackUrl?: string | null;
+  /** Ставка НДС (тег 1199). По умолчанию — ATOL_VAT_TYPE или НДС 5%. */
+  vatType?: string | null;
+  /** Признак способа расчёта (тег 1214). По умолчанию — полный расчёт. */
+  paymentMethod?: string | null;
 };
 
 export type AtolReport = {
@@ -114,6 +121,7 @@ async function getToken(force = false): Promise<string> {
     headers: { "Content-Type": "application/json; charset=utf-8" },
     body: JSON.stringify({ login: LOGIN, pass: PASSWORD }),
     cache: "no-store",
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
   const data = await parseJson(res);
   const token = typeof data.token === "string" ? data.token : "";
@@ -139,7 +147,10 @@ function money(value: number): number {
 }
 
 function buildReceipt(input: AtolRegisterInput) {
-  const vatType = process.env.ATOL_VAT_TYPE || "none";
+  // Ставку НДС и способ расчёта задаёт вызывающий (из настроек оплаты в
+  // админке). Фолбэк — переменная окружения, затем НДС 5% / полный расчёт.
+  const vatType = input.vatType || process.env.ATOL_VAT_TYPE || "vat5";
+  const paymentMethod = input.paymentMethod || "full_payment";
   // Признак предмета расчёта: услуга (право использования ПО).
   // В v5 это числовой код ФФД 1.2, в v4 — строковый enum.
   const paymentObject = process.env.ATOL_PAYMENT_OBJECT ?? (IS_V5 ? "4" : "service");
@@ -167,7 +178,7 @@ function buildReceipt(input: AtolRegisterInput) {
       quantity: item.quantity,
       sum: money(item.sum),
       ...(IS_V5 ? { measure: 0 } : { measurement_unit: "шт" }),
-      payment_method: "full_payment",
+      payment_method: paymentMethod,
       payment_object: IS_V5 ? Number(paymentObject) : paymentObject,
       vat: { type: vatType },
     })),
@@ -194,6 +205,7 @@ export async function registerReceipt(input: AtolRegisterInput): Promise<{ uuid:
       headers: { "Content-Type": "application/json; charset=utf-8", Token: token },
       body: JSON.stringify(body),
       cache: "no-store",
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
 
   let res = await send(await getToken());
@@ -214,6 +226,7 @@ export async function getReceiptReport(uuid: string): Promise<AtolReport> {
     fetch(`${BASE_URL}/${GROUP}/report/${encodeURIComponent(uuid)}`, {
       headers: { Token: token },
       cache: "no-store",
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
 
   let res = await send(await getToken());
