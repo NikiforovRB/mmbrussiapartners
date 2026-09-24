@@ -102,6 +102,24 @@ export function atolPayPaymentMethods(): AtolPayMethod[] {
     .filter((m) => m.paymentType && Number.isInteger(m.bankId));
 }
 
+const METHOD_PHRASES: Record<string, string> = {
+  card: "картой",
+  bank_app: "через T-Pay",
+  sbp: "по СБП",
+  bnpl: "в рассрочку",
+  account: "по счёту",
+};
+
+/** «картой или через T-Pay» — для подсказок дилеру; null, если способы берутся из ЛК. */
+export function atolPayMethodsPhrase(): string | null {
+  const phrases = [
+    ...new Set(atolPayPaymentMethods().map((m) => METHOD_PHRASES[m.paymentType]).filter(Boolean)),
+  ];
+  if (phrases.length === 0) return null;
+  if (phrases.length === 1) return phrases[0];
+  return `${phrases.slice(0, -1).join(", ")} или ${phrases[phrases.length - 1]}`;
+}
+
 /** Коды статуса заказа АТОЛ Pay (GET /payments/{orderId}/status). */
 export const ATOL_PAY_STATUS = {
   processing: 0,

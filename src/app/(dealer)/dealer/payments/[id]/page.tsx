@@ -10,6 +10,7 @@ import { StatusTag } from "@/components/ui/status-tag";
 import { fioFromParts, formatCurrency } from "@/lib/utils";
 import { formatRuDateTime } from "@/lib/dates";
 import { syncAtolPayPayment } from "@/lib/payments/service";
+import { atolPayMethodsPhrase } from "@/lib/payments/provider";
 
 export const dynamic = "force-dynamic";
 
@@ -56,6 +57,7 @@ export default async function DealerPaymentPage({
   });
 
   const online = payment.provider === "atol_pay";
+  const methodsPhrase = atolPayMethodsPhrase();
   const receiptTo = payment.receiptEmail || user.email;
 
   return (
@@ -102,8 +104,8 @@ export default async function DealerPaymentPage({
                     <Button icon={<ExternalLink className="h-4 w-4" />}>Перейти к оплате</Button>
                   </a>
                   <p className="text-sm text-ink-muted">
-                    Оплата картой, T-Pay или по СБП на защищённой странице АТОЛ Pay. После оплаты
-                    чек придёт на <span className="text-ink">{receiptTo}</span>.
+                    Оплата{methodsPhrase ? ` ${methodsPhrase}` : ""} на защищённой странице АТОЛ Pay.
+                    После оплаты чек придёт на <span className="text-ink">{receiptTo}</span>.
                   </p>
                   {checkout === "failed" ? (
                     <p className="text-sm text-danger">
