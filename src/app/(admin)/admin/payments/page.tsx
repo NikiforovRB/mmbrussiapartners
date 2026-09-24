@@ -8,7 +8,7 @@ import { formatCurrency } from "@/lib/utils";
 import { formatRuDate } from "@/lib/dates";
 import { Pagination, parsePage } from "@/components/cabinet/pagination";
 import { atolMissingEnv, isAtolConfigured } from "@/lib/payments/atol";
-import { getPaymentProvider } from "@/lib/payments/provider";
+import { atolPayMethodsPhrase, getPaymentProvider } from "@/lib/payments/provider";
 import { PaymentActions } from "./payment-actions";
 
 export const dynamic = "force-dynamic";
@@ -38,6 +38,7 @@ export default async function AdminPaymentsPage({
   ]);
 
   const provider = getPaymentProvider();
+  const methodsPhrase = atolPayMethodsPhrase();
   const atolReady = isAtolConfigured();
   const missing = atolMissingEnv();
 
@@ -57,7 +58,7 @@ export default async function AdminPaymentsPage({
               <div className="mt-1 text-xs text-ink-muted">
                 {provider.id === "manual"
                   ? "Дилер получает счёт, поступление денег подтверждает администратор."
-                  : "Оплата картой, T-Pay или СБП по ссылке АТОЛ Pay. Оплата подтверждается автоматически, чек пробивается сам."}
+                  : `Оплата${methodsPhrase ? ` ${methodsPhrase}` : ""} по ссылке АТОЛ Pay. Оплата подтверждается автоматически, чек пробивается сам.`}
               </div>
             </div>
             <div>
