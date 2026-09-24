@@ -57,6 +57,18 @@ export function PaymentSettingsPanel({ summary }: { summary: PaymentSettingsSumm
           label="АТОЛ Pay токен"
           value={acquiring.atolPayConfigured ? <Tag tone="success">задан</Tag> : <Tag tone="warning">не задан</Tag>}
         />
+        <Row
+          label="Способы оплаты"
+          value={
+            acquiring.paymentMethods.length > 0
+              ? acquiring.paymentMethods.join(", ")
+              : "из настроек ЛК АТОЛ Pay"
+          }
+        />
+        <Row
+          label="Колбэк об оплате"
+          value={acquiring.webhookConfigured ? <Tag tone="success">включён</Tag> : <Tag tone="warning">выключен</Tag>}
+        />
         {acquiring.configuredProvider === "atol_pay" && !acquiring.atolPayConfigured ? (
           <p className="mt-3 text-xs text-warning">
             Провайдер выбран как АТОЛ Pay, но токен не задан — оплата работает в режиме счёта.

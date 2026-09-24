@@ -5,7 +5,26 @@ import {
   type PaymentSettings,
 } from "@/lib/site-settings";
 import { isAtolConfigured, atolMissingEnv } from "./atol";
-import { defaultLicensePrice } from "./provider";
+import { atolPayPaymentMethods, defaultLicensePrice } from "./provider";
+
+const PAYMENT_TYPE_TITLES: Record<string, string> = {
+  card: "Карта",
+  bank_app: "Приложение банка",
+  sbp: "СБП",
+  bnpl: "Рассрочка",
+  account: "По счёту",
+};
+const BANK_TITLES: Record<number, string> = {
+  100: "Альфа-Банк",
+  300: "Райффайзен",
+  400: "Сбербанк",
+  401: "SberPay QR",
+  500: "НСПК",
+  600: "ЮКасса",
+  700: "Т-Банк",
+  701: "Т-Банк Долями",
+  900: "ГПБ",
+};
 
 function vatLabel(value: string): string {
   return PAYMENT_VAT_OPTIONS.find((o) => o.value === value)?.label ?? value;
@@ -24,6 +43,9 @@ export type PaymentSettingsSummary = {
     configuredProvider: string;
     activeProvider: string;
     atolPayConfigured: boolean;
+    /** Способы оплаты на форме АТОЛ Pay; пусто — из настроек ЛК АТОЛ Pay. */
+    paymentMethods: string[];
+    webhookConfigured: boolean;
   };
   fiscalization: {
     configured: boolean;
@@ -84,6 +106,11 @@ export function getPaymentSettingsSummary(payment: PaymentSettings): PaymentSett
       configuredProvider,
       activeProvider,
       atolPayConfigured,
+      paymentMethods: atolPayPaymentMethods().map(
+        (m) =>
+          `${PAYMENT_TYPE_TITLES[m.paymentType] ?? m.paymentType} (${BANK_TITLES[m.bankId] ?? m.bankId})`,
+      ),
+      webhookConfigured: Boolean(process.env.ATOL_PAY_WEBHOOK_SECRET || process.env.ATOL_WEBHOOK_SECRET),
     },
     fiscalization: {
       configured: isAtolConfigured(),

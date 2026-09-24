@@ -3,6 +3,7 @@ import "server-only";
 import { db } from "@/lib/db";
 import { mergePaymentSettings, type PaymentSettings } from "@/lib/site-settings";
 import { notifyDealerReceipt } from "@/lib/notifications";
+import { notifyAdmins, notifyUser } from "@/lib/app-notifications";
 import {
   AtolError,
   getReceiptReport,
@@ -11,7 +12,13 @@ import {
   registerReceipt,
   type AtolReport,
 } from "./atol";
-import { getPaymentProvider } from "./provider";
+import {
+  ATOL_PAY_STATUS,
+  getAtolPayOrderStatus,
+  getPaymentProvider,
+  type AtolPayOrderStatus,
+  type CheckoutResult,
+} from "./provider";
 
 /** Настройки онлайн-оплаты из админки (наименование услуги, НДС, способ расчёта). */
 async function loadPaymentSettings(): Promise<PaymentSettings> {
@@ -65,19 +72,49 @@ export async function createPayment(input: CreatePaymentInput) {
     },
   });
 
-  const checkout = await provider.createCheckout({
-    paymentId: payment.id,
-    amount: input.amount,
-    description: input.description,
-    email: input.email,
-    phone: input.phone,
-    returnUrl: absolute(`/dealer/payments/${payment.id}`),
-    notifyUrl: atolPayCallbackUrl(),
-  });
+  let checkout: CheckoutResult;
+  try {
+    checkout = await provider.createCheckout({
+      paymentId: payment.id,
+      amount: input.amount,
+      description: input.description,
+      email: input.email,
+      phone: input.phone,
+      returnUrl: absolute(`/dealer/payments/${payment.id}`),
+      notifyUrl: atolPayCallbackUrl(payment.id),
+    });
+  } catch (err) {
+    if (provider.id === "manual") throw err;
+    // Эквайринг не выдал ссылку — счёт не теряем, а переводим на оплату по
+    // реквизитам: её подтвердит администратор.
+    const message = (err as Error).message;
+    console.error(`[payments] ${provider.title}: не удалось создать ссылку на оплату ${payment.id}`, err);
+    await notifyAdmins(["payments.manage"], {
+      type: "PAYMENT_CREATED",
+      title: "Онлайн-оплата недоступна",
+      body: `Счёт выставлен на оплату по реквизитам. ${provider.title}: ${message}`,
+      link: "/admin/payments",
+    });
+    return db.payment.update({
+      where: { id: payment.id },
+      data: {
+        provider: "manual",
+        externalId: `inv_${payment.id}`,
+        payUrl: `/dealer/payments/${payment.id}`,
+        providerPayload: { checkoutError: message } as never,
+      },
+    });
+  }
 
   return db.payment.update({
     where: { id: payment.id },
-    data: { externalId: checkout.externalId, payUrl: checkout.payUrl },
+    data: {
+      externalId: checkout.externalId,
+      payUrl: checkout.payUrl,
+      ...(provider.id === "atol_pay"
+        ? { providerPayload: { atolPayOrders: [checkout.externalId] } as never }
+        : {}),
+    },
   });
 }
 
@@ -196,11 +233,15 @@ export function atolPayWebhookSecret(): string {
   return process.env.ATOL_PAY_WEBHOOK_SECRET ?? process.env.ATOL_WEBHOOK_SECRET ?? "";
 }
 
-/** Адрес callback АТОЛ Pay о смене статуса оплаты (null — если секрет пуст). */
-export function atolPayCallbackUrl(): string | null {
+/**
+ * Адрес callback АТОЛ Pay о смене статуса оплаты (null — если секрет пуст).
+ * id платежа передаём в адресе: формат тела колбэка АТОЛ Pay не документирован.
+ */
+export function atolPayCallbackUrl(paymentId: string): string | null {
   const secret = atolPayWebhookSecret();
   if (!secret) return null;
-  return `${siteOrigin()}/api/atolpay/webhook?token=${encodeURIComponent(secret)}`;
+  const params = new URLSearchParams({ token: secret, orderId: paymentId });
+  return `${siteOrigin()}/api/atolpay/webhook?${params}`;
 }
 
 function atolCallbackUrl(): string | null {
@@ -275,36 +316,159 @@ export async function handleAtolCallback(payload: Record<string, unknown>) {
   return applyReceiptReport(payment.id, report);
 }
 
+function payloadObject(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+/** Номера заказов АТОЛ Pay по платежу: текущий первым, затем перевыпущенные ранее. */
+function atolPayOrders(payment: { id: string; externalId: string | null; providerPayload: unknown }) {
+  const listed = payloadObject(payment.providerPayload).atolPayOrders;
+  const previous = Array.isArray(listed) ? listed.filter((v): v is string => typeof v === "string") : [];
+  const current = payment.externalId || payment.id;
+  return [current, ...previous.filter((id) => id !== current)];
+}
+
+export type AtolPaySync = {
+  paid: boolean;
+  /** Статус текущего заказа у АТОЛ Pay; null — заказа нет или сверка не нужна. */
+  current: AtolPayOrderStatus | null;
+};
+
 /**
- * Обработка callback от АТОЛ Pay (эквайринг). При успешной оплате отмечает
- * платёж оплаченным и запускает фискализацию через кассу АТОЛ Онлайн.
+ * Сверяет платёж с АТОЛ Pay и, если оплата подтверждена, проводит его и
+ * пробивает чек. Источник истины — авторизованный запрос статуса заказа, а не
+ * тело колбэка, поэтому подделанный колбэк ничего не проведёт.
+ *
+ * Сверяются и отменённые администратором счета: если деньги всё же пришли,
+ * чек по 54-ФЗ обязателен.
  */
-export async function handleAtolPayCallback(payload: Record<string, unknown>) {
-  const type = typeof payload.type === "string" ? payload.type : "";
-  const status = typeof payload.status === "string" ? payload.status : "";
-  const orderId = typeof payload.orderId === "string" ? payload.orderId : "";
+export async function syncAtolPayPayment(paymentId: string): Promise<AtolPaySync | null> {
+  const payment = await db.payment.findUnique({
+    where: { id: paymentId },
+    select: {
+      id: true,
+      status: true,
+      provider: true,
+      externalId: true,
+      providerPayload: true,
+      amount: true,
+      dealerId: true,
+      license: { select: { number: true } },
+    },
+  });
+  if (!payment || payment.provider !== "atol_pay") return null;
+  if (payment.status === "PAID" || payment.status === "REFUNDED") {
+    return { paid: payment.status === "PAID", current: null };
+  }
+
+  let current: AtolPayOrderStatus | null = null;
+  let paidOrder: string | null = null;
+  for (const [index, orderId] of atolPayOrders(payment).entries()) {
+    const status = await getAtolPayOrderStatus(orderId);
+    if (index === 0) current = status;
+    if (status?.code === ATOL_PAY_STATUS.success) {
+      paidOrder = orderId;
+      break;
+    }
+  }
+  if (!paidOrder) return { paid: false, current };
+
+  // Колбэк и возврат дилера на страницу счёта приходят почти одновременно:
+  // провести оплату и разослать уведомления должен только один из них.
+  const claimed = await db.payment.updateMany({
+    where: { id: payment.id, status: { notIn: ["PAID", "REFUNDED"] } },
+    data: { status: "PAID", paidAt: new Date(), confirmedById: null, externalId: paidOrder },
+  });
+  if (claimed.count === 0) return { paid: true, current };
+
+  const updated = await fiscalizePayment(payment.id);
+  const amountLabel = `${Number(payment.amount).toLocaleString("ru-RU")} ₽`;
+  const licenseLabel = payment.license?.number ? `Лицензия ${payment.license.number}` : "Счёт";
+  await notifyUser(payment.dealerId, {
+    type: "PAYMENT_PAID",
+    title: `Оплата получена: ${amountLabel}`,
+    body: licenseLabel,
+    link: `/dealer/payments/${payment.id}`,
+  });
+  await notifyAdmins(["payments.manage"], {
+    type: "PAYMENT_PAID",
+    title: `Онлайн-оплата: ${amountLabel}`,
+    body: licenseLabel,
+    link: "/admin/payments",
+  });
+  if (updated.receiptStatus === "fail") {
+    await notifyAdmins(["payments.manage"], {
+      type: "RECEIPT_FAILED",
+      title: `Чек не пробит: ${amountLabel}`,
+      body: updated.receiptError ?? licenseLabel,
+      link: "/admin/payments",
+    });
+  }
+  return { paid: true, current };
+}
+
+/**
+ * Рабочая ссылка на оплату счёта АТОЛ Pay: текущая, пока заказ ждёт оплаты,
+ * иначе — новая (ссылка просрочена, отменена или платёж не прошёл).
+ * null — счёт уже оплачен, закрыт или онлайн-оплата выключена.
+ */
+export async function atolPayCheckoutUrl(paymentId: string): Promise<string | null> {
+  const sync = await syncAtolPayPayment(paymentId);
+  if (!sync || sync.paid) return null;
+
+  const payment = await db.payment.findUnique({ where: { id: paymentId } });
+  if (!payment || payment.status !== "PENDING") return null;
+
+  const code = sync.current?.code;
+  const awaitingPayment = code === ATOL_PAY_STATUS.processing || code === ATOL_PAY_STATUS.confirm3ds;
+  if (awaitingPayment && payment.payUrl?.startsWith("http")) return payment.payUrl;
+
+  const provider = getPaymentProvider();
+  if (provider.id !== "atol_pay") return null;
+
+  // У АТОЛ Pay номер заказа одноразовый, поэтому новая ссылка — новый заказ.
+  const checkout = await provider.createCheckout({
+    paymentId: payment.id,
+    orderId: `${payment.id}-${Date.now().toString(36)}`,
+    amount: Number(payment.amount),
+    description: payment.description ?? "",
+    returnUrl: absolute(`/dealer/payments/${payment.id}`),
+    notifyUrl: atolPayCallbackUrl(payment.id),
+  });
+  await db.payment.update({
+    where: { id: payment.id },
+    data: {
+      externalId: checkout.externalId,
+      payUrl: checkout.payUrl,
+      providerPayload: {
+        ...payloadObject(payment.providerPayload),
+        atolPayOrders: [checkout.externalId, ...atolPayOrders(payment)],
+      } as never,
+    },
+  });
+  return checkout.payUrl;
+}
+
+/**
+ * Обработка callback от АТОЛ Pay (эквайринг). Тело колбэка служит лишь
+ * сигналом: оплату подтверждает сверка через API статуса заказа.
+ */
+export async function handleAtolPayCallback(
+  payload: Record<string, unknown>,
+  paymentIdFromUrl?: string | null,
+) {
+  const data = payloadObject(payload.data);
+  const orderId = [paymentIdFromUrl, payload.orderId, data.orderId].find(
+    (v): v is string => typeof v === "string" && v.length > 0,
+  );
   if (!orderId) return null;
 
-  if (type === "payment" && status === "success") {
-    const payment = await db.payment.findFirst({
-      where: { OR: [{ id: orderId }, { externalId: orderId }] },
-      select: { id: true, status: true, amount: true },
-    });
-    if (!payment) return null;
-    if (payment.status === "PAID") return payment;
-
-    // Защита от подделанного колбэка: сумма должна совпасть с суммой счёта.
-    const paidKopecks =
-      typeof payload.amount === "number" ? payload.amount : Number(payload.amount);
-    const expectedKopecks = Math.round(Number(payment.amount) * 100);
-    if (Number.isFinite(paidKopecks) && paidKopecks > 0 && paidKopecks !== expectedKopecks) {
-      console.error(
-        `[atolpay] сумма в колбэке (${paidKopecks} коп.) не совпала со счётом (${expectedKopecks} коп.), order ${orderId}`,
-      );
-      return null;
-    }
-
-    return markPaymentPaid(payment.id, null);
-  }
-  return null;
+  const payment = await db.payment.findFirst({
+    where: { OR: [{ id: orderId }, { externalId: orderId }] },
+    select: { id: true },
+  });
+  if (!payment) return null;
+  return syncAtolPayPayment(payment.id);
 }

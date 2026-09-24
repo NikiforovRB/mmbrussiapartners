@@ -4,14 +4,19 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { hasPermission } from "@/lib/permissions";
 import { ApiError, badRequest, forbidden, notFound, parseBody, route, unauthenticated } from "@/lib/api";
-import { fiscalizePayment, markPaymentPaid, refreshReceipt } from "@/lib/payments/service";
+import {
+  fiscalizePayment,
+  markPaymentPaid,
+  refreshReceipt,
+  syncAtolPayPayment,
+} from "@/lib/payments/service";
 import { recordAdminAction } from "@/lib/admin-audit";
 import { notifyUser, notifyAdmins } from "@/lib/app-notifications";
 
 export const runtime = "nodejs";
 
 const schema = z.object({
-  action: z.enum(["confirm", "cancel", "fiscalize", "refresh-receipt", "refund"]),
+  action: z.enum(["confirm", "cancel", "fiscalize", "refresh-receipt", "refund", "sync"]),
 });
 
 export const POST = route(async (req: Request, ctx: { params: Promise<{ id: string }> }) => {
@@ -86,6 +91,15 @@ export const POST = route(async (req: Request, ctx: { params: Promise<{ id: stri
       case "refresh-receipt": {
         const updated = await refreshReceipt(id);
         return NextResponse.json({ ok: true, payment: updated });
+      }
+      case "sync": {
+        if (payment.provider !== "atol_pay") throw badRequest("Счёт выставлен не через АТОЛ Pay");
+        const synced = await syncAtolPayPayment(id);
+        return NextResponse.json({
+          ok: true,
+          paid: synced?.paid ?? false,
+          statusMessage: synced?.current?.message ?? null,
+        });
       }
       case "refund": {
         // Деньги возвращает администратор вручную (в банке/эквайринге), в
