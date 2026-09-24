@@ -14,7 +14,8 @@ function tokenMatches(provided: string, expected: string): boolean {
 /**
  * POST-колбэк АТОЛ Pay (эквайринг): приходит при смене статуса оплаты.
  * Адрес передаётся в additionalProps.notificationUrl при регистрации платежа.
- * Подлинность подтверждает неугадываемый токен в адресе.
+ * Подлинность подтверждает неугадываемый токен в адресе, а саму оплату —
+ * запрос статуса заказа в АТОЛ Pay.
  */
 export async function POST(req: Request) {
   const expected = atolPayWebhookSecret();
@@ -25,17 +26,22 @@ export async function POST(req: Request) {
     );
   }
 
-  const token = new URL(req.url).searchParams.get("token") ?? "";
+  const params = new URL(req.url).searchParams;
+  const token = params.get("token") ?? "";
   if (!tokenMatches(token, expected)) {
     return NextResponse.json({ error: "Недействительный токен", code: "FORBIDDEN" }, { status: 403 });
   }
 
-  const payload = await req.json().catch(() => null);
-  if (!payload || typeof payload !== "object") {
-    return NextResponse.json({ error: "Некорректное тело", code: "VALIDATION" }, { status: 400 });
-  }
+  const body = await req.json().catch(() => null);
+  const payload = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
 
-  const updated = await handleAtolPayCallback(payload as Record<string, unknown>);
-  // Отвечаем 200 и на неизвестный orderId — иначе АТОЛ Pay будет повторять доставку.
-  return NextResponse.json({ ok: true, matched: Boolean(updated) });
+  try {
+    const synced = await handleAtolPayCallback(payload, params.get("orderId"));
+    // Отвечаем 200 и на неизвестный orderId — иначе АТОЛ Pay будет повторять доставку.
+    return NextResponse.json({ ok: true, matched: Boolean(synced), paid: synced?.paid ?? false });
+  } catch (err) {
+    // Статус заказа не получен — 5xx, чтобы АТОЛ Pay повторил колбэк позже.
+    console.error("[atolpay] не удалось сверить оплату по колбэку", err);
+    return NextResponse.json({ error: "Сверка оплаты не удалась", code: "UPSTREAM" }, { status: 502 });
+  }
 }

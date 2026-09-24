@@ -17,6 +17,8 @@ export type PaymentProviderId = "manual" | "atol_pay";
 
 export type CheckoutInput = {
   paymentId: string;
+  /** Номер заказа у эквайринга. По умолчанию — id платежа; у перевыпущенной ссылки свой. */
+  orderId?: string;
   amount: number;
   description: string;
   email?: string | null;
@@ -69,11 +71,75 @@ function readAtolPayError(data: Record<string, unknown>): string | null {
   return null;
 }
 
+function atolPayBase(): string {
+  return (process.env.ATOL_PAY_BASE_URL || "https://new-api-mobile.atolpay.ru/v1/ecom").replace(/\/+$/, "");
+}
+
+function atolPayAuthorization(token: string): string {
+  return /^bearer\s/i.test(token) ? token : `Bearer ${token}`;
+}
+
+function atolPayTimeout(): number {
+  return Number(process.env.ATOL_PAY_TIMEOUT_MS ?? 20_000);
+}
+
+type AtolPayMethod = { paymentType: string; bankId: number };
+
+/**
+ * Способы оплаты на форме АТОЛ Pay из ATOL_PAY_PAYMENT_METHODS в виде
+ * "card:700,bank_app:700,sbp:600" (тип:банк). Пусто — берутся из ЛК АТОЛ Pay
+ * (Настройки → Настройки заказов); если и там не заданы, заказ не создастся.
+ */
+export function atolPayPaymentMethods(): AtolPayMethod[] {
+  return (process.env.ATOL_PAY_PAYMENT_METHODS ?? "")
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => {
+      const [paymentType, bankId] = part.split(":").map((s) => s.trim());
+      return { paymentType, bankId: Number(bankId) };
+    })
+    .filter((m) => m.paymentType && Number.isInteger(m.bankId));
+}
+
+/** Коды статуса заказа АТОЛ Pay (GET /payments/{orderId}/status). */
+export const ATOL_PAY_STATUS = {
+  processing: 0,
+  success: 1,
+  canceled: 4,
+  refunded: 5,
+  paymentIsOverdue: 9,
+  confirm3ds: 10,
+} as const;
+
+export type AtolPayOrderStatus = { code: number; message: string };
+
+/** Статус заказа в АТОЛ Pay; null — такого заказа у АТОЛ Pay нет. */
+export async function getAtolPayOrderStatus(orderId: string): Promise<AtolPayOrderStatus | null> {
+  const token = process.env.ATOL_PAY_API_TOKEN;
+  if (!token) throw new Error("АТОЛ Pay не настроен (ATOL_PAY_API_TOKEN)");
+  const res = await fetch(`${atolPayBase()}/payments/${encodeURIComponent(orderId)}/status`, {
+    headers: { Authorization: atolPayAuthorization(token) },
+    signal: AbortSignal.timeout(atolPayTimeout()),
+    cache: "no-store",
+  });
+  const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  if (data.errorCode === "ORDER_NOT_FOUND") return null;
+  const payload = (data.data && typeof data.data === "object" ? data.data : {}) as Record<string, unknown>;
+  if (!res.ok || data.status !== "success" || typeof payload.status !== "number") {
+    throw new Error(readAtolPayError(data) ?? `АТОЛ Pay не вернул статус заказа (${res.status})`);
+  }
+  return {
+    code: payload.status,
+    message: typeof payload.statusMessage === "string" ? payload.statusMessage : "",
+  };
+}
+
 /**
  * АТОЛ Pay Ecom (интернет-эквайринг). Регистрируем платёж методом
  * POST /v1/ecom/payments и перенаправляем дилера на paymentUrls.main.
- * Токен из ЛК АТОЛ Pay (https://lk.atolpay.ru/) передаётся в заголовке
- * Authorization без префикса Bearer. Сумма — в копейках.
+ * Токен из ЛК АТОЛ Pay (https://lk.atolpay.ru/, Настройки → API Токены)
+ * передаётся в заголовке Authorization: Bearer {token}. Сумма — в копейках.
  * Документация: https://new-api-mobile.atolpay.ru/v1/ecom/documentation/
  */
 const atolPayProvider: PaymentProvider = {
@@ -88,21 +154,20 @@ const atolPayProvider: PaymentProvider = {
         "АТОЛ Pay не настроен: получите токен в личном кабинете АТОЛ Pay и задайте ATOL_PAY_API_TOKEN.",
       );
     }
-    const base = (process.env.ATOL_PAY_BASE_URL ?? "https://new-api-mobile.atolpay.ru/v1/ecom").replace(
-      /\/+$/,
-      "",
-    );
-    const res = await fetch(`${base}/payments`, {
+    const orderId = input.orderId ?? input.paymentId;
+    const paymentMethods = atolPayPaymentMethods();
+    const res = await fetch(`${atolPayBase()}/payments`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: token,
+        Authorization: atolPayAuthorization(token),
       },
-      signal: AbortSignal.timeout(Number(process.env.ATOL_PAY_TIMEOUT_MS ?? 20_000)),
+      signal: AbortSignal.timeout(atolPayTimeout()),
       body: JSON.stringify({
         amount: Math.round(input.amount * 100), // сумма в копейках
-        orderId: input.paymentId,
+        orderId,
         sessionType: "oneStep",
+        ...(paymentMethods.length > 0 ? { paymentMethods } : {}),
         additionalProps: {
           returnUrl: input.returnUrl,
           ...(input.notifyUrl ? { notificationUrl: input.notifyUrl } : {}),
@@ -120,7 +185,7 @@ const atolPayProvider: PaymentProvider = {
       throw new Error(readAtolPayError(data) ?? `АТОЛ Pay не вернул ссылку на оплату (${res.status})`);
     }
     return {
-      externalId: typeof payload.orderId === "string" ? payload.orderId : input.paymentId,
+      externalId: typeof payload.orderId === "string" ? payload.orderId : orderId,
       payUrl,
       requiresManualConfirmation: false,
     };

@@ -57,7 +57,7 @@ export default async function AdminPaymentsPage({
               <div className="mt-1 text-xs text-ink-muted">
                 {provider.id === "manual"
                   ? "Дилер получает счёт, поступление денег подтверждает администратор."
-                  : "Оплата картой по ссылке провайдера."}
+                  : "Оплата картой, T-Pay или СБП по ссылке АТОЛ Pay. Оплата подтверждается автоматически, чек пробивается сам."}
               </div>
             </div>
             <div>
@@ -116,7 +116,12 @@ export default async function AdminPaymentsPage({
                     <div className="mt-1 text-[11px] text-danger">{p.receiptError}</div>
                   ) : null}
                   <div className="mt-3">
-                    <PaymentActions id={p.id} status={p.status} receiptStatus={p.receiptStatus} />
+                    <PaymentActions
+                      id={p.id}
+                      status={p.status}
+                      receiptStatus={p.receiptStatus}
+                      provider={p.provider}
+                    />
                   </div>
                 </li>
               ))}
@@ -169,7 +174,12 @@ export default async function AdminPaymentsPage({
                         ) : null}
                       </td>
                       <td className="px-4 py-3">
-                        <PaymentActions id={p.id} status={p.status} receiptStatus={p.receiptStatus} />
+                        <PaymentActions
+                          id={p.id}
+                          status={p.status}
+                          receiptStatus={p.receiptStatus}
+                          provider={p.provider}
+                        />
                       </td>
                     </tr>
                   ))}

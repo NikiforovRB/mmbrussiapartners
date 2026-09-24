@@ -2,22 +2,24 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, Receipt, RefreshCw, Undo2, XCircle } from "lucide-react";
+import { CheckCircle2, Receipt, RefreshCw, SearchCheck, Undo2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { usePermissions } from "@/hooks/use-permissions";
 
-type Action = "confirm" | "cancel" | "fiscalize" | "refresh-receipt" | "refund";
+type Action = "confirm" | "cancel" | "fiscalize" | "refresh-receipt" | "refund" | "sync";
 
 export function PaymentActions({
   id,
   status,
   receiptStatus,
+  provider,
 }: {
   id: string;
   status: string;
   receiptStatus: string | null;
+  provider: string;
 }) {
   const router = useRouter();
   const { can } = usePermissions();
@@ -36,6 +38,12 @@ export function PaymentActions({
     const json = await res.json().catch(() => ({}));
     if (!res.ok) {
       toast.error(json.error ?? "Не удалось выполнить действие");
+      return;
+    }
+    if (action === "sync") {
+      if (json.paid) toast.success("АТОЛ Pay подтвердил оплату, чек отправлен в кассу");
+      else toast.info(`Оплата не поступила. АТОЛ Pay: ${json.statusMessage ?? "заказ не найден"}`);
+      router.refresh();
       return;
     }
     toast.success(
@@ -60,6 +68,17 @@ export function PaymentActions({
     <div className="flex flex-wrap items-center gap-1.5">
       {status === "PENDING" ? (
         <>
+          {provider === "atol_pay" ? (
+            <Button
+              size="sm"
+              variant="secondary"
+              loading={busy === "sync"}
+              icon={<SearchCheck className="h-3.5 w-3.5" />}
+              onClick={() => run("sync")}
+            >
+              Проверить оплату
+            </Button>
+          ) : null}
           <Button
             size="sm"
             loading={busy === "confirm"}

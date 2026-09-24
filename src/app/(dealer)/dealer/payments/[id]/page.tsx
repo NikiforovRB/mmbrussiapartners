@@ -9,19 +9,23 @@ import { Button } from "@/components/ui/button";
 import { StatusTag } from "@/components/ui/status-tag";
 import { fioFromParts, formatCurrency } from "@/lib/utils";
 import { formatRuDateTime } from "@/lib/dates";
+import { syncAtolPayPayment } from "@/lib/payments/service";
 
 export const dynamic = "force-dynamic";
 
 export default async function DealerPaymentPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ checkout?: string }>;
 }) {
   const session = await auth();
   if (!session?.user) redirect("/login");
   const { id } = await params;
+  const { checkout } = await searchParams;
 
-  const [user, payment, company] = await Promise.all([
+  const [user, loaded, company] = await Promise.all([
     db.user.findUnique({
       where: { id: session.user.id },
       include: { dealerProfile: true, role: true },
@@ -30,7 +34,20 @@ export default async function DealerPaymentPage({
     db.companySettings.findFirst(),
   ]);
   if (!user) redirect("/login");
-  if (!payment || payment.dealerId !== user.id) notFound();
+  if (!loaded || loaded.dealerId !== user.id) notFound();
+
+  let payment = loaded;
+  if (payment.provider === "atol_pay" && payment.status !== "PAID" && payment.status !== "REFUNDED") {
+    // Сюда АТОЛ Pay возвращает дилера после оплаты — сверяем статус сразу,
+    // не дожидаясь колбэка.
+    const synced = await syncAtolPayPayment(payment.id).catch((err) => {
+      console.error(`[payments] не удалось сверить оплату ${payment.id}`, err);
+      return null;
+    });
+    if (synced?.paid) {
+      payment = (await db.payment.findUnique({ where: { id }, include: { license: true } })) ?? payment;
+    }
+  }
 
   const fio = fioFromParts({
     firstName: user.dealerProfile?.firstName,
@@ -38,7 +55,8 @@ export default async function DealerPaymentPage({
     middleName: user.dealerProfile?.middleName,
   });
 
-  const external = payment.payUrl?.startsWith("http") ? payment.payUrl : null;
+  const online = payment.provider === "atol_pay";
+  const receiptTo = payment.receiptEmail || user.email;
 
   return (
     <>
@@ -78,10 +96,22 @@ export default async function DealerPaymentPage({
 
           {payment.status === "PENDING" ? (
             <div className="mt-5">
-              {external ? (
-                <a href={external} target="_blank" rel="noreferrer">
-                  <Button icon={<ExternalLink className="h-4 w-4" />}>Перейти к оплате</Button>
-                </a>
+              {online ? (
+                <div className="space-y-3">
+                  <a href={`/api/payments/${payment.id}/pay`}>
+                    <Button icon={<ExternalLink className="h-4 w-4" />}>Перейти к оплате</Button>
+                  </a>
+                  <p className="text-sm text-ink-muted">
+                    Оплата картой, T-Pay или по СБП на защищённой странице АТОЛ Pay. После оплаты
+                    чек придёт на <span className="text-ink">{receiptTo}</span>.
+                  </p>
+                  {checkout === "failed" ? (
+                    <p className="text-sm text-danger">
+                      Не удалось открыть страницу оплаты. Попробуйте ещё раз через минуту или
+                      свяжитесь с администратором.
+                    </p>
+                  ) : null}
+                </div>
               ) : (
                 <div className="rounded-panel border border-hairline p-4 text-sm">
                   <div className="font-display tracking-tight mb-2">Как оплатить</div>
@@ -89,7 +119,7 @@ export default async function DealerPaymentPage({
                     Переведите сумму по реквизитам MMB RUSSIA, указав в назначении платежа номер счёта{" "}
                     <span className="text-ink">{payment.id.slice(-8).toUpperCase()}</span>. После
                     поступления средств администратор подтвердит оплату, и фискальный чек придёт на{" "}
-                    <span className="text-ink">{payment.receiptEmail || user.email}</span>.
+                    <span className="text-ink">{receiptTo}</span>.
                   </p>
                   {company ? (
                     <div className="mt-3 text-xs text-ink-muted space-y-0.5">
