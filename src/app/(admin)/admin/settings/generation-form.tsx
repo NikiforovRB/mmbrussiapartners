@@ -8,7 +8,9 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Toggle } from "@/components/ui/toggle";
+import { DateTimePicker } from "@/components/ui/date-time-picker";
 import { usePermissions } from "@/hooks/use-permissions";
+import { parseMoscowLocal } from "@/lib/dates";
 import type { GenerationSettings } from "@/lib/site-settings";
 
 export function GenerationForm({ initial }: { initial: GenerationSettings }) {
@@ -36,6 +38,12 @@ export function GenerationForm({ initial }: { initial: GenerationSettings }) {
   }
 
   async function save() {
+    const start = parseMoscowLocal(blackoutStart);
+    const end = parseMoscowLocal(blackoutEnd);
+    if (start && end && end <= start) {
+      toast.error("Окончание запрета должно быть позже начала");
+      return;
+    }
     setSaving(true);
     const res = await fetch("/api/settings/generation", {
       method: "PATCH",
@@ -78,19 +86,17 @@ export function GenerationForm({ initial }: { initial: GenerationSettings }) {
             label="Запрет генерации включён"
           />
           <div className="grid sm:grid-cols-2 gap-3">
-            <Input
+            <DateTimePicker
               label="Начало"
-              type="datetime-local"
               value={blackoutStart}
               disabled={!canEdit}
-              onChange={(e) => setBlackoutStart(e.target.value)}
+              onChange={setBlackoutStart}
             />
-            <Input
+            <DateTimePicker
               label="Окончание"
-              type="datetime-local"
               value={blackoutEnd}
               disabled={!canEdit}
-              onChange={(e) => setBlackoutEnd(e.target.value)}
+              onChange={setBlackoutEnd}
             />
           </div>
           <Textarea

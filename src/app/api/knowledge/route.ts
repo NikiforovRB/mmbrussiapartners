@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { parseBody, route } from "@/lib/api";
 import { recordAdminAction } from "@/lib/admin-audit";
 import { blocksSchema, slugify } from "@/lib/knowledge";
-import { sanitizeBlocks } from "@/lib/knowledge-server";
+import { resolveCategoryId, sanitizeBlocks } from "@/lib/knowledge-server";
 import type { Prisma } from "@prisma/client";
 import { requirePermission } from "@/lib/session";
 
@@ -12,7 +12,7 @@ export const runtime = "nodejs";
 
 const schema = z.object({
   title: z.string().min(1, "Укажите заголовок").max(200),
-  category: z.string().max(80).nullable().optional(),
+  categoryId: z.string().max(40).nullable().optional(),
   excerpt: z.string().max(400).nullable().optional(),
   coverKey: z.string().nullable().optional(),
   blocks: blocksSchema,
@@ -35,12 +35,13 @@ export const POST = route(async (req: Request) => {
   const data = await parseBody(req, schema);
   const slug = await uniqueSlug(slugify(data.title));
   const blocks = sanitizeBlocks(data.blocks);
+  const categoryId = await resolveCategoryId(data.categoryId);
 
   const article = await db.knowledgeArticle.create({
     data: {
       title: data.title.trim(),
       slug,
-      category: data.category?.trim() || null,
+      categoryId,
       excerpt: data.excerpt?.trim() || null,
       coverKey: data.coverKey || null,
       blocks: blocks as unknown as Prisma.InputJsonValue,

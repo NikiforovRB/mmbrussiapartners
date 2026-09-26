@@ -4,12 +4,12 @@ import { db } from "@/lib/db";
 import { Topbar } from "@/components/cabinet/topbar";
 import { Tag } from "@/components/ui/tag";
 import { StatusTag } from "@/components/ui/status-tag";
-import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { ChevronRight, Search } from "lucide-react";
-import { getDownloadUrl } from "@/lib/s3";
+import { hasAdminScope, hasPermission } from "@/lib/permissions";
 import { fioFromParts } from "@/lib/utils";
 import { DealersFilters } from "./dealers-filters";
+import { DeleteDealerButton } from "./delete-dealer-button";
 import { Pagination, parsePage } from "@/components/cabinet/pagination";
 
 export const dynamic = "force-dynamic";
@@ -60,12 +60,7 @@ export default async function AdminDealersPage({
     }),
   ]);
 
-  // Ссылки на фото профилей (presigned) — по одному на представителя.
-  const avatarUrls = await Promise.all(
-    dealers.map((u) =>
-      u.dealerProfile?.avatarKey ? getDownloadUrl(u.dealerProfile.avatarKey, 3600) : Promise.resolve(null),
-    ),
-  );
+  const canDelete = hasPermission(user.role.permissions, "dealers.delete", user.isSuperAdmin);
 
   return (
     <>
@@ -102,22 +97,22 @@ export default async function AdminDealersPage({
                     </td>
                   </tr>
                 ) : null}
-                {dealers.map((u, idx) => {
+                {dealers.map((u) => {
                   const fio = fioFromParts({
                     firstName: u.dealerProfile?.firstName,
                     lastName: u.dealerProfile?.lastName,
                     middleName: u.dealerProfile?.middleName,
                   });
+                  const deletable =
+                    canDelete &&
+                    u.id !== user.id &&
+                    !u.isSuperAdmin &&
+                    !hasAdminScope(u.role.permissions);
                   return (
                     <tr key={u.id} className="transition-colors hover:bg-surface-muted">
                       <td className="px-4 py-3">
-                        <div className="flex items-center gap-3">
-                          <Avatar name={fio || u.email} src={avatarUrls[idx]} size={36} />
-                          <div>
-                            <div className="">{fio || "—"}</div>
-                            <div className="text-xs text-ink-muted">{u.dealerProfile?.organization ?? "—"}</div>
-                          </div>
-                        </div>
+                        <div>{fio || "—"}</div>
+                        <div className="text-xs text-ink-muted">{u.dealerProfile?.organization ?? "—"}</div>
                       </td>
                       <td className="px-4 py-3 text-xs text-ink-muted">
                         <div>{u.email}</div>
@@ -140,12 +135,17 @@ export default async function AdminDealersPage({
                           <Tag tone="muted">Скрыт</Tag>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-right">
-                        <Link href={`/admin/dealers/${u.id}`}>
-                          <Button size="sm" variant="ghost" iconRight={<ChevronRight className="h-4 w-4" />}>
-                            Открыть
-                          </Button>
-                        </Link>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-end gap-1">
+                          <Link href={`/admin/dealers/${u.id}`}>
+                            <Button size="sm" variant="ghost" iconRight={<ChevronRight className="h-4 w-4" />}>
+                              Открыть
+                            </Button>
+                          </Link>
+                          {deletable ? (
+                            <DeleteDealerButton dealerId={u.id} name={fio || u.email} compact />
+                          ) : null}
+                        </div>
                       </td>
                     </tr>
                   );

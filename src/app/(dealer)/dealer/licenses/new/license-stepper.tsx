@@ -21,7 +21,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Card } from "@/components/ui/card";
 import { Tag } from "@/components/ui/tag";
 import { usePermissions } from "@/hooks/use-permissions";
-import { formatRub } from "@/lib/money";
+import { Money } from "@/components/ui/money";
+import { formatRuDateTime } from "@/lib/dates";
 
 type Step = 1 | 2 | 3 | 4;
 
@@ -56,12 +57,6 @@ type LicInfo = {
   deviceId: string;
   items: LicItem[];
 };
-
-function formatRuDate(iso: string | null): string | null {
-  if (!iso) return null;
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? null : d.toLocaleDateString("ru-RU");
-}
 
 async function fileToBase64(file: File): Promise<string> {
   const buf = await file.arrayBuffer();
@@ -343,18 +338,18 @@ export function LicenseStepper({
                     <p className="mt-2 text-xs text-ink-muted">
                       По этому ШГУ уже выдавалась лицензия {info.previous.number} (
                       {info.previous.type.toLowerCase()},{" "}
-                      {new Date(info.previous.createdAt).toLocaleDateString("ru-RU")}).
+                      {formatRuDateTime(info.previous.createdAt)}).
                     </p>
                   ) : null}
                   {info.firstGeneratedAt || info.lastGeneratedAt ? (
                     <p className="mt-1 text-xs text-ink-muted">
                       Данные по этому ШГУ:
                       {info.firstGeneratedAt
-                        ? ` первая генерация ${formatRuDate(info.firstGeneratedAt)}`
+                        ? ` первая генерация ${formatRuDateTime(info.firstGeneratedAt)}`
                         : ""}
                       {info.firstGeneratedAt && info.lastGeneratedAt ? "," : ""}
                       {info.lastGeneratedAt
-                        ? ` последняя генерация ${formatRuDate(info.lastGeneratedAt)}`
+                        ? ` последняя генерация ${formatRuDateTime(info.lastGeneratedAt)}`
                         : ""}
                       .
                     </p>
@@ -454,7 +449,9 @@ export function LicenseStepper({
                     value={
                       selectedItem ? (
                         <span className="flex flex-wrap items-center gap-1.5">
-                          <span>{`${bundleLabel(selectedItem)} · ${formatRub(selectedItem.price)}`}</span>
+                          <span>
+                            {bundleLabel(selectedItem)} · <Money value={selectedItem.price} />
+                          </span>
                           {selectedItem.firstAtClientPrice ? (
                             <Tag tone="accent">Первая — по клиентской цене</Tag>
                           ) : null}
@@ -590,7 +587,7 @@ export function LicenseStepper({
                         </div>
                       </div>
                       <p className="mt-1 text-sm text-ink-muted">
-                        К оплате {formatRub(result.payment.amount)}.
+                        К оплате <Money value={result.payment.amount} />.
                         {receiptEmail.trim()
                           ? ` Фискальный чек придёт на ${receiptEmail.trim()} после оплаты.`
                           : " Фискальный чек придёт после оплаты."}
@@ -665,9 +662,7 @@ function BundleButton({
       }`}
     >
       <span className="tracking-tight">{bundleLabel(item)}</span>
-      <span className={active ? "text-accent" : "text-ink-muted"}>
-        {formatRub(item.price)}
-      </span>
+      <Money value={item.price} className={active ? "text-accent" : "text-ink-muted"} />
     </button>
   );
 }

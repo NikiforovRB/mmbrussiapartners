@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { notFound, parseBody, route } from "@/lib/api";
 import { recordAdminAction } from "@/lib/admin-audit";
 import { blocksSchema } from "@/lib/knowledge";
-import { sanitizeBlocks } from "@/lib/knowledge-server";
+import { resolveCategoryId, sanitizeBlocks } from "@/lib/knowledge-server";
 import type { Prisma } from "@prisma/client";
 import { requirePermission } from "@/lib/session";
 
@@ -12,7 +12,7 @@ export const runtime = "nodejs";
 
 const schema = z.object({
   title: z.string().min(1).max(200).optional(),
-  category: z.string().max(80).nullable().optional(),
+  categoryId: z.string().max(40).nullable().optional(),
   excerpt: z.string().max(400).nullable().optional(),
   coverKey: z.string().nullable().optional(),
   blocks: blocksSchema.optional(),
@@ -29,7 +29,10 @@ export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: str
   const data = await parseBody(req, schema);
   const update: Prisma.KnowledgeArticleUpdateInput = {};
   if (data.title !== undefined) update.title = data.title.trim();
-  if (data.category !== undefined) update.category = data.category?.trim() || null;
+  if (data.categoryId !== undefined) {
+    const categoryId = await resolveCategoryId(data.categoryId);
+    update.category = categoryId ? { connect: { id: categoryId } } : { disconnect: true };
+  }
   if (data.excerpt !== undefined) update.excerpt = data.excerpt?.trim() || null;
   if (data.coverKey !== undefined) update.coverKey = data.coverKey || null;
   if (data.published !== undefined) update.published = data.published;

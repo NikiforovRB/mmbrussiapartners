@@ -132,7 +132,7 @@ const ITEMS: Item[] = [
   },
   {
     id: "a-audit",
-    label: "Аудит",
+    label: "Логи",
     href: "/admin/audit",
     icon: <History className="h-4 w-4" />,
     scope: "admin",

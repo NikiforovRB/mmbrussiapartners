@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { hasPermission, type PermissionKey } from "@/lib/permissions";
-import { badRequest, forbidden, notFound, parseBody, route } from "@/lib/api";
+import { hasAdminScope, hasPermission, type PermissionKey } from "@/lib/permissions";
+import { badRequest, conflict, forbidden, notFound, parseBody, route } from "@/lib/api";
 import { recordAdminAction, changedFields } from "@/lib/admin-audit";
 import { notifyUser } from "@/lib/app-notifications";
-import { normalizePhone } from "@/lib/utils";
-import { requireApprovedUser } from "@/lib/session";
+import { deleteObject } from "@/lib/s3";
+import { fioFromParts, normalizePhone, plural } from "@/lib/utils";
+import { requireApprovedUser, requirePermission } from "@/lib/session";
 
 export const runtime = "nodejs";
 
@@ -177,6 +178,73 @@ export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: str
       link: "/dealer",
     });
   }
+
+  return NextResponse.json({ ok: true });
+});
+
+export const DELETE = route(async (_req: Request, ctx: { params: Promise<{ id: string }> }) => {
+  const session = await requirePermission("dealers.delete", "Нет права на удаление представителей");
+  const { id } = await ctx.params;
+  if (id === session.user.id) throw forbidden("Собственную учётную запись удалить нельзя");
+
+  const target = await db.user.findUnique({
+    where: { id },
+    include: {
+      dealerProfile: true,
+      role: { select: { permissions: true } },
+      _count: {
+        select: {
+          licenses: true,
+          payments: true,
+          humaxPasswords: true,
+          requestedCancellations: true,
+          auditedActions: true,
+          adminAuditActions: true,
+        },
+      },
+    },
+  });
+  if (!target) throw notFound("Представитель не найден");
+  if (target.isSuperAdmin || hasAdminScope(target.role.permissions)) {
+    throw forbidden("Это учётная запись сотрудника, а не представителя — здесь её удалить нельзя");
+  }
+
+  // Лицензии, счета и история действий ссылаются на пользователя и нужны для
+  // отчётности, поэтому удалять можно только того, кто ещё ничего не сделал.
+  const c = target._count;
+  const records = [
+    c.licenses > 0 && `${c.licenses} ${plural(c.licenses, ["лицензия", "лицензии", "лицензий"])}`,
+    c.payments > 0 && `${c.payments} ${plural(c.payments, ["платёж", "платежа", "платежей"])}`,
+    c.humaxPasswords > 0 &&
+      `${c.humaxPasswords} ${plural(c.humaxPasswords, ["пароль HUMAX", "пароля HUMAX", "паролей HUMAX"])}`,
+    c.requestedCancellations > 0 && "заявки на аннулирование",
+    c.auditedActions + c.adminAuditActions > 0 && "записи в логах",
+  ].filter(Boolean);
+  if (records.length > 0) {
+    throw conflict(
+      `Удалить нельзя: у представителя есть ${records.join(", ")}. Эти данные нужны для отчётности — заблокируйте представителя вместо удаления.`,
+    );
+  }
+
+  await db.user.delete({ where: { id } });
+  if (target.dealerProfile?.avatarKey) {
+    await deleteObject(target.dealerProfile.avatarKey).catch((err) =>
+      console.error("[dealer-delete] не удалось удалить фото", err),
+    );
+  }
+
+  const fio = fioFromParts({
+    firstName: target.dealerProfile?.firstName,
+    lastName: target.dealerProfile?.lastName,
+    middleName: target.dealerProfile?.middleName,
+  });
+  await recordAdminAction({
+    actorId: session.user.id,
+    entity: "DEALER",
+    entityId: id,
+    action: "DEALER_DELETED",
+    summary: fio ? `${fio} (${target.email})` : target.email,
+  });
 
   return NextResponse.json({ ok: true });
 });

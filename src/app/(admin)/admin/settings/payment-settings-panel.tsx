@@ -3,7 +3,7 @@ import { CreditCard, ReceiptText, ShieldCheck, Info, Mail } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Tag } from "@/components/ui/tag";
 import type { PaymentSettingsSummary } from "@/lib/payments/summary";
-import { formatRub } from "@/lib/money";
+import { Money } from "@/components/ui/money";
 
 const PROVIDER_TITLES: Record<string, string> = {
   manual: "Счёт на оплату (перевод / СБП по реквизитам)",
@@ -23,7 +23,7 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex items-start justify-between gap-4 py-2 border-b border-hairline last:border-0">
       <span className="text-sm text-ink-muted">{label}</span>
-      <span className="text-sm text-right break-all">{value}</span>
+      <span className="min-w-0 text-sm text-right break-words">{value}</span>
     </div>
   );
 }
@@ -147,13 +147,13 @@ export function PaymentSettingsPanel({ summary }: { summary: PaymentSettingsSumm
           label="Базовая цена генерации"
           value={
             pricing.defaultLicensePrice > 0
-              ? formatRub(pricing.defaultLicensePrice)
+              ? <Money value={pricing.defaultLicensePrice} />
               : "не задана"
           }
         />
         {Object.keys(pricing.bundlePrices).length > 0 ? (
           Object.entries(pricing.bundlePrices).map(([bundle, price]) => (
-            <Row key={bundle} label={`Цена комплектации ${bundle}`} value={formatRub(price)} />
+            <Row key={bundle} label={`Цена комплектации ${bundle}`} value={<Money value={price} />} />
           ))
         ) : (
           <Row label="Прайс по комплектациям" value="используется по умолчанию" />

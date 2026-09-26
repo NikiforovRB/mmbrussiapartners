@@ -5,7 +5,8 @@ import { Topbar } from "@/components/cabinet/topbar";
 import { Card } from "@/components/ui/card";
 import { fioFromParts } from "@/lib/utils";
 import { formatRub } from "@/lib/money";
-import { formatRuDate } from "@/lib/dates";
+import { Money } from "@/components/ui/money";
+import { formatRuDateTime } from "@/lib/dates";
 import { hasPermission } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
@@ -154,17 +155,17 @@ export default async function AdminFinancePage() {
                     <div className="truncate">{r.name}</div>
                     <div className="truncate text-xs text-ink-muted">{r.sub}</div>
                   </div>
-                  <div className="font-display tracking-tight shrink-0">{formatRub(r.paidAmount)}</div>
+                  <Money value={r.paidAmount} className="font-display tracking-tight shrink-0" />
                 </div>
                 <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-muted">
                   <span>Платежей: {r.paidCount}</span>
                   <span>Лицензий: {r.licenses}</span>
                   {r.pendingAmount > 0 ? (
                     <span className="text-[#a16207]">
-                      Долг: {formatRub(r.pendingAmount)} ({r.pendingCount})
+                      Долг: <Money value={r.pendingAmount} /> ({r.pendingCount})
                     </span>
                   ) : null}
-                  <span>{r.lastPaidAt ? formatRuDate(r.lastPaidAt) : "—"}</span>
+                  <span>{r.lastPaidAt ? formatRuDateTime(r.lastPaidAt) : "—"}</span>
                 </div>
               </li>
             ))}
@@ -199,14 +200,14 @@ export default async function AdminFinancePage() {
                       <div className="text-xs text-ink-muted">{r.sub}</div>
                     </td>
                     <td className="px-5 py-3 text-right font-display tracking-tight">
-                      {formatRub(r.paidAmount)}
+                      <Money value={r.paidAmount} />
                     </td>
-                    <td className="px-5 py-3 text-right text-ink-muted">{formatRub(r.paid30Amount)}</td>
+                    <td className="px-5 py-3 text-right text-ink-muted"><Money value={r.paid30Amount} /></td>
                     <td className="px-5 py-3 text-right text-ink-muted">{r.paidCount}</td>
                     <td className="px-5 py-3 text-right">
                       {r.pendingAmount > 0 ? (
                         <span className="text-[#a16207]">
-                          {formatRub(r.pendingAmount)}
+                          <Money value={r.pendingAmount} />
                           <span className="text-ink-subtle"> ({r.pendingCount})</span>
                         </span>
                       ) : (
@@ -214,8 +215,8 @@ export default async function AdminFinancePage() {
                       )}
                     </td>
                     <td className="px-5 py-3 text-right text-ink-muted">{r.licenses}</td>
-                    <td className="px-5 py-3 text-ink-muted">
-                      {r.lastPaidAt ? formatRuDate(r.lastPaidAt) : "—"}
+                    <td className="px-5 py-3 text-ink-muted whitespace-nowrap">
+                      {r.lastPaidAt ? formatRuDateTime(r.lastPaidAt) : "—"}
                     </td>
                   </tr>
                 ))}
@@ -230,9 +231,9 @@ export default async function AdminFinancePage() {
 
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
-    <Card>
+    <Card className="p-4 sm:p-6">
       <div className="text-[11px] uppercase tracking-tight text-ink-subtle">{label}</div>
-      <div className="mt-1 font-display text-xl lg:text-2xl tracking-tight">{value}</div>
+      <div className="mt-1 whitespace-nowrap font-display text-xl lg:text-2xl tracking-tight">{value}</div>
     </Card>
   );
 }

@@ -16,6 +16,8 @@ export interface ModalProps {
   className?: string;
 }
 
+const openModals: symbol[] = [];
+
 export function Modal({
   open,
   onClose,
@@ -27,19 +29,30 @@ export function Modal({
   className,
 }: ModalProps) {
   const [mounted, setMounted] = React.useState(false);
+  const onCloseRef = React.useRef(onClose);
+  React.useEffect(() => {
+    onCloseRef.current = onClose;
+  });
 
   // Окно живёт в body: любой предок с transform, filter или backdrop-filter
   // становится точкой отсчёта для position: fixed — и окно съезжает внутрь
   // него. Такой предок оставляет после себя даже animate-fade-up.
   React.useEffect(() => setMounted(true), []);
 
+  // Escape закрывает только верхнее окно (например, календарь поверх формы).
   React.useEffect(() => {
+    if (!open) return;
+    const id = Symbol();
+    openModals.push(id);
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape" && openModals[openModals.length - 1] === id) onCloseRef.current();
     }
-    if (open) document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      openModals.splice(openModals.indexOf(id), 1);
+    };
+  }, [open]);
 
   React.useEffect(() => {
     if (!open) return;

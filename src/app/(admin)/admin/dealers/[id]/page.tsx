@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { Tags } from "lucide-react";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { hasPermission } from "@/lib/permissions";
+import { hasAdminScope, hasPermission } from "@/lib/permissions";
 import { getDownloadUrl } from "@/lib/s3";
 import { Topbar } from "@/components/cabinet/topbar";
 import { Button } from "@/components/ui/button";
@@ -37,6 +37,12 @@ export default async function AdminDealerPage({ params }: { params: Promise<{ id
     Boolean(dealer.dealerProfile) &&
     hasPermission(session.user.permissions, "pricing.manage", session.user.isSuperAdmin);
 
+  const deletable =
+    hasPermission(session.user.permissions, "dealers.delete", session.user.isSuperAdmin) &&
+    dealer.id !== session.user.id &&
+    !dealer.isSuperAdmin &&
+    !hasAdminScope(dealer.role.permissions);
+
   const avatarUrl = dealer.dealerProfile?.avatarKey
     ? await getDownloadUrl(dealer.dealerProfile.avatarKey, 3600)
     : null;
@@ -62,7 +68,35 @@ export default async function AdminDealerPage({ params }: { params: Promise<{ id
         }
       />
       <div className="mt-6">
-        <DealerEditor dealer={JSON.parse(JSON.stringify(dealer))} avatarUrl={avatarUrl} />
+        <DealerEditor
+          dealer={{
+            id: dealer.id,
+            email: dealer.email,
+            status: dealer.status,
+            createdAt: dealer.createdAt.toISOString(),
+            dealerProfile: dealer.dealerProfile
+              ? {
+                  firstName: dealer.dealerProfile.firstName,
+                  lastName: dealer.dealerProfile.lastName,
+                  middleName: dealer.dealerProfile.middleName,
+                  organization: dealer.dealerProfile.organization,
+                  inn: dealer.dealerProfile.inn,
+                  phone: dealer.dealerProfile.phone,
+                  city: dealer.dealerProfile.city,
+                  region: dealer.dealerProfile.region,
+                  address: dealer.dealerProfile.address,
+                  licenseLimit: dealer.dealerProfile.licenseLimit,
+                  licensesUsed: dealer.dealerProfile.licensesUsed,
+                  phoneVisibleOnSite: dealer.dealerProfile.phoneVisibleOnSite,
+                  driveModsAccess: dealer.dealerProfile.driveModsAccess,
+                  driveModsRequestedAt: dealer.dealerProfile.driveModsRequestedAt?.toISOString() ?? null,
+                }
+              : null,
+            role: { name: dealer.role.name },
+          }}
+          avatarUrl={avatarUrl}
+          deletable={deletable}
+        />
       </div>
     </>
   );

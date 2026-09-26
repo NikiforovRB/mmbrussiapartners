@@ -8,7 +8,7 @@ import { db, type Prisma } from "@/lib/db";
 import { hasPermission } from "@/lib/permissions";
 import { uploadFile, getDownloadUrl } from "@/lib/s3";
 import { fioFromParts } from "@/lib/utils";
-import { formatRuDate } from "@/lib/dates";
+import { formatRuDateTime } from "@/lib/dates";
 import { statusLabel } from "@/lib/status-labels";
 import { forbidden, parseBody, route } from "@/lib/api";
 import { requireApprovedUser } from "@/lib/session";
@@ -101,7 +101,7 @@ export const POST = route(async (req: Request) => {
         versionCustom: l.versionCustom ?? "",
         status: l.status,
         statusLabel: statusLabel("license", l.status),
-        createdAt: formatRuDate(l.createdAt),
+        createdAt: formatRuDateTime(l.createdAt),
         dealer:
           fioFromParts({
             firstName: l.dealer.dealerProfile?.firstName,
@@ -166,7 +166,7 @@ export const POST = route(async (req: Request) => {
           versionCustom: l.versionCustom ?? "",
           issuedWithoutPayment: l.issuedWithoutPayment ? "Да" : "",
           status: statusLabel("license", l.status),
-          createdAt: formatRuDate(l.createdAt),
+          createdAt: formatRuDateTime(l.createdAt),
           dealer: fioFromParts({
             firstName: l.dealer.dealerProfile?.firstName,
             lastName: l.dealer.dealerProfile?.lastName,

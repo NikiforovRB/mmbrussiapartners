@@ -1,3 +1,4 @@
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import {
   LayoutDashboard,
@@ -22,6 +23,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { fioFromParts } from "@/lib/utils";
 import { getUserAvatarUrl } from "@/lib/user-avatar";
+import { SIDEBAR_COOKIE } from "@/lib/sidebar";
 
 export default async function DealerLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
@@ -68,7 +70,7 @@ export default async function DealerLayout({ children }: { children: React.React
     </div>
   );
 
-  const [avatarUrl, unreadCount, settings, loginNotices] = await Promise.all([
+  const [avatarUrl, unreadCount, settings, loginNotices, cookieStore] = await Promise.all([
     getUserAvatarUrl(user.id),
     db.appNotification.count({ where: { userId: user.id, readAt: null } }),
     db.companySettings.findUnique({ where: { id: "singleton" }, select: { announcement: true } }),
@@ -77,8 +79,10 @@ export default async function DealerLayout({ children }: { children: React.React
       orderBy: { createdAt: "asc" },
       select: { id: true, title: true, body: true },
     }),
+    cookies(),
   ]);
   const announcement = mergeAnnouncement(settings?.announcement);
+  const sidebarCollapsed = cookieStore.get(SIDEBAR_COOKIE)?.value === "collapsed";
 
   return (
     <CabinetUserProvider
@@ -99,13 +103,13 @@ export default async function DealerLayout({ children }: { children: React.React
       }}
     >
       <MobileNavProvider items={items} footer={footer}>
-        <div className="cabinet min-h-screen flex bg-bg-default">
-          <Sidebar items={items} footer={footer} />
-          <div className="flex-1 min-w-0 px-4 lg:px-6 pb-12">
-            {announcement.enabled ? (
-              <AnnouncementBar text={announcement.text} updatedAt={announcement.updatedAt ?? null} />
-            ) : null}
-            {children}
+        <div className="cabinet min-h-screen flex flex-col bg-bg-default">
+          {announcement.enabled ? (
+            <AnnouncementBar text={announcement.text} updatedAt={announcement.updatedAt ?? null} />
+          ) : null}
+          <div className="flex flex-1">
+            <Sidebar items={items} footer={footer} defaultCollapsed={sidebarCollapsed} />
+            <div className="flex-1 min-w-0 px-4 lg:px-6 pb-12">{children}</div>
           </div>
           <LoginNoticeGate notices={loginNotices} />
           <CommandPalette />

@@ -65,8 +65,7 @@ export default async function AdminAuditPage({
   return (
     <>
       <Topbar
-        title="Журнал аудита"
-        subtitle={tab === "licenses" ? "Действия с лицензиями" : "Представители, роли, платежи и настройки"}
+        title="Логи"
         user={{ name: me?.email ?? "Admin", email: me?.email ?? "", role: me?.role.name ?? "Admin" }}
       />
       <div className="mt-6">
@@ -116,7 +115,7 @@ export default async function AdminAuditPage({
                       <div className="flex items-center gap-2 flex-wrap">
                         <Tag tone="accent">{ENTITY_LABEL[l.entity] ?? l.entity}</Tag>
                         <span className="text-sm">{ACTION_LABEL[l.action] ?? l.action}</span>
-                        {l.entity === "DEALER" ? (
+                        {l.entity === "DEALER" && l.action !== "DEALER_DELETED" ? (
                           <Link href={`/admin/dealers/${l.entityId}`} className="text-sm hover:text-accent">
                             {l.summary ?? l.entityId}
                           </Link>
@@ -167,6 +166,13 @@ const ACTION_LABEL: Record<string, string> = {
   STATUS_REJECTED: "отклонён",
   STATUS_SUSPENDED: "заблокирован",
   STATUS_PENDING: "возвращён на рассмотрение",
+  DEALER_DELETED: "удалён",
+  KB_ARTICLE_CREATED: "статья базы знаний создана",
+  KB_ARTICLE_UPDATED: "статья базы знаний изменена",
+  KB_ARTICLE_DELETED: "статья базы знаний удалена",
+  KB_CATEGORY_CREATED: "категория базы знаний создана",
+  KB_CATEGORY_UPDATED: "категория базы знаний изменена",
+  KB_CATEGORY_DELETED: "категория базы знаний удалена",
   CONFIRMED: "оплата подтверждена",
   CANCELLED: "отменён",
   FISCALIZED: "чек отправлен в кассу",

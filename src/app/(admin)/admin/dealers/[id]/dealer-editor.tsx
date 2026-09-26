@@ -14,8 +14,9 @@ import { Avatar } from "@/components/ui/avatar";
 import { Modal } from "@/components/ui/modal";
 import { Textarea } from "@/components/ui/textarea";
 import { fioFromParts } from "@/lib/utils";
-import { formatRuDate } from "@/lib/dates";
+import { formatRuDateTime } from "@/lib/dates";
 import { usePermissions } from "@/hooks/use-permissions";
+import { DeleteDealerButton } from "../delete-dealer-button";
 
 type Dealer = {
   id: string;
@@ -41,7 +42,15 @@ type Dealer = {
   role: { name: string };
 };
 
-export function DealerEditor({ dealer, avatarUrl }: { dealer: Dealer; avatarUrl?: string | null }) {
+export function DealerEditor({
+  dealer,
+  avatarUrl,
+  deletable = false,
+}: {
+  dealer: Dealer;
+  avatarUrl?: string | null;
+  deletable?: boolean;
+}) {
   const router = useRouter();
   const { can } = usePermissions();
   const canApprove = can("dealers.approve");
@@ -180,7 +189,7 @@ export function DealerEditor({ dealer, avatarUrl }: { dealer: Dealer; avatarUrl?
                 <div className="text-sm text-ink-muted">{data.email}</div>
                 <div className="mt-2 flex items-center gap-2">
                   <StatusTag kind="user" status={data.status} />
-                  <Tag tone="muted">Заявка от {formatRuDate(data.createdAt)}</Tag>
+                  <Tag tone="muted">Заявка от {formatRuDateTime(data.createdAt)}</Tag>
                 </div>
                 {photo && canEdit ? (
                   <button
@@ -236,6 +245,9 @@ export function DealerEditor({ dealer, avatarUrl }: { dealer: Dealer; avatarUrl?
                 >
                   Разблокировать
                 </Button>
+              ) : null}
+              {deletable ? (
+                <DeleteDealerButton dealerId={data.id} name={fio || data.email} redirectTo="/admin/dealers" />
               ) : null}
             </div>
           </div>
@@ -393,7 +405,7 @@ export function DealerEditor({ dealer, avatarUrl }: { dealer: Dealer; avatarUrl?
           />
           {data.dealerProfile?.driveModsRequestedAt && !data.dealerProfile?.driveModsAccess ? (
             <div className="mt-3 rounded-panel border border-hairline p-3 text-xs text-ink-muted">
-              Представитель запросил доступ {formatRuDate(data.dealerProfile.driveModsRequestedAt)}.
+              Представитель запросил доступ {formatRuDateTime(data.dealerProfile.driveModsRequestedAt)}.
             </div>
           ) : null}
         </Card>

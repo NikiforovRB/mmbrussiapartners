@@ -5,6 +5,7 @@ import { Topbar } from "@/components/cabinet/topbar";
 import { ArticleEditor } from "@/components/knowledge/article-editor";
 import { hasPermission } from "@/lib/permissions";
 import { readBlocks } from "@/lib/knowledge-server";
+import { loadKnowledgeCategories } from "@/lib/knowledge-browse";
 
 export const dynamic = "force-dynamic";
 
@@ -20,9 +21,10 @@ export default async function AdminKnowledgeEditPage({
   }
 
   const { id } = await params;
-  const [me, article] = await Promise.all([
+  const [me, article, categories] = await Promise.all([
     db.user.findUnique({ where: { id: session.user.id }, include: { role: true } }),
     db.knowledgeArticle.findUnique({ where: { id } }),
+    loadKnowledgeCategories(),
   ]);
   if (!article) notFound();
 
@@ -38,11 +40,12 @@ export default async function AdminKnowledgeEditPage({
           initial={{
             id: article.id,
             title: article.title,
-            category: article.category ?? "",
+            categoryId: article.categoryId ?? "",
             excerpt: article.excerpt ?? "",
             published: article.published,
             blocks: readBlocks(article.blocks),
           }}
+          categories={categories}
         />
       </div>
     </>

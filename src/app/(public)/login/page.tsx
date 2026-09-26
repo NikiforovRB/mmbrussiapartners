@@ -24,11 +24,9 @@ export default async function LoginPage() {
           <div className="relative">
             <div className="text-xs tracking-widest uppercase text-white/60">MMB · Личный кабинет дилера</div>
             <h1 className="mt-3 font-display text-4xl  tracking-tightest leading-tight">
-              Лицензии,
-              <br /> аналитика
-              <br /> и&nbsp;дилеры
+              Управление лицензиями и&nbsp;аналитика
             </h1>
-            <p className="mt-6 text-white/70 max-w-sm">
+            <p className="mt-6 text-white/70">
               Удобный личный кабинет для генерации и управления лицензиями. Оперативная техподдержка и помощь на всех этапах.
             </p>
           </div>

@@ -13,7 +13,7 @@ import { Topbar } from "@/components/cabinet/topbar";
 import { Card } from "@/components/ui/card";
 import { StatusTag } from "@/components/ui/status-tag";
 import { Button } from "@/components/ui/button";
-import { addDays, formatRuDate } from "@/lib/dates";
+import { addDays, formatRuDate, formatRuDateTime } from "@/lib/dates";
 import { fioFromParts } from "@/lib/utils";
 import { formatRub } from "@/lib/money";
 
@@ -105,7 +105,7 @@ export default async function AdminDashboard() {
                   </div>
                   <div className="flex items-center gap-3 text-sm text-ink-muted">
                     <StatusTag kind="user" status={u.status} />
-                    <span>{formatRuDate(u.createdAt)}</span>
+                    <span>{formatRuDateTime(u.createdAt)}</span>
                     <Link href={`/admin/dealers/${u.id}`}>
                       <Button size="sm" variant="secondary">Открыть</Button>
                     </Link>
@@ -139,7 +139,7 @@ function Kpi({ icon, label, value }: { icon: React.ReactNode; label: string; val
         <span className="grid h-9 w-9 place-items-center rounded-panel bg-white text-accent">{icon}</span>
         <div className="text-xs">{label}</div>
       </div>
-      <div className="mt-3 font-display text-2xl  tracking-tight">{value}</div>
+      <div className="mt-3 whitespace-nowrap font-display text-2xl tracking-tight">{value}</div>
     </div>
   );
 }

@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatusTag } from "@/components/ui/status-tag";
 import { fioFromParts } from "@/lib/utils";
-import { formatRub } from "@/lib/money";
+import { Money } from "@/components/ui/money";
 import { formatRuDateTime } from "@/lib/dates";
 import { syncAtolPayPayment } from "@/lib/payments/service";
 import { atolPayMethodsPhrase } from "@/lib/payments/provider";
@@ -77,9 +77,7 @@ export default async function DealerPaymentPage({
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <div className="text-[11px] uppercase tracking-tight text-ink-subtle">К оплате</div>
-              <div className="mt-1 font-display text-4xl tracking-tightest">
-                {formatRub(Number(payment.amount))}
-              </div>
+              <Money value={Number(payment.amount)} className="mt-1 block font-display text-4xl tracking-tightest" />
               <div className="mt-1 text-sm text-ink-muted">{payment.description ?? "Лицензия MMB RUSSIA"}</div>
             </div>
             <StatusTag kind="payment" status={payment.status} />
