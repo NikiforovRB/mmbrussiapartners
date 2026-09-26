@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
+import { PUBLISHED_ON_SITE_WHERE } from "@/lib/site-dealers";
 
 export const runtime = "nodejs";
 export const revalidate = 60;
@@ -21,10 +22,7 @@ export async function GET(req: Request) {
   }
 
   const dealers = await db.dealerProfile.findMany({
-    where: {
-      phoneVisibleOnSite: true,
-      user: { status: "APPROVED" },
-    },
+    where: PUBLISHED_ON_SITE_WHERE,
     include: { user: { select: { email: true } } },
     orderBy: [{ region: "asc" }, { city: "asc" }, { lastName: "asc" }],
   });

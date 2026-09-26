@@ -1,14 +1,17 @@
 "use client";
 
 import * as React from "react";
-import { Save, Phone, Building2, MapPin, Lock, Eye, Upload, Trash2 } from "lucide-react";
+import { Save, Phone, Building2, MapPin, Lock, Eye, Upload, Trash2, Send } from "lucide-react";
 import { toast } from "sonner";
 import { signOut } from "next-auth/react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Toggle } from "@/components/ui/toggle";
+import { Tag } from "@/components/ui/tag";
 import { Avatar } from "@/components/ui/avatar";
+import { formatRuDate } from "@/lib/dates";
+import type { SitePublication } from "@/lib/site-sync-labels";
 
 type ProfileInitial = {
   firstName: string;
@@ -19,25 +22,39 @@ type ProfileInitial = {
   inn: string;
   city: string;
   region: string;
+  country: string;
   address: string;
+  siteComment: string;
   phoneVisibleOnSite: boolean;
   notifyByEmail: boolean;
   notifyByTelegram: boolean;
   telegramChatId: string;
 };
 
+type PublicationState = {
+  status: SitePublication;
+  at: string | null;
+  note: string | null;
+  /** Сохранённое значение тоггла — от него зависит, что будет после «Сохранить». */
+  consent: boolean;
+};
+
 export function ProfileForm({
   initial,
+  publication: initialPublication,
   email,
   avatarUrl: initialAvatarUrl,
   displayName,
 }: {
   initial: ProfileInitial;
+  publication: PublicationState;
   email: string;
   avatarUrl: string | null;
   displayName: string;
 }) {
   const [data, setData] = React.useState(initial);
+  const [publication, setPublication] = React.useState(initialPublication);
+  const [requesting, setRequesting] = React.useState(false);
   const [avatarUrl, setAvatarUrl] = React.useState(initialAvatarUrl);
   const [uploadingAvatar, setUploadingAvatar] = React.useState(false);
   const fileRef = React.useRef<HTMLInputElement>(null);
@@ -89,7 +106,34 @@ export function ProfileForm({
       toast.error(j.error ?? "Не удалось сохранить");
       return;
     }
+    if (data.phoneVisibleOnSite !== publication.consent) {
+      setPublication({
+        status: data.phoneVisibleOnSite ? "PENDING" : "NONE",
+        at: new Date().toISOString(),
+        note: null,
+        consent: data.phoneVisibleOnSite,
+      });
+      toast.success(
+        data.phoneVisibleOnSite
+          ? "Профиль обновлён, заявка на публикацию отправлена администратору"
+          : "Профиль обновлён, телефон снят с сайта",
+      );
+      return;
+    }
     toast.success("Профиль обновлён");
+  }
+
+  async function requestAgain() {
+    setRequesting(true);
+    const res = await fetch("/api/profile/site-publication", { method: "POST" });
+    setRequesting(false);
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      toast.error(j.error ?? "Не удалось отправить заявку");
+      return;
+    }
+    setPublication({ ...publication, status: "PENDING", at: new Date().toISOString(), note: null });
+    toast.success("Заявка отправлена администратору");
   }
 
   async function savePassword() {
@@ -129,9 +173,12 @@ export function ProfileForm({
             <Input label="Отчество" value={data.middleName} onChange={(e) => setData({ ...data, middleName: e.target.value })} />
             <Input label="Организация" icon={<Building2 className="h-4 w-4" />} value={data.organization} onChange={(e) => setData({ ...data, organization: e.target.value })} />
             <Input label="ИНН" value={data.inn} onChange={(e) => setData({ ...data, inn: e.target.value })} />
+            <Input label="Страна" placeholder="Россия" value={data.country} onChange={(e) => setData({ ...data, country: e.target.value })} />
             <Input label="Регион" icon={<MapPin className="h-4 w-4" />} value={data.region} onChange={(e) => setData({ ...data, region: e.target.value })} />
             <Input label="Город" value={data.city} onChange={(e) => setData({ ...data, city: e.target.value })} />
-            <Input label="Адрес" value={data.address} onChange={(e) => setData({ ...data, address: e.target.value })} />
+            <div className="sm:col-span-2">
+              <Input label="Адрес" value={data.address} onChange={(e) => setData({ ...data, address: e.target.value })} />
+            </div>
           </div>
           <div className="mt-5 flex justify-end">
             <Button loading={saving} onClick={save} icon={<Save className="h-4 w-4" />}>
@@ -199,7 +246,7 @@ export function ProfileForm({
           </div>
         </Card>
         <Card>
-          <div className="font-display text-lg  tracking-tight mb-4">Публичный контакт</div>
+          <div className="font-display text-lg  tracking-tight mb-4">Публикация на сайте</div>
           <Toggle
             checked={data.phoneVisibleOnSite}
             onChange={(v) => setData({ ...data, phoneVisibleOnSite: v })}
@@ -208,8 +255,26 @@ export function ProfileForm({
                 <Eye className="h-4 w-4" /> Показывать телефон на сайте
               </span>
             }
-            description="После сохранения и одобрения администратором ваш телефон появится в списке представителей на mmbrussia.ru."
+            description="После одобрения администратором телефон, город и подпись появятся в «Дилерской сети» на mmbrussia.ru/contacts."
           />
+          <PublicationStatus
+            publication={publication}
+            toggle={data.phoneVisibleOnSite}
+            requesting={requesting}
+            onRequestAgain={() => void requestAgain()}
+          />
+          {data.phoneVisibleOnSite ? (
+            <div className="mt-4">
+              <Input
+                label="Подпись на сайте"
+                placeholder="Например: имя или район"
+                maxLength={200}
+                value={data.siteComment}
+                onChange={(e) => setData({ ...data, siteComment: e.target.value })}
+                hint="Необязательно. Показывается рядом с телефоном."
+              />
+            </div>
+          ) : null}
           <div className="mt-5 flex justify-end">
             <Button loading={saving} onClick={save} variant="secondary" icon={<Save className="h-4 w-4" />}>
               Сохранить
@@ -243,6 +308,88 @@ export function ProfileForm({
           </div>
         </Card>
       </div>
+    </div>
+  );
+}
+
+function PublicationStatus({
+  publication,
+  toggle,
+  requesting,
+  onRequestAgain,
+}: {
+  publication: PublicationState;
+  toggle: boolean;
+  requesting: boolean;
+  onRequestAgain: () => void;
+}) {
+  const box = "mt-4 rounded-panel border border-hairline p-3 text-xs text-ink-muted space-y-2";
+
+  if (toggle !== publication.consent) {
+    return (
+      <div className={box}>
+        {toggle
+          ? "Сохраните профиль — заявка на публикацию уйдёт администратору."
+          : publication.status === "APPROVED"
+            ? "Сохраните профиль — телефон сразу исчезнет с сайта."
+            : "Сохраните профиль, чтобы отозвать заявку."}
+      </div>
+    );
+  }
+  if (!publication.consent) return null;
+
+  if (publication.status === "PENDING") {
+    return (
+      <div className={box}>
+        <Tag tone="warning">На рассмотрении</Tag>
+        <div>
+          Заявка отправлена{publication.at ? ` ${formatRuDate(publication.at)}` : ""}. Телефон появится
+          на сайте после одобрения администратором.
+        </div>
+      </div>
+    );
+  }
+  if (publication.status === "APPROVED") {
+    return (
+      <div className={box}>
+        <Tag tone="success">Опубликован</Tag>
+        <div>
+          Телефон показывается в «Дилерской сети» на{" "}
+          <a
+            href="https://mmbrussia.ru/contacts"
+            target="_blank"
+            rel="noreferrer"
+            className="text-accent hover:underline"
+          >
+            mmbrussia.ru/contacts
+          </a>
+          . Выключите переключатель и сохраните, чтобы убрать его.
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className={box}>
+      <Tag tone="danger">Не опубликован</Tag>
+      <div>
+        {publication.status === "REJECTED"
+          ? "Администратор отклонил заявку или снял телефон с сайта."
+          : "Заявка ещё не отправлена."}
+        {publication.note ? (
+          <>
+            {" "}Причина: <span className="text-ink">{publication.note}</span>
+          </>
+        ) : null}
+      </div>
+      <Button
+        size="sm"
+        variant="secondary"
+        loading={requesting}
+        icon={<Send className="h-4 w-4" />}
+        onClick={onRequestAgain}
+      >
+        {publication.status === "REJECTED" ? "Подать заявку повторно" : "Подать заявку"}
+      </Button>
     </div>
   );
 }

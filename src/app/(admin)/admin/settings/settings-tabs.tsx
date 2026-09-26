@@ -10,7 +10,7 @@ import { GenerationForm } from "./generation-form";
 import type { HomepageContent } from "@/lib/homepage-content";
 import type { Announcement, SupportSettings, GenerationSettings } from "@/lib/site-settings";
 
-type Tab = "general" | "homepage" | "announcement" | "support" | "generation" | "payment";
+type Tab = "general" | "homepage" | "announcement" | "support" | "generation" | "payment" | "site";
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "general", label: "Основные данные" },
@@ -19,6 +19,7 @@ const TABS: { key: Tab; label: string }[] = [
   { key: "support", label: "Техподдержка" },
   { key: "generation", label: "Ограничения генерации" },
   { key: "payment", label: "Настройки онлайн-оплаты" },
+  { key: "site", label: "Дилерская сеть на сайте" },
 ];
 
 export function SettingsTabs({
@@ -28,6 +29,7 @@ export function SettingsTabs({
   support,
   generation,
   payment,
+  site,
 }: {
   general: { phone: string; email: string; address: string };
   homepage: HomepageContent;
@@ -35,6 +37,7 @@ export function SettingsTabs({
   support: SupportSettings;
   generation: GenerationSettings;
   payment: React.ReactNode;
+  site: React.ReactNode;
 }) {
   const [tab, setTab] = React.useState<Tab>("general");
 
@@ -63,6 +66,7 @@ export function SettingsTabs({
       {tab === "support" ? <SupportForm initial={support} /> : null}
       {tab === "generation" ? <GenerationForm initial={generation} /> : null}
       {tab === "payment" ? payment : null}
+      {tab === "site" ? site : null}
     </div>
   );
 }

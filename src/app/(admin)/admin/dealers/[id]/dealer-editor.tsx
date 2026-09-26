@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, XCircle, Save, Ban, Eye, ShieldOff, ShieldCheck, KeyRound, Camera, Loader2, Trash2 } from "lucide-react";
+import { CheckCircle2, XCircle, Save, Ban, ShieldOff, ShieldCheck, KeyRound, Camera, Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -32,10 +32,11 @@ type Dealer = {
     phone: string;
     city: string | null;
     region: string | null;
+    country: string | null;
     address: string | null;
+    siteComment: string | null;
     licenseLimit: number;
     licensesUsed: number;
-    phoneVisibleOnSite: boolean;
     driveModsAccess: boolean;
     driveModsRequestedAt: string | null;
   } | null;
@@ -46,10 +47,13 @@ export function DealerEditor({
   dealer,
   avatarUrl,
   deletable = false,
+  sitePublication,
 }: {
   dealer: Dealer;
   avatarUrl?: string | null;
   deletable?: boolean;
+  /** Карточка модерации публикации на сайте — рендерится страницей по данным из БД. */
+  sitePublication?: React.ReactNode;
 }) {
   const router = useRouter();
   const { can } = usePermissions();
@@ -112,6 +116,7 @@ export function DealerEditor({
 
   async function approve() {
     if (await update({ status: "APPROVED" })) {
+      setData((d) => ({ ...d, status: "APPROVED" }));
       toast.success("Дилер одобрен");
       router.refresh();
     }
@@ -122,14 +127,17 @@ export function DealerEditor({
       return;
     }
     if (await update({ status: "REJECTED", rejectionReason: rejectReason })) {
+      setData((d) => ({ ...d, status: "REJECTED" }));
       toast.success("Заявка отклонена");
       setRejectOpen(false);
       router.refresh();
     }
   }
   async function suspend() {
-    if (await update({ status: data.status === "SUSPENDED" ? "APPROVED" : "SUSPENDED" })) {
-      toast.success(data.status === "SUSPENDED" ? "Разблокирован" : "Заблокирован");
+    const next = data.status === "SUSPENDED" ? "APPROVED" : "SUSPENDED";
+    if (await update({ status: next })) {
+      setData((d) => ({ ...d, status: next }));
+      toast.success(next === "APPROVED" ? "Разблокирован" : "Заблокирован");
       router.refresh();
     }
   }
@@ -305,6 +313,15 @@ export function DealerEditor({
               }
             />
             <Input
+              label="Страна"
+              placeholder="Россия"
+              disabled={!canEdit}
+              value={data.dealerProfile?.country ?? ""}
+              onChange={(e) =>
+                setData({ ...data, dealerProfile: data.dealerProfile && { ...data.dealerProfile, country: e.target.value } })
+              }
+            />
+            <Input
               label="Регион"
               disabled={!canEdit}
               value={data.dealerProfile?.region ?? ""}
@@ -326,6 +343,16 @@ export function DealerEditor({
               value={data.dealerProfile?.address ?? ""}
               onChange={(e) =>
                 setData({ ...data, dealerProfile: data.dealerProfile && { ...data.dealerProfile, address: e.target.value } })
+              }
+            />
+            <Input
+              label="Подпись на сайте"
+              placeholder="Например: имя или район"
+              maxLength={200}
+              disabled={!canEdit}
+              value={data.dealerProfile?.siteComment ?? ""}
+              onChange={(e) =>
+                setData({ ...data, dealerProfile: data.dealerProfile && { ...data.dealerProfile, siteComment: e.target.value } })
               }
             />
             <Input
@@ -359,28 +386,7 @@ export function DealerEditor({
       </div>
 
       <div className="space-y-5">
-        <Card>
-          <div className="font-display text-lg  tracking-tight mb-4">Публикация на сайте</div>
-          <Toggle
-            checked={!!data.dealerProfile?.phoneVisibleOnSite}
-            disabled={!canEdit}
-            onChange={async (v) => {
-              if (!canEdit) return;
-              setData({
-                ...data,
-                dealerProfile: data.dealerProfile && { ...data.dealerProfile, phoneVisibleOnSite: v },
-              });
-              await update({ profile: { phoneVisibleOnSite: v } });
-              router.refresh();
-            }}
-            label={
-              <span className="flex items-center gap-2">
-                <Eye className="h-4 w-4" /> Показывать телефон на сайте
-              </span>
-            }
-            description="Сразу же отражается в публичном API /api/public/representatives."
-          />
-        </Card>
+        {sitePublication ? sitePublication : null}
 
         <Card>
           <div className="font-display text-lg  tracking-tight mb-4">Доступ к ЛК DriveMods</div>

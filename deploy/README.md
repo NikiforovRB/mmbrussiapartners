@@ -156,8 +156,13 @@ NEXTAUTH_URL="https://cabinet.mmbrussia.ru"     # обязательно https
 NEXTAUTH_SECRET="<openssl rand -base64 48>"
 DATABASE_URL="postgresql://…"                    # внешняя БД
 DIRECT_URL="postgresql://…"
+MMB_SITE_URL="https://mmbrussia.ru"              # «Дилерская сеть» на сайте
+MMB_DEALERS_SYNC_SECRET="<= DEALERS_SYNC_SECRET на сайте>"
 # S3, SMTP, ATOL, DRIVEMODS и NEXT_PUBLIC_* — из .env.example
 ```
+
+Суточную сверку «Дилерской сети» запускает сам процесс кабинета
+(`src/instrumentation.ts`), cron и таймеры systemd для неё не нужны.
 
 ```bash
 sudo -u deploy openssl rand -base64 48   # для NEXTAUTH_SECRET
