@@ -9,27 +9,58 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import type { HomepageContent } from "@/lib/homepage-content";
 import { usePermissions } from "@/hooks/use-permissions";
+import { useAutosave, useUnsavedChangesWarning } from "@/hooks/use-autosave";
 
 export function HomepageEditorForm({ initial }: { initial: HomepageContent }) {
   const { can } = usePermissions();
   const canEdit = can("settings.edit");
   const [data, setData] = React.useState(initial);
   const [saving, setSaving] = React.useState(false);
+  const [savedJson, setSavedJson] = React.useState(() => JSON.stringify(initial));
+  const [autosavedAt, setAutosavedAt] = React.useState<Date | null>(null);
+  const inFlight = React.useRef(false);
+
+  const json = JSON.stringify(data);
+  const dirty = canEdit && json !== savedJson;
+
+  async function persist(mode: "manual" | "auto"): Promise<boolean> {
+    if (inFlight.current) return false;
+    inFlight.current = true;
+    if (mode === "manual") setSaving(true);
+    const body = json;
+    try {
+      const res = await fetch("/api/settings/homepage", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body,
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        const message = j.error ?? "Ошибка сохранения";
+        toast.error(mode === "auto" ? `Автосохранение не удалось: ${message}` : message);
+        return false;
+      }
+      setSavedJson(body);
+      return true;
+    } catch {
+      toast.error(mode === "auto" ? "Автосохранение не удалось: нет связи" : "Нет связи с сервером");
+      return false;
+    } finally {
+      inFlight.current = false;
+      if (mode === "manual") setSaving(false);
+    }
+  }
+
+  useAutosave(
+    async () => {
+      if (await persist("auto")) setAutosavedAt(new Date());
+    },
+    { dirty, enabled: canEdit },
+  );
+  useUnsavedChangesWarning(dirty);
 
   async function save() {
-    setSaving(true);
-    const res = await fetch("/api/settings/homepage", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    setSaving(false);
-    if (!res.ok) {
-      const j = await res.json().catch(() => ({}));
-      toast.error(j.error ?? "Ошибка сохранения");
-      return;
-    }
-    toast.success("Главная страница обновлена");
+    if (await persist("manual")) toast.success("Главная страница обновлена");
   }
 
   return (
@@ -153,7 +184,14 @@ export function HomepageEditorForm({ initial }: { initial: HomepageContent }) {
         </div>
       </Card>
 
-      <div className="flex justify-end">
+      <div className="flex flex-wrap items-center justify-end gap-3">
+        <span className="mr-auto text-xs text-ink-muted">
+          {dirty
+            ? "Есть несохранённые изменения — автосохранение раз в 5 минут"
+            : autosavedAt
+              ? `Автосохранено в ${autosavedAt.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}`
+              : null}
+        </span>
         <Button
           loading={saving}
           disabled={!canEdit}

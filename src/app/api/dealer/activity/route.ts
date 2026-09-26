@@ -1,14 +1,13 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { badRequest, route, unauthenticated } from "@/lib/api";
+import { badRequest, route } from "@/lib/api";
+import { requireApprovedUser } from "@/lib/session";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export const GET = route(async (req: Request) => {
-  const session = await auth();
-  if (!session?.user) throw unauthenticated();
+  const session = await requireApprovedUser();
 
   const { searchParams } = new URL(req.url);
   const dateStr = searchParams.get("date");

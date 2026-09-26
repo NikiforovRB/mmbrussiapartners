@@ -1,15 +1,14 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getDownloadUrl } from "@/lib/s3";
 import { hasAdminScope, hasPermission } from "@/lib/permissions";
-import { badRequest, forbidden, notFound, route, unauthenticated } from "@/lib/api";
+import { badRequest, forbidden, notFound, route } from "@/lib/api";
+import { requireApprovedUser } from "@/lib/session";
 
 export const runtime = "nodejs";
 
 export const GET = route(async (_req: Request, ctx: { params: Promise<{ id: string }> }) => {
-  const session = await auth();
-  if (!session?.user) throw unauthenticated();
+  const session = await requireApprovedUser();
 
   const { id } = await ctx.params;
   const license = await db.license.findUnique({ where: { id } });

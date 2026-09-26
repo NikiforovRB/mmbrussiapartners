@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { ApiError, forbidden, parseBody, route, unauthenticated } from "@/lib/api";
+import { ApiError, parseBody, route } from "@/lib/api";
 import { huPass, describeDriveModsFailure, isDriveModsConfigured } from "@/lib/drivemods";
+import { requireApprovedUser } from "@/lib/session";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,9 +14,7 @@ const schema = z.object({
 });
 
 export const POST = route(async (req: Request) => {
-  const session = await auth();
-  if (!session?.user) throw unauthenticated();
-  if (session.user.status !== "APPROVED") throw forbidden("Аккаунт не одобрен");
+  const session = await requireApprovedUser();
   if (!isDriveModsConfigured()) {
     throw new ApiError(
       "NOT_CONFIGURED",

@@ -1,17 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { auth, hashPassword } from "@/lib/auth";
+import { hashPassword } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { hasPermission } from "@/lib/permissions";
-import {
-  badRequest,
-  forbidden,
-  notFound,
-  parseBody,
-  route,
-  unauthenticated,
-} from "@/lib/api";
+import { badRequest, forbidden, notFound, parseBody, route } from "@/lib/api";
 import { recordAdminAction } from "@/lib/admin-audit";
+import { requirePermission } from "@/lib/session";
 
 export const runtime = "nodejs";
 
@@ -21,14 +14,12 @@ const schema = z.object({
   password: z.string().min(8, "Пароль — минимум 8 символов").optional(),
   roleId: z.string().min(1).optional(),
   status: z.enum(["APPROVED", "SUSPENDED"]).optional(),
+  /** Выкинуть пользователя со всех устройств, не меняя остального. */
+  revokeSessions: z.literal(true).optional(),
 });
 
 export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: string }> }) => {
-  const session = await auth();
-  if (!session?.user) throw unauthenticated();
-  if (!hasPermission(session.user.permissions, "users.manage", session.user.isSuperAdmin)) {
-    throw forbidden();
-  }
+  const session = await requirePermission("users.manage");
 
   const { id } = await ctx.params;
   const target = await db.user.findUnique({ where: { id }, include: { role: true } });
@@ -65,6 +56,16 @@ export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: str
     if (isSelf) throw badRequest("Нельзя менять собственный статус.");
     update.status = data.status;
     actions.push("USER_STATUS_CHANGED");
+  }
+
+  if (data.revokeSessions) {
+    if (isSelf) throw badRequest("Свои сеансы завершите выходом из кабинета.");
+    actions.push("USER_SESSIONS_REVOKED");
+  }
+
+  // Новый пароль, блокировка и явный отзыв обнуляют все выданные сессии.
+  if (update.passwordHash || update.status || data.revokeSessions) {
+    update.sessionVersion = { increment: 1 };
   }
 
   if (Object.keys(update).length === 0) {

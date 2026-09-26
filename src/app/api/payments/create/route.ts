@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { hasPermission } from "@/lib/permissions";
-import { ApiError, badRequest, forbidden, parseBody, route, unauthenticated } from "@/lib/api";
+import { ApiError, badRequest, forbidden, parseBody, route } from "@/lib/api";
 import { createPayment } from "@/lib/payments/service";
 import { defaultLicensePrice, getPaymentProvider } from "@/lib/payments/provider";
 import { resolvePrice } from "@/lib/pricing";
 import { notifyAdmins } from "@/lib/app-notifications";
+import { formatRub } from "@/lib/money";
+import { requireApprovedUser } from "@/lib/session";
 
 export const runtime = "nodejs";
 
@@ -21,9 +22,7 @@ const schema = z.object({
 });
 
 export const POST = route(async (req: Request) => {
-  const session = await auth();
-  if (!session?.user) throw unauthenticated();
-  if (session.user.status !== "APPROVED") throw forbidden("Аккаунт не одобрен");
+  const session = await requireApprovedUser();
 
   const body = await parseBody(req, schema);
   const canSetAmount = hasPermission(
@@ -90,7 +89,7 @@ export const POST = route(async (req: Request) => {
 
   await notifyAdmins(["payments.manage"], {
     type: "PAYMENT_CREATED",
-    title: `Новый счёт на ${amount.toLocaleString("ru-RU")} ₽`,
+    title: `Новый счёт на ${formatRub(amount)}`,
     body: session.user.email,
     link: "/admin/payments",
   });
@@ -101,4 +100,4 @@ export const POST = route(async (req: Request) => {
     provider: payment.provider,
     manual: getPaymentProvider().id === "manual",
   });
-});
+}, { rateLimit: { limit: 30, windowMs: 10 * 60_000, name: "payments-create" } });

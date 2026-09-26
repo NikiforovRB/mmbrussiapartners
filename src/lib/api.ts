@@ -80,7 +80,7 @@ export function route<Args extends unknown[]>(
         const ip = clientIp(req.headers);
         const path = new URL(req.url).pathname;
         const key = `${options.rateLimit.name ?? path}:${req.method}:${ip}`;
-        const rl = rateLimit(key, options.rateLimit);
+        const rl = await rateLimit(key, options.rateLimit);
         if (!rl.ok) {
           const res = apiError(tooManyRequests());
           res.headers.set("Retry-After", String(Math.ceil(rl.retryAfterMs / 1000)));

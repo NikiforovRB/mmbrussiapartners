@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { clientIp, rateLimit } from "@/lib/rate-limit";
 import { atolPayCheckoutUrl, siteOrigin } from "@/lib/payments/service";
 
 export const runtime = "nodejs";
@@ -11,13 +12,21 @@ export const dynamic = "force-dynamic";
  * перевыпускает просроченную. Оплаченный или закрытый счёт возвращает на его
  * страницу.
  */
-export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
   const origin = siteOrigin();
   const page = `${origin}/dealer/payments/${id}`;
 
   const session = await auth();
   if (!session?.user) return NextResponse.redirect(`${origin}/login`);
+  if (session.user.status !== "APPROVED") return NextResponse.redirect(`${origin}/dealer`);
+
+  // Каждый перевыпуск ссылки — новый заказ в АТОЛ Pay.
+  const rl = await rateLimit(`payment-checkout:${session.user.id}:${clientIp(req.headers)}`, {
+    limit: 30,
+    windowMs: 10 * 60_000,
+  });
+  if (!rl.ok) return NextResponse.redirect(`${page}?checkout=failed`);
 
   const payment = await db.payment.findUnique({
     where: { id },

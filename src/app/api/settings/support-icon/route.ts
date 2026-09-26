@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
-import { hasPermission } from "@/lib/permissions";
-import { badRequest, forbidden, route, unauthenticated } from "@/lib/api";
+import { badRequest, route } from "@/lib/api";
 import { uploadObject } from "@/lib/s3";
+import { requirePermission } from "@/lib/session";
 
 export const runtime = "nodejs";
 
@@ -21,11 +20,7 @@ const ALLOWED: Record<string, string> = {
  * SVG отдаётся через <img>, поэтому скрипты внутри него не исполняются.
  */
 export const POST = route(async (req: Request) => {
-  const session = await auth();
-  if (!session?.user) throw unauthenticated();
-  if (!hasPermission(session.user.permissions, "settings.edit", session.user.isSuperAdmin)) {
-    throw forbidden();
-  }
+  await requirePermission("settings.edit");
 
   const form = await req.formData();
   const file = form.get("file");

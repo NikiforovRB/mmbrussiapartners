@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { hasPermission } from "@/lib/permissions";
-import { forbidden, parseBody, route, unauthenticated } from "@/lib/api";
+import { parseBody, route } from "@/lib/api";
 import { recordAdminAction } from "@/lib/admin-audit";
 import { blocksSchema, slugify } from "@/lib/knowledge";
 import { sanitizeBlocks } from "@/lib/knowledge-server";
 import type { Prisma } from "@prisma/client";
+import { requirePermission } from "@/lib/session";
 
 export const runtime = "nodejs";
 
@@ -31,11 +30,7 @@ async function uniqueSlug(base: string): Promise<string> {
 }
 
 export const POST = route(async (req: Request) => {
-  const session = await auth();
-  if (!session?.user) throw unauthenticated();
-  if (!hasPermission(session.user.permissions, "settings.edit", session.user.isSuperAdmin)) {
-    throw forbidden();
-  }
+  const session = await requirePermission("settings.edit");
 
   const data = await parseBody(req, schema);
   const slug = await uniqueSlug(slugify(data.title));

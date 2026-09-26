@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { hasAdminScope, hasPermission } from "@/lib/permissions";
-import { forbidden, notFound, parseBody, route, unauthenticated } from "@/lib/api";
+import { forbidden, notFound, parseBody, route } from "@/lib/api";
 import { syncLicenseSlots } from "@/lib/license-slots";
+import { requireApprovedUser } from "@/lib/session";
 
 export const runtime = "nodejs";
 
@@ -21,8 +21,7 @@ const patchSchema = z.object({
 const TERM_FIELDS = ["status", "features", "type"] as const;
 
 export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: string }> }) => {
-  const session = await auth();
-  if (!session?.user) throw unauthenticated();
+  const session = await requireApprovedUser();
 
   const { id } = await ctx.params;
   const license = await db.license.findUnique({ where: { id } });
@@ -76,8 +75,7 @@ export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: str
 });
 
 export const DELETE = route(async (req: Request, ctx: { params: Promise<{ id: string }> }) => {
-  const session = await auth();
-  if (!session?.user) throw unauthenticated();
+  const session = await requireApprovedUser();
 
   const { id } = await ctx.params;
   const license = await db.license.findUnique({ where: { id } });

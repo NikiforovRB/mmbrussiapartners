@@ -16,7 +16,8 @@ import { StatusTag } from "@/components/ui/status-tag";
 import { Button } from "@/components/ui/button";
 import { ScrollReveal } from "@/components/animations/scroll-reveal";
 import { DayActivity } from "@/components/dealer/day-activity";
-import { fioFromParts, formatCurrency } from "@/lib/utils";
+import { fioFromParts } from "@/lib/utils";
+import { formatRub } from "@/lib/money";
 import { formatRuDate } from "@/lib/dates";
 
 export const dynamic = "force-dynamic";
@@ -150,7 +151,7 @@ export default async function DealerDashboard() {
             <KpiCard
               icon={<TrendingUp className="h-4 w-4" />}
               label="Оплачено"
-              value={formatCurrency(Number(totalRevenue._sum.amount ?? 0))}
+              value={formatRub(Number(totalRevenue._sum.amount ?? 0))}
             />
           </div>
         </ScrollReveal>

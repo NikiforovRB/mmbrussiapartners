@@ -26,10 +26,18 @@ type AuthJwt = {
   status?: string;
   roleName?: string;
   permissions?: PermissionKey[];
+  /** Совпадает с User.sessionVersion; увеличение в базе отзывает все выданные сессии. */
+  sessionVersion?: number;
   refreshedAt?: number;
 };
 
-const JWT_REFRESH_MS = 60_000;
+/**
+ * Как часто токен сверяется с базой. JWT нельзя отозвать мгновенно: блокировка,
+ * смена прав или отзыв сессий вступают в силу не позже чем через этот интервал.
+ */
+const JWT_REFRESH_MS = 30_000;
+
+const BLOCKED_STATUSES = new Set(["SUSPENDED", "REJECTED"]);
 
 const credentialsSchema = z.object({
   email: z.string().email(),
@@ -54,7 +62,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       authorize: async (creds, req) => {
         // Анти-брутфорс: ограничиваем попытки по IP и по email (10 минут).
         const ip = req?.headers ? clientIp(req.headers) : "unknown";
-        if (!rateLimit(`login-ip:${ip}`, { limit: 15, windowMs: 10 * 60_000 }).ok) {
+        if (!(await rateLimit(`login-ip:${ip}`, { limit: 15, windowMs: 10 * 60_000 })).ok) {
           throw new Error("TOO_MANY_ATTEMPTS");
         }
 
@@ -62,7 +70,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (!parsed.success) return null;
         const { email, password } = parsed.data;
 
-        if (!rateLimit(`login-email:${email.toLowerCase().trim()}`, { limit: 8, windowMs: 10 * 60_000 }).ok) {
+        const emailKey = `login-email:${email.toLowerCase().trim()}`;
+        if (!(await rateLimit(emailKey, { limit: 8, windowMs: 10 * 60_000 })).ok) {
           throw new Error("TOO_MANY_ATTEMPTS");
         }
 
@@ -91,6 +100,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           status: user.status,
           roleName: user.role.name,
           permissions: user.role.permissions as PermissionKey[],
+          sessionVersion: user.sessionVersion,
         };
       },
     }),
@@ -105,6 +115,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         t.status = u.status as string;
         t.roleName = u.roleName as string;
         t.permissions = (u.permissions as PermissionKey[]) ?? [];
+        t.sessionVersion = (u.sessionVersion as number) ?? 0;
         t.refreshedAt = Date.now();
         return t as typeof token;
       }
@@ -115,12 +126,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           where: { id: t.id },
           include: { role: true },
         });
-        if (fresh) {
-          t.isSuperAdmin = fresh.isSuperAdmin;
-          t.status = fresh.status;
-          t.roleName = fresh.role.name;
-          t.permissions = fresh.role.permissions as PermissionKey[];
+        // null сбрасывает cookie сессии: пользователь удалён, заблокирован
+        // или его сессии отозваны (сменён пароль, «Завершить сеансы»).
+        if (
+          !fresh ||
+          BLOCKED_STATUSES.has(fresh.status) ||
+          fresh.sessionVersion !== (t.sessionVersion ?? 0)
+        ) {
+          return null;
         }
+        t.isSuperAdmin = fresh.isSuperAdmin;
+        t.status = fresh.status;
+        t.roleName = fresh.role.name;
+        t.permissions = fresh.role.permissions as PermissionKey[];
         t.refreshedAt = Date.now();
       }
       return t as typeof token;
@@ -128,11 +146,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     session({ session, token }) {
       const t = token as AuthJwt;
       if (t && session.user) {
+        // Права действуют только у одобренной учётной записи: проверки вида
+        // hasPermission(session.user.permissions, …) отказывают остальным сами.
+        const approved = t.status === "APPROVED";
         session.user.id = t.id ?? "";
-        session.user.isSuperAdmin = !!t.isSuperAdmin;
+        session.user.isSuperAdmin = approved && !!t.isSuperAdmin;
         session.user.status = t.status ?? "";
         session.user.roleName = t.roleName ?? "";
-        session.user.permissions = t.permissions ?? [];
+        session.user.permissions = approved ? (t.permissions ?? []) : [];
       }
       return session;
     },

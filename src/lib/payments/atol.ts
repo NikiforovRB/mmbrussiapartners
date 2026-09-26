@@ -1,4 +1,5 @@
 import "server-only";
+import { fetchWithTimeout } from "@/lib/http";
 
 /**
  * АТОЛ Онлайн — облачная касса (54-ФЗ).
@@ -116,12 +117,11 @@ async function getToken(force = false): Promise<string> {
   if (!force && tokenCache && Date.now() - tokenCache.ts < TOKEN_TTL_MS) {
     return tokenCache.token;
   }
-  const res = await fetch(`${BASE_URL}/getToken`, {
+  const res = await fetchWithTimeout(`${BASE_URL}/getToken`, {
     method: "POST",
     headers: { "Content-Type": "application/json; charset=utf-8" },
     body: JSON.stringify({ login: LOGIN, pass: PASSWORD }),
-    cache: "no-store",
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    timeoutMs: REQUEST_TIMEOUT_MS,
   });
   const data = await parseJson(res);
   const token = typeof data.token === "string" ? data.token : "";
@@ -200,12 +200,11 @@ export async function registerReceipt(input: AtolRegisterInput): Promise<{ uuid:
   };
 
   const send = async (token: string) =>
-    fetch(`${BASE_URL}/${GROUP}/sell`, {
+    fetchWithTimeout(`${BASE_URL}/${GROUP}/sell`, {
       method: "POST",
       headers: { "Content-Type": "application/json; charset=utf-8", Token: token },
       body: JSON.stringify(body),
-      cache: "no-store",
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      timeoutMs: REQUEST_TIMEOUT_MS,
     });
 
   let res = await send(await getToken());
@@ -223,10 +222,9 @@ export async function registerReceipt(input: AtolRegisterInput): Promise<{ uuid:
 /** Результат обработки чека: статус и фискальные реквизиты. */
 export async function getReceiptReport(uuid: string): Promise<AtolReport> {
   const send = async (token: string) =>
-    fetch(`${BASE_URL}/${GROUP}/report/${encodeURIComponent(uuid)}`, {
+    fetchWithTimeout(`${BASE_URL}/${GROUP}/report/${encodeURIComponent(uuid)}`, {
       headers: { Token: token },
-      cache: "no-store",
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      timeoutMs: REQUEST_TIMEOUT_MS,
     });
 
   let res = await send(await getToken());

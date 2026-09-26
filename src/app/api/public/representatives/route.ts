@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 export const revalidate = 60;
 
 export async function GET(req: Request) {
-  const rl = rateLimit(`public-representatives:${clientIp(req.headers)}`, {
+  const rl = await rateLimit(`public-representatives:${clientIp(req.headers)}`, {
     limit: 120,
     windowMs: 60_000,
   });

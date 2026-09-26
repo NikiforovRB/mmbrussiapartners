@@ -1,10 +1,13 @@
 import "server-only";
+import { createReadStream } from "node:fs";
+import { stat } from "node:fs/promises";
 import {
   S3Client,
   PutObjectCommand,
   GetObjectCommand,
   DeleteObjectCommand,
   HeadObjectCommand,
+  HeadBucketCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
@@ -21,6 +24,8 @@ export const s3 = new S3Client({
   region,
   credentials: { accessKeyId, secretAccessKey },
   forcePathStyle: true,
+  // Без таймаутов зависшее хранилище держало бы запрос до таймаута nginx.
+  requestHandler: { connectionTimeout: 5_000, requestTimeout: 60_000 },
 });
 
 export const S3_FOLDERS = {
@@ -51,6 +56,34 @@ export async function uploadObject(
     }),
   );
   return { key };
+}
+
+/** Загрузка файла с диска потоком — без чтения целиком в память. */
+export async function uploadFile(
+  folder: S3Folder,
+  filename: string,
+  path: string,
+  contentType?: string,
+): Promise<{ key: string }> {
+  const key = `${S3_FOLDERS[folder]}${Date.now()}-${sanitizeFilename(filename)}`;
+  const { size } = await stat(path);
+  await s3.send(
+    new PutObjectCommand({
+      Bucket: S3_BUCKET,
+      Key: key,
+      Body: createReadStream(path),
+      ContentLength: size,
+      ContentType: contentType,
+    }),
+  );
+  return { key };
+}
+
+/** Доступность бакета для внешнего мониторинга. */
+export async function pingBucket(timeoutMs = 5_000): Promise<void> {
+  await s3.send(new HeadBucketCommand({ Bucket: S3_BUCKET }), {
+    abortSignal: AbortSignal.timeout(timeoutMs),
+  });
 }
 
 export async function getDownloadUrl(key: string, expiresInSec = 60 * 5): Promise<string> {

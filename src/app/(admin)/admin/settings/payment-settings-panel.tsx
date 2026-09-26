@@ -3,6 +3,7 @@ import { CreditCard, ReceiptText, ShieldCheck, Info, Mail } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Tag } from "@/components/ui/tag";
 import type { PaymentSettingsSummary } from "@/lib/payments/summary";
+import { formatRub } from "@/lib/money";
 
 const PROVIDER_TITLES: Record<string, string> = {
   manual: "Счёт на оплату (перевод / СБП по реквизитам)",
@@ -146,13 +147,13 @@ export function PaymentSettingsPanel({ summary }: { summary: PaymentSettingsSumm
           label="Базовая цена генерации"
           value={
             pricing.defaultLicensePrice > 0
-              ? `${pricing.defaultLicensePrice.toLocaleString("ru-RU")} ₽`
+              ? formatRub(pricing.defaultLicensePrice)
               : "не задана"
           }
         />
         {Object.keys(pricing.bundlePrices).length > 0 ? (
           Object.entries(pricing.bundlePrices).map(([bundle, price]) => (
-            <Row key={bundle} label={`Цена комплектации ${bundle}`} value={`${price.toLocaleString("ru-RU")} ₽`} />
+            <Row key={bundle} label={`Цена комплектации ${bundle}`} value={formatRub(price)} />
           ))
         ) : (
           <Row label="Прайс по комплектациям" value="используется по умолчанию" />

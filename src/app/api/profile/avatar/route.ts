@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { badRequest, notFound, route, unauthenticated } from "@/lib/api";
+import { badRequest, notFound, route } from "@/lib/api";
 import { uploadObject, getDownloadUrl, deleteObject } from "@/lib/s3";
+import { requireApprovedUser } from "@/lib/session";
 
 export const runtime = "nodejs";
 
@@ -10,8 +10,7 @@ const MAX_SIZE = 2 * 1024 * 1024;
 const ALLOWED = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 
 export const GET = route(async () => {
-  const session = await auth();
-  if (!session?.user) throw unauthenticated();
+  const session = await requireApprovedUser();
 
   const profile = await db.dealerProfile.findUnique({
     where: { userId: session.user.id },
@@ -23,8 +22,7 @@ export const GET = route(async () => {
 });
 
 export const POST = route(async (req: Request) => {
-  const session = await auth();
-  if (!session?.user) throw unauthenticated();
+  const session = await requireApprovedUser();
 
   const form = await req.formData();
   const file = form.get("avatar");
@@ -64,8 +62,7 @@ export const POST = route(async (req: Request) => {
 });
 
 export const DELETE = route(async () => {
-  const session = await auth();
-  if (!session?.user) throw unauthenticated();
+  const session = await requireApprovedUser();
 
   const profile = await db.dealerProfile.findUnique({
     where: { userId: session.user.id },

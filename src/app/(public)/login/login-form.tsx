@@ -14,6 +14,8 @@ export function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
   const callbackUrl = params.get("callbackUrl") || "/dealer";
+  const notice =
+    params.get("notice") === "password" ? "Пароль изменён. Войдите с новым паролем." : null;
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [loading, setLoading] = React.useState(false);
@@ -63,6 +65,14 @@ export function LoginForm() {
 
   return (
     <form onSubmit={onSubmit} className="space-y-4" noValidate>
+      {notice && !formError ? (
+        <div
+          role="status"
+          className="rounded-btn border border-accent/30 bg-accent/5 px-3 py-2.5 text-sm text-ink"
+        >
+          {notice}
+        </div>
+      ) : null}
       {formError ? (
         <div
           role="alert"

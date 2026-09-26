@@ -1,15 +1,14 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
-import { badRequest, route, unauthenticated } from "@/lib/api";
+import { badRequest, route } from "@/lib/api";
 import { getDownloadUrl, S3_PREFIX } from "@/lib/s3";
+import { requireApprovedUser } from "@/lib/session";
 
 export const runtime = "nodejs";
 
 // Отдаёт изображение статьи по ключу: проверяет доступ и редиректит на
 // свежую подписанную ссылку. Ключи ограничены папкой базы знаний.
 export const GET = route(async (req: Request) => {
-  const session = await auth();
-  if (!session?.user) throw unauthenticated();
+  await requireApprovedUser();
 
   const key = new URL(req.url).searchParams.get("key") ?? "";
   // Проксируем только медиа кабинета: статьи базы знаний и иконки техподдержки.

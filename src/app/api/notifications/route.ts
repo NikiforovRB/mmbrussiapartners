@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { parseBody, route, unauthenticated } from "@/lib/api";
+import { parseBody, route } from "@/lib/api";
+import { requireApprovedUser } from "@/lib/session";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,8 +11,7 @@ export const dynamic = "force-dynamic";
 const PAGE_SIZE = 20;
 
 export const GET = route(async () => {
-  const session = await auth();
-  if (!session?.user) throw unauthenticated();
+  const session = await requireApprovedUser();
 
   const [items, unread] = await Promise.all([
     db.appNotification.findMany({
@@ -41,8 +40,7 @@ const markSchema = z.object({
 });
 
 export const POST = route(async (req: Request) => {
-  const session = await auth();
-  if (!session?.user) throw unauthenticated();
+  const session = await requireApprovedUser();
 
   const { ids } = await parseBody(req, markSchema);
 

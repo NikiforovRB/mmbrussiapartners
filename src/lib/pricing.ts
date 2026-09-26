@@ -160,10 +160,6 @@ export async function resolvePrice(
   return only;
 }
 
-export function formatRub(value: number): string {
-  return `${value.toLocaleString("ru-RU")} ₽`;
-}
-
 /** Подпись позиции: продукт, а за ним пакет и регион, если они есть. */
 export function positionLabel(q: PriceQuery): string {
   return [q.product, q.bundle, q.region].map((v) => (v ?? "").trim()).filter(Boolean).join(" ");

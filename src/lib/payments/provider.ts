@@ -1,4 +1,5 @@
 import "server-only";
+import { fetchWithTimeout } from "@/lib/http";
 
 /**
  * Приём оплаты (эквайринг).
@@ -34,6 +35,8 @@ export type CheckoutResult = {
   payUrl: string;
   /** true — деньги придут мимо портала, оплату подтверждает администратор. */
   requiresManualConfirmation: boolean;
+  /** Сумма заказа в копейках, как её зарегистрировал эквайринг. */
+  amountMinor?: number;
 };
 
 export interface PaymentProvider {
@@ -136,10 +139,9 @@ export type AtolPayOrderStatus = { code: number; message: string };
 export async function getAtolPayOrderStatus(orderId: string): Promise<AtolPayOrderStatus | null> {
   const token = process.env.ATOL_PAY_API_TOKEN;
   if (!token) throw new Error("АТОЛ Pay не настроен (ATOL_PAY_API_TOKEN)");
-  const res = await fetch(`${atolPayBase()}/payments/${encodeURIComponent(orderId)}/status`, {
+  const res = await fetchWithTimeout(`${atolPayBase()}/payments/${encodeURIComponent(orderId)}/status`, {
     headers: { Authorization: atolPayAuthorization(token) },
-    signal: AbortSignal.timeout(atolPayTimeout()),
-    cache: "no-store",
+    timeoutMs: atolPayTimeout(),
   });
   const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
   if (data.errorCode === "ORDER_NOT_FOUND") return null;
@@ -174,15 +176,16 @@ const atolPayProvider: PaymentProvider = {
     }
     const orderId = input.orderId ?? input.paymentId;
     const paymentMethods = atolPayPaymentMethods();
-    const res = await fetch(`${atolPayBase()}/payments`, {
+    const amountMinor = Math.round(input.amount * 100); // сумма в копейках
+    const res = await fetchWithTimeout(`${atolPayBase()}/payments`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: atolPayAuthorization(token),
       },
-      signal: AbortSignal.timeout(atolPayTimeout()),
+      timeoutMs: atolPayTimeout(),
       body: JSON.stringify({
-        amount: Math.round(input.amount * 100), // сумма в копейках
+        amount: amountMinor,
         orderId,
         sessionType: "oneStep",
         ...(paymentMethods.length > 0 ? { paymentMethods } : {}),
@@ -191,7 +194,6 @@ const atolPayProvider: PaymentProvider = {
           ...(input.notifyUrl ? { notificationUrl: input.notifyUrl } : {}),
         },
       }),
-      cache: "no-store",
     });
     const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
     const payload = (data.data && typeof data.data === "object" ? data.data : {}) as Record<string, unknown>;
@@ -206,6 +208,7 @@ const atolPayProvider: PaymentProvider = {
       externalId: typeof payload.orderId === "string" ? payload.orderId : orderId,
       payUrl,
       requiresManualConfirmation: false,
+      amountMinor: typeof payload.amount === "number" ? payload.amount : amountMinor,
     };
   },
 };

@@ -44,8 +44,10 @@ const ICONS: Record<string, React.ReactNode> = {
   PRICE_MISSING: <Tags className="h-4 w-4" />,
 };
 
-/** Как часто подтягиваем счётчик, пока вкладка открыта. */
-const POLL_MS = 60_000;
+/** Как часто подтягиваем счётчик, пока вкладка на экране. */
+const POLL_MS = 120_000;
+/** При возврате на вкладку обновляем счётчик, если он старше этого. */
+const STALE_ON_FOCUS_MS = 30_000;
 
 export function NotificationPanel({ initialUnread }: { initialUnread: number }) {
   const router = useRouter();
@@ -75,16 +77,29 @@ export function NotificationPanel({ initialUnread }: { initialUnread: number }) 
     }
   }, []);
 
-  // Пока панель закрыта, список не нужен — обновляем только счётчик.
+  // Пока панель закрыта, список не нужен — обновляем только счётчик, и только
+  // когда вкладку видно: фоновые вкладки базу не нагружают.
   React.useEffect(() => {
     if (open) return;
-    const timer = setInterval(() => {
-      fetch("/api/notifications", { cache: "no-store" })
+    let lastPoll = Date.now();
+    const poll = () => {
+      lastPoll = Date.now();
+      fetch("/api/notifications/unread", { cache: "no-store" })
         .then((r) => (r.ok ? r.json() : null))
         .then((d: { unread: number } | null) => d && setUnread(d.unread))
         .catch(() => {});
+    };
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") poll();
     }, POLL_MS);
-    return () => clearInterval(timer);
+    const onVisible = () => {
+      if (document.visibilityState === "visible" && Date.now() - lastPoll > STALE_ON_FOCUS_MS) poll();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [open]);
 
   React.useEffect(() => {

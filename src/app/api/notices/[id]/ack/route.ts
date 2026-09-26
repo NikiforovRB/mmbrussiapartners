@@ -1,14 +1,13 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { notFound, route, unauthenticated } from "@/lib/api";
+import { notFound, route } from "@/lib/api";
+import { requireApprovedUser } from "@/lib/session";
 
 export const runtime = "nodejs";
 
 // Пользователь подтверждает ознакомление с уведомлением входа.
 export const POST = route(async (_req: Request, ctx: { params: Promise<{ id: string }> }) => {
-  const session = await auth();
-  if (!session?.user) throw unauthenticated();
+  const session = await requireApprovedUser();
 
   const { id } = await ctx.params;
   const notice = await db.loginNotice.findUnique({ where: { id } });

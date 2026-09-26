@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { Topbar } from "@/components/cabinet/topbar";
 import { Card } from "@/components/ui/card";
 import { StatusTag } from "@/components/ui/status-tag";
-import { formatCurrency } from "@/lib/utils";
+import { formatRub } from "@/lib/money";
 import { formatRuDate } from "@/lib/dates";
 import { Pagination, parsePage } from "@/components/cabinet/pagination";
 import { atolMissingEnv, isAtolConfigured } from "@/lib/payments/atol";
@@ -90,7 +90,7 @@ export default async function AdminPaymentsPage({
               {payments.map((p) => (
                 <li key={p.id} className="p-4">
                   <div className="flex items-center justify-between gap-3">
-                    <div className="font-display tracking-tight">{formatCurrency(Number(p.amount))}</div>
+                    <div className="font-display tracking-tight">{formatRub(Number(p.amount))}</div>
                     <StatusTag kind="payment" status={p.status} />
                   </div>
                   <div className="mt-1 text-xs text-ink-muted">
@@ -148,7 +148,7 @@ export default async function AdminPaymentsPage({
                       <td className="px-4 py-3">{p.dealer.email}</td>
                       <td className="px-4 py-3">{p.license?.number ?? "—"}</td>
                       <td className="px-4 py-3 text-ink-muted">{p.description ?? "—"}</td>
-                      <td className="px-4 py-3 ">{formatCurrency(Number(p.amount))}</td>
+                      <td className="px-4 py-3 ">{formatRub(Number(p.amount))}</td>
                       <td className="px-4 py-3">
                         <StatusTag kind="payment" status={p.status} />
                       </td>
