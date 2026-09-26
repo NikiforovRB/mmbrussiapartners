@@ -2,7 +2,17 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Plus, KeyRound, Shield, ShieldCheck, UserCog, Ban, RotateCcw, LogOut } from "lucide-react";
+import {
+  Plus,
+  KeyRound,
+  Shield,
+  ShieldCheck,
+  UserCog,
+  Ban,
+  RotateCcw,
+  LogOut,
+  CheckCircle2,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -277,23 +287,33 @@ function AddUserModal({
 }) {
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
+  const [confirm, setConfirm] = React.useState("");
   const [roleId, setRoleId] = React.useState<string>("");
   const [loading, setLoading] = React.useState(false);
-  const [errors, setErrors] = React.useState<{ email?: string; password?: string; roleId?: string }>({});
+  const [errors, setErrors] = React.useState<{
+    email?: string;
+    password?: string;
+    confirm?: string;
+    roleId?: string;
+  }>({});
 
   React.useEffect(() => {
     if (open) {
       setEmail("");
       setPassword("");
+      setConfirm("");
       setRoleId("");
       setErrors({});
     }
   }, [open]);
 
+  const passwordsMatch = password.length > 0 && confirm.length > 0 && password === confirm;
+
   function validate() {
     const next: typeof errors = {};
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) next.email = "Некорректный email";
     if (password.length < 8) next.password = "Минимум 8 символов";
+    if (confirm !== password) next.confirm = "Пароли не совпадают";
     if (!roleId) next.roleId = "Выберите роль";
     setErrors(next);
     return Object.keys(next).length === 0;
@@ -336,11 +356,35 @@ function AddUserModal({
         <Input
           label="Пароль"
           type="password"
+          autoComplete="new-password"
           value={password}
           error={errors.password}
-          onChange={(e) => setPassword(e.target.value)}
+          onChange={(e) => {
+            setPassword(e.target.value);
+            if (errors.password || errors.confirm)
+              setErrors((p) => ({ ...p, password: undefined, confirm: undefined }));
+          }}
           placeholder="Минимум 8 символов"
         />
+        <div className="space-y-1.5">
+          <Input
+            label="Повторите пароль"
+            type="password"
+            autoComplete="new-password"
+            value={confirm}
+            error={errors.confirm}
+            onChange={(e) => {
+              setConfirm(e.target.value);
+              if (errors.confirm) setErrors((p) => ({ ...p, confirm: undefined }));
+            }}
+            placeholder="Введите пароль ещё раз"
+          />
+          {passwordsMatch && !errors.confirm ? (
+            <p className="flex items-center gap-1.5 text-xs text-success">
+              <CheckCircle2 className="h-3.5 w-3.5" /> Пароли совпадают
+            </p>
+          ) : null}
+        </div>
         <div className="space-y-1.5">
           <Select
             label="Роль"

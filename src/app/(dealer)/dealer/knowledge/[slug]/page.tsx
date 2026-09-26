@@ -8,7 +8,8 @@ import { Tag } from "@/components/ui/tag";
 import { ArrowLeft } from "lucide-react";
 import { fioFromParts } from "@/lib/utils";
 import { readBlocks } from "@/lib/knowledge-server";
-import { formatRuDate } from "@/lib/dates";
+import { categoryPath } from "@/lib/knowledge-browse";
+import { formatRuDateTime } from "@/lib/dates";
 import { ArticleContent } from "@/components/knowledge/article-content";
 
 export const dynamic = "force-dynamic";
@@ -23,12 +24,13 @@ export default async function DealerArticlePage({ params }: { params: Promise<{ 
     db.knowledgeArticle.findUnique({ where: { slug } }),
   ]);
   if (!article || !article.published) notFound();
+  const category = await categoryPath(article.categoryId);
 
   return (
     <>
       <Topbar
         title="База знаний"
-        subtitle={article.category ?? "Статья"}
+        subtitle={category ?? "Статья"}
         user={{
           name:
             fioFromParts({
@@ -42,16 +44,16 @@ export default async function DealerArticlePage({ params }: { params: Promise<{ 
       />
       <div className="mt-6 max-w-3xl">
         <Link
-          href="/dealer/knowledge"
+          href={article.categoryId ? `/dealer/knowledge?category=${article.categoryId}` : "/dealer/knowledge"}
           className="inline-flex items-center gap-1.5 text-sm text-ink-muted hover:text-accent"
         >
           <ArrowLeft className="h-4 w-4" />
-          Все статьи
+          {category ? `К разделу «${category}»` : "Все статьи"}
         </Link>
         <Card className="mt-3">
-          {article.category ? <Tag tone="muted">{article.category}</Tag> : null}
+          {category ? <Tag tone="muted">{category}</Tag> : null}
           <h1 className="mt-2 font-display text-2xl tracking-tight">{article.title}</h1>
-          <div className="mt-1 text-xs text-ink-subtle">{formatRuDate(article.createdAt)}</div>
+          <div className="mt-1 text-xs text-ink-subtle">{formatRuDateTime(article.createdAt)}</div>
           <div className="divider my-4" />
           <ArticleContent blocks={readBlocks(article.blocks)} />
         </Card>

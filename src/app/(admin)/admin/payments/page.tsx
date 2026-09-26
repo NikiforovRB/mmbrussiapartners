@@ -4,8 +4,8 @@ import { db } from "@/lib/db";
 import { Topbar } from "@/components/cabinet/topbar";
 import { Card } from "@/components/ui/card";
 import { StatusTag } from "@/components/ui/status-tag";
-import { formatRub } from "@/lib/money";
-import { formatRuDate } from "@/lib/dates";
+import { Money } from "@/components/ui/money";
+import { formatRuDateTime } from "@/lib/dates";
 import { Pagination, parsePage } from "@/components/cabinet/pagination";
 import { atolMissingEnv, isAtolConfigured } from "@/lib/payments/atol";
 import { atolPayMethodsPhrase, getPaymentProvider } from "@/lib/payments/provider";
@@ -90,11 +90,11 @@ export default async function AdminPaymentsPage({
               {payments.map((p) => (
                 <li key={p.id} className="p-4">
                   <div className="flex items-center justify-between gap-3">
-                    <div className="font-display tracking-tight">{formatRub(Number(p.amount))}</div>
+                    <Money value={Number(p.amount)} className="font-display tracking-tight" />
                     <StatusTag kind="payment" status={p.status} />
                   </div>
                   <div className="mt-1 text-xs text-ink-muted">
-                    {formatRuDate(p.createdAt)} · {p.dealer.email}
+                    {formatRuDateTime(p.createdAt)} · {p.dealer.email}
                   </div>
                   <div className="mt-1 text-sm">
                     {p.license?.number ? <span className="text-ink">{p.license.number}</span> : null}
@@ -144,11 +144,11 @@ export default async function AdminPaymentsPage({
                 <tbody>
                   {payments.map((p) => (
                     <tr key={p.id} className="transition-colors hover:bg-surface-muted">
-                      <td className="px-4 py-3">{formatRuDate(p.createdAt)}</td>
+                      <td className="px-4 py-3 whitespace-nowrap">{formatRuDateTime(p.createdAt)}</td>
                       <td className="px-4 py-3">{p.dealer.email}</td>
                       <td className="px-4 py-3">{p.license?.number ?? "—"}</td>
                       <td className="px-4 py-3 text-ink-muted">{p.description ?? "—"}</td>
-                      <td className="px-4 py-3 ">{formatRub(Number(p.amount))}</td>
+                      <td className="px-4 py-3"><Money value={Number(p.amount)} /></td>
                       <td className="px-4 py-3">
                         <StatusTag kind="payment" status={p.status} />
                       </td>

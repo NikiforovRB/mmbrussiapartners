@@ -18,7 +18,7 @@ import { ScrollReveal } from "@/components/animations/scroll-reveal";
 import { DayActivity } from "@/components/dealer/day-activity";
 import { fioFromParts } from "@/lib/utils";
 import { formatRub } from "@/lib/money";
-import { formatRuDate } from "@/lib/dates";
+import { formatRuDate, formatRuDateTime } from "@/lib/dates";
 
 export const dynamic = "force-dynamic";
 
@@ -198,7 +198,7 @@ export default async function DealerDashboard() {
                       <td className="px-4 py-3">
                         <StatusTag kind="license" status={l.status} />
                       </td>
-                      <td className="px-4 py-3 text-ink-muted">{formatRuDate(l.createdAt)}</td>
+                      <td className="px-4 py-3 text-ink-muted whitespace-nowrap">{formatRuDateTime(l.createdAt)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -261,7 +261,7 @@ function KpiCard({ icon, label, value }: { icon: React.ReactNode; label: string;
         <span className="grid h-9 w-9 place-items-center rounded-panel bg-white text-accent">{icon}</span>
         <div className="text-xs">{label}</div>
       </div>
-      <div className="mt-3 font-display text-2xl  tracking-tight">{value}</div>
+      <div className="mt-3 whitespace-nowrap font-display text-2xl tracking-tight">{value}</div>
     </div>
   );
 }

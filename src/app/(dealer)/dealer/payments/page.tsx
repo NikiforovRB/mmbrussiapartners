@@ -4,12 +4,12 @@ import { CreditCard, ExternalLink } from "lucide-react";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { fioFromParts } from "@/lib/utils";
-import { formatRub } from "@/lib/money";
+import { Money } from "@/components/ui/money";
 import { Topbar } from "@/components/cabinet/topbar";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatusTag } from "@/components/ui/status-tag";
-import { formatRuDate } from "@/lib/dates";
+import { formatRuDateTime } from "@/lib/dates";
 import { getPaymentProvider } from "@/lib/payments/provider";
 
 export const dynamic = "force-dynamic";
@@ -74,10 +74,10 @@ export default async function DealerPaymentsPage() {
             </div>
             <div className="rounded-panel surface-glass-dark p-5 text-center min-w-[180px]">
               <div className="text-xs text-white/60">Оплачено</div>
-              <div className="mt-1 font-display text-2xl tracking-tight">{formatRub(paid)}</div>
+              <Money value={paid} className="mt-1 block font-display text-2xl tracking-tight" />
               {awaiting > 0 ? (
                 <div className="mt-2 text-[11px] text-white/60">
-                  ожидает оплаты: {formatRub(awaiting)}
+                  ожидает оплаты: <Money value={awaiting} />
                 </div>
               ) : null}
             </div>
@@ -96,10 +96,10 @@ export default async function DealerPaymentsPage() {
               {payments.map((p) => (
                 <li key={p.id} className="p-4">
                   <div className="flex items-center justify-between gap-3">
-                    <div className="font-display tracking-tight">{formatRub(Number(p.amount))}</div>
+                    <Money value={Number(p.amount)} className="font-display tracking-tight" />
                     <StatusTag kind="payment" status={p.status} />
                   </div>
-                  <div className="mt-1 text-xs text-ink-muted">{formatRuDate(p.createdAt)}</div>
+                  <div className="mt-1 text-xs text-ink-muted">{formatRuDateTime(p.createdAt)}</div>
                   {p.description ? <div className="mt-1 text-sm">{p.description}</div> : null}
                   <div className="mt-3 flex items-center justify-between gap-2">
                     {p.receiptUrl ? (
@@ -138,9 +138,9 @@ export default async function DealerPaymentsPage() {
                 <tbody>
                   {payments.map((p) => (
                     <tr key={p.id} className="transition-colors hover:bg-surface-muted">
-                      <td className="px-4 py-3">{formatRuDate(p.createdAt)}</td>
+                      <td className="px-4 py-3 whitespace-nowrap">{formatRuDateTime(p.createdAt)}</td>
                       <td className="px-4 py-3">{p.description ?? "—"}</td>
-                      <td className="px-4 py-3 ">{formatRub(Number(p.amount))}</td>
+                      <td className="px-4 py-3"><Money value={Number(p.amount)} /></td>
                       <td className="px-4 py-3">
                         <StatusTag kind="payment" status={p.status} />
                       </td>

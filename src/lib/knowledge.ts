@@ -19,6 +19,17 @@ export type KbBlock =
 
 export type VideoProvider = "youtube" | "vimeo" | "rutube" | "vk";
 
+/** Узел дерева категорий: категория со счётчиком статей и подкатегориями. */
+export type KbTreeNode = {
+  id: string;
+  name: string;
+  count: number;
+  children: KbTreeNode[];
+};
+
+/** Значение `?category=` для статей без категории. */
+export const KB_UNCATEGORIZED = "none";
+
 const VIDEO_HOSTS: Record<VideoProvider, string> = {
   youtube: "www.youtube.com",
   vimeo: "player.vimeo.com",

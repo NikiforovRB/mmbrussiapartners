@@ -4,7 +4,7 @@ import { Topbar } from "@/components/cabinet/topbar";
 import { Card } from "@/components/ui/card";
 import { Tag } from "@/components/ui/tag";
 import { TrashRow } from "./trash-row";
-import { formatRuDate } from "@/lib/dates";
+import { formatRuDateTime } from "@/lib/dates";
 import { Pagination, parsePage } from "@/components/cabinet/pagination";
 
 export const dynamic = "force-dynamic";
@@ -67,7 +67,7 @@ export default async function AdminTrashPage({
                       </td>
                       <td className="px-4 py-3 text-ink-muted">{l.dealer.email}</td>
                       <td className="px-4 py-3 text-ink-muted">
-                        {l.deletedAt ? formatRuDate(l.deletedAt) : "—"}
+                        {l.deletedAt ? formatRuDateTime(l.deletedAt) : "—"}
                       </td>
                       <td className="px-4 py-3 text-right">
                         <TrashRow id={l.id} />

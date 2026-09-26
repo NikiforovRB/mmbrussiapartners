@@ -11,7 +11,7 @@ import { StatusTag } from "@/components/ui/status-tag";
 import { Modal } from "@/components/ui/modal";
 import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
-import { formatRuDateTime, formatRuDate } from "@/lib/dates";
+import { formatRuDateTime } from "@/lib/dates";
 import { usePermissions } from "@/hooks/use-permissions";
 import { LICENSE_TYPE_OPTIONS } from "@/lib/license-options";
 
@@ -357,7 +357,7 @@ export function LicenseDetailEditor({
             <li key={entry.id} className="py-3">
               <div className="flex items-center justify-between text-xs text-ink-muted">
                 <Tag tone={mapAuditTone(entry.action)}>{labelAction(entry.action)}</Tag>
-                <span>{formatRuDate(entry.createdAt)}</span>
+                <span>{formatRuDateTime(entry.createdAt)}</span>
               </div>
               <div className="text-sm mt-1.5">{entry.actor.email}</div>
               {entry.reason ? <div className="text-xs text-ink-muted mt-1.5">{entry.reason}</div> : null}

@@ -78,7 +78,7 @@ export function AnnouncementForm({ initial }: { initial: Announcement }) {
       <Card>
         <div className="text-xs uppercase tracking-widest text-ink-muted mb-3">Предпросмотр</div>
         {text.trim() ? (
-          <div className="rounded-panel border border-[#f5b544] bg-[#fff4e0] text-[#8a5200] px-4 py-2.5 flex items-center gap-3">
+          <div className="rounded-panel bg-[#fc4c02] text-white px-4 py-2.5 flex items-center gap-3">
             <Megaphone className="h-4 w-4 shrink-0" />
             <p className="text-[13px] leading-snug">{text}</p>
           </div>

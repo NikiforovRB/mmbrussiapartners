@@ -198,7 +198,7 @@ export function SupportForm({ initial }: { initial: SupportSettings }) {
                   disabled={!canEdit}
                   options={SUPPORT_ICON_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
                 />
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid gap-3 sm:col-span-2 sm:grid-cols-2">
                   <IconField
                     label="Иконка (SVG/PNG)"
                     value={c.iconUrl ?? ""}

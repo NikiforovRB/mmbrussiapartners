@@ -11,6 +11,7 @@ import { resolvePrice, positionLabel } from "@/lib/pricing";
 import { createPayment } from "@/lib/payments/service";
 import { notifyAdmins } from "@/lib/app-notifications";
 import { formatRub } from "@/lib/money";
+import { formatRuDateTime } from "@/lib/dates";
 import { mergeGenerationSettings, generationBlockReason } from "@/lib/site-settings";
 import { requireApprovedUser } from "@/lib/session";
 
@@ -270,11 +271,9 @@ export const POST = route(async (req: Request) => {
     // Повторная генерация по уже засвеченному ШГУ — повод оповестить админов:
     // это либо восстановление лицензии, либо потенциальное задвоение выдачи.
     if (repeatGeneration) {
-      const prevDate = p.previousGeneratedAt ? new Date(p.previousGeneratedAt) : null;
-      const prevLabel =
-        prevDate && !Number.isNaN(prevDate.getTime())
-          ? ` · прошлая генерация ${prevDate.toLocaleDateString("ru-RU")}`
-          : "";
+      const prevLabel = p.previousGeneratedAt
+        ? ` · прошлая генерация ${formatRuDateTime(p.previousGeneratedAt)}`
+        : "";
       await notifyAdmins(["licenses.view"], {
         type: "LICENSE_ISSUED",
         title: `Повторная генерация лицензии ${license.number}`,

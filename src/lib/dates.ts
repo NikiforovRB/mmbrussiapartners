@@ -22,16 +22,6 @@ const TIME_FORMATTER = new Intl.DateTimeFormat("ru-RU", {
   hour12: false,
 });
 
-const DATETIME_FORMATTER = new Intl.DateTimeFormat("ru-RU", {
-  day: "numeric",
-  month: "long",
-  weekday: "short",
-  hour: "2-digit",
-  minute: "2-digit",
-  timeZone: MOSCOW_TZ,
-  hour12: false,
-});
-
 export const RU_MONTHS_NOM = [
   "январь",
   "февраль",
@@ -97,10 +87,31 @@ export function formatRuTime(value: Date | string | number | null | undefined): 
   return TIME_FORMATTER.format(d);
 }
 
+/** «26 сентября, сб • 18:00» — единый формат даты со временем, по Москве. */
 export function formatRuDateTime(value: Date | string | number | null | undefined): string {
   const d = ensureDate(value);
   if (!d) return "—";
-  return normalizeRuDate(DATETIME_FORMATTER.format(d));
+  return `${normalizeRuDate(SHORT_FORMATTER.format(d))} • ${TIME_FORMATTER.format(d)}`;
+}
+
+const MOSCOW_LOCAL_RE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/;
+
+/**
+ * Московское время в виде «YYYY-MM-DDTHH:mm» (как у datetime-local) → момент
+ * времени. В Москве круглый год UTC+3, поэтому смещение постоянное.
+ */
+export function parseMoscowLocal(value: string | null | undefined): Date | null {
+  const m = value ? MOSCOW_LOCAL_RE.exec(value.trim()) : null;
+  if (!m) return null;
+  const d = new Date(`${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:00+03:00`);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/** Момент времени → московское «YYYY-MM-DDTHH:mm». */
+export function toMoscowLocal(value: Date): string {
+  const p = getMoscowParts(value);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${p.year}-${pad(p.month)}-${pad(p.day)}T${pad(p.hour === 24 ? 0 : p.hour)}:${pad(p.minute)}`;
 }
 
 function normalizeRuDate(input: string) {

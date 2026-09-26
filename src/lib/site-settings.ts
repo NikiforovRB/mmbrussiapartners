@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { parseMoscowLocal } from "./dates";
 
 /**
  * Настройки сайта, редактируемые администратором и хранящиеся в CompanySettings:
@@ -71,7 +72,7 @@ export const SUPPORT_ICON_OPTIONS = [
 export const generationSettingsSchema = z.object({
   /** Запрет генерации в заданный период (техработы, стоп-продажи и т.п.). */
   blackoutEnabled: z.boolean(),
-  /** Локальное время начала/конца в формате datetime-local (YYYY-MM-DDTHH:mm). */
+  /** Московское время начала/конца в формате datetime-local (YYYY-MM-DDTHH:mm). */
   blackoutStart: z.string().max(40).optional().nullable(),
   blackoutEnd: z.string().max(40).optional().nullable(),
   blackoutMessage: z.string().max(300).optional().nullable(),
@@ -105,10 +106,15 @@ export function mergeGenerationSettings(raw: unknown): GenerationSettings {
   };
 }
 
+/** Граница запрета: московское «YYYY-MM-DDTHH:mm»; сервер работает в UTC. */
+function parseBlackoutTime(value: string | null | undefined): number {
+  if (!value) return NaN;
+  return parseMoscowLocal(value)?.getTime() ?? Date.parse(value);
+}
+
 /**
  * Проверяет ограничения генерации. Возвращает причину отказа или null, если
- * генерация разрешена. Время blackout трактуется как локальное время сервера
- * (datetime-local без таймзоны).
+ * генерация разрешена. Время blackout задаётся по Москве.
  */
 export function generationBlockReason(
   settings: GenerationSettings,
@@ -116,8 +122,8 @@ export function generationBlockReason(
 ): string | null {
   if (settings.blackoutEnabled) {
     const now = Date.now();
-    const start = settings.blackoutStart ? Date.parse(settings.blackoutStart) : NaN;
-    const end = settings.blackoutEnd ? Date.parse(settings.blackoutEnd) : NaN;
+    const start = parseBlackoutTime(settings.blackoutStart);
+    const end = parseBlackoutTime(settings.blackoutEnd);
     const afterStart = Number.isNaN(start) || now >= start;
     const beforeEnd = Number.isNaN(end) || now <= end;
     // Если обе границы пустые — считаем запрет постоянным (пока включён тумблер).

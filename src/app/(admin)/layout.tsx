@@ -1,3 +1,4 @@
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import {
   LayoutDashboard,
@@ -30,6 +31,7 @@ import { db } from "@/lib/db";
 import { hasPermission, hasAdminScope } from "@/lib/permissions";
 import { fioFromParts } from "@/lib/utils";
 import { getUserAvatarUrl } from "@/lib/user-avatar";
+import { SIDEBAR_COOKIE } from "@/lib/sidebar";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
@@ -90,7 +92,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   if (user.isSuperAdmin || hasPermission(user.role.permissions, "pricing.manage", user.isSuperAdmin))
     items.push({ href: "/admin/pricing", label: "Справочник цен", icon: <Tags className="h-4 w-4" /> });
   if (user.isSuperAdmin || hasPermission(user.role.permissions, "auditLog.view", user.isSuperAdmin))
-    items.push({ href: "/admin/audit", label: "Аудит", icon: <History className="h-4 w-4" /> });
+    items.push({ href: "/admin/audit", label: "Логи", icon: <History className="h-4 w-4" /> });
   if (user.isSuperAdmin || hasPermission(user.role.permissions, "licenses.restore", user.isSuperAdmin))
     items.push({ href: "/admin/trash", label: "Корзина", icon: <Trash2 className="h-4 w-4" /> });
   if (user.isSuperAdmin || hasPermission(user.role.permissions, "settings.edit", user.isSuperAdmin))
@@ -101,7 +103,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   if (user.isSuperAdmin || hasPermission(user.role.permissions, "settings.edit", user.isSuperAdmin))
     items.push({ href: "/admin/settings", label: "Настройки", icon: <Settings className="h-4 w-4" /> });
 
-  const [unreadCount, settings, loginNotices] = await Promise.all([
+  const [unreadCount, settings, loginNotices, cookieStore] = await Promise.all([
     db.appNotification.count({ where: { userId: user.id, readAt: null } }),
     db.companySettings.findUnique({ where: { id: "singleton" }, select: { announcement: true } }),
     db.loginNotice.findMany({
@@ -109,8 +111,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       orderBy: { createdAt: "asc" },
       select: { id: true, title: true, body: true },
     }),
+    cookies(),
   ]);
   const announcement = mergeAnnouncement(settings?.announcement);
+  const sidebarCollapsed = cookieStore.get(SIDEBAR_COOKIE)?.value === "collapsed";
 
   return (
     <CabinetUserProvider
@@ -126,13 +130,13 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       }}
     >
       <MobileNavProvider items={items}>
-        <div className="cabinet min-h-screen flex bg-bg-default">
-          <Sidebar items={items} />
-          <div className="flex-1 min-w-0 px-4 lg:px-6 pb-12">
-            {announcement.enabled ? (
-              <AnnouncementBar text={announcement.text} updatedAt={announcement.updatedAt ?? null} />
-            ) : null}
-            {children}
+        <div className="cabinet min-h-screen flex flex-col bg-bg-default">
+          {announcement.enabled ? (
+            <AnnouncementBar text={announcement.text} updatedAt={announcement.updatedAt ?? null} />
+          ) : null}
+          <div className="flex flex-1">
+            <Sidebar items={items} defaultCollapsed={sidebarCollapsed} />
+            <div className="flex-1 min-w-0 px-4 lg:px-6 pb-12">{children}</div>
           </div>
           <LoginNoticeGate notices={loginNotices} />
           <CommandPalette />

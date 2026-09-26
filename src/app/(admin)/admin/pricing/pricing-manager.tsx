@@ -22,7 +22,8 @@ import { Tag } from "@/components/ui/tag";
 import { Toggle } from "@/components/ui/toggle";
 import { Modal } from "@/components/ui/modal";
 import { cn, formatPhone, plural } from "@/lib/utils";
-import { formatRub as rub, parseMoney } from "@/lib/money";
+import { parseMoney } from "@/lib/money";
+import { Money } from "@/components/ui/money";
 
 export type PriceItem = {
   id: string;
@@ -183,17 +184,22 @@ function Catalog({ items, missing }: { items: PriceItem[]; missing: MissingPosit
           сервис генерации. MB-S5WM FULL RUS, MB-S5WM FULL CHN и MB-S5WM ECO считаются разными
           товарами. Если комплектации или региона у продукта нет, поле оставьте пустым.
         </p>
-        <div className="flex items-center gap-2">
-          <div className="relative">
+        {/* На узком экране кнопка уходит под поиск, а не сжимается в две строки. */}
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+          <div className="relative w-full sm:w-72">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-ink-subtle" />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Поиск по продукту, комплектации, региону"
-              className="field-control h-10 w-72 rounded-panel border border-hairline bg-white pl-9 pr-3 text-sm placeholder:text-ink-subtle focus:outline-none focus:border-accent"
+              className="field-control h-10 w-full rounded-panel border border-[#dddcdb] bg-white pl-9 pr-3 text-sm placeholder:text-ink-subtle focus:outline-none focus:border-accent"
             />
           </div>
-          <Button icon={<Plus className="h-4 w-4" />} onClick={() => setEditing("new")}>
+          <Button
+            icon={<Plus className="h-4 w-4" />}
+            className="whitespace-nowrap"
+            onClick={() => setEditing("new")}
+          >
             Добавить позицию
           </Button>
         </div>
@@ -301,11 +307,11 @@ function Catalog({ items, missing }: { items: PriceItem[]; missing: MissingPosit
                       </td>
                       <td className="px-4 py-3 text-ink-muted">{item.region || "Без региона"}</td>
                       <td className="px-4 py-3 text-ink-muted">
-                        {item.myPrice == null ? "—" : rub(item.myPrice)}
+                        {item.myPrice == null ? "—" : <Money value={item.myPrice} />}
                       </td>
-                      <td className="px-4 py-3 font-display tracking-tight">{rub(item.price)}</td>
+                      <td className="px-4 py-3 font-display tracking-tight"><Money value={item.price} /></td>
                       <td className="px-4 py-3 text-ink-muted">
-                        {item.clientPrice == null ? "—" : rub(item.clientPrice)}
+                        {item.clientPrice == null ? "—" : <Money value={item.clientPrice} />}
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-1.5">
@@ -674,9 +680,9 @@ function DealerPrices({
                           )}
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-ink-muted">{rub(item.price)}</td>
+                      <td className="px-4 py-3 text-ink-muted"><Money value={item.price} /></td>
                       <td className="px-4 py-3 text-ink-muted">
-                        {kind === "NONE" ? "—" : rub(adjusted)}
+                        {kind === "NONE" ? "—" : <Money value={adjusted} />}
                       </td>
                       <td className="px-4 py-3 w-[180px]">
                         <MoneyInput
@@ -686,7 +692,7 @@ function DealerPrices({
                         />
                       </td>
                       <td className="px-4 py-3">
-                        <span className="font-display tracking-tight">{rub(total)}</span>
+                        <Money value={total} className="font-display tracking-tight" />
                         {personal !== null ? (
                           <Tag tone="accent" className="ml-2">
                             личная

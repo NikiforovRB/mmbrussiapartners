@@ -98,7 +98,7 @@ function Hero({ content, loginHref }: { content: HomepageContent; loginHref: str
           </h1>
         </FadeUp>
         <FadeUp delay={0.1}>
-          <p className="mt-6 max-w-xl text-lg text-ink-muted text-pretty">
+          <p className="mt-6 text-lg text-ink-muted text-pretty">
             {content.hero.description}
           </p>
         </FadeUp>

@@ -424,18 +424,41 @@ model LoginNotice {
  * а не сырым HTML: так безопаснее рендерить и проще редактировать.
  */
 model KnowledgeArticle {
+  id         String   @id @default(cuid())
+  title      String
+  slug       String   @unique
+  categoryId String?
+  excerpt    String?
+  coverKey   String?
+  blocks     Json     @default("[]")
+  published  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  category KnowledgeCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  @@index([published, createdAt])
+  @@index([categoryId])
+}
+
+/**
+ * Категория базы знаний. Вложенность ровно в два уровня: категория
+ * (parentId = null) и её подкатегории. Удаление категории убирает и
+ * подкатегории, а статьи из них остаются без категории.
+ */
+model KnowledgeCategory {
   id        String   @id @default(cuid())
-  title     String
-  slug      String   @unique
-  category  String?
-  excerpt   String?
-  coverKey  String?
-  blocks    Json     @default("[]")
-  published Boolean  @default(false)
+  name      String
+  parentId  String?
+  sortOrder Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([published, createdAt])
+  parent   KnowledgeCategory?  @relation("KnowledgeCategoryTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children KnowledgeCategory[] @relation("KnowledgeCategoryTree")
+  articles KnowledgeArticle[]
+
+  @@index([parentId, sortOrder])
 }
 
 /** Факт ознакомления пользователя с конкретным уведомлением входа. */

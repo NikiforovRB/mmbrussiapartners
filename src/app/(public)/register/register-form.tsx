@@ -131,7 +131,7 @@ export function RegisterForm() {
         <Input
           label="Введите пароль повторно *"
           name="passwordConfirm"
-          type="text"
+          type="password"
           required
           placeholder="Повторите пароль"
           icon={<Lock className="h-4 w-4" />}

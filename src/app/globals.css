@@ -82,11 +82,17 @@
     color: inherit;
     background: transparent;
     outline: none;
-    border: 0;
+    /* Только ширина: border-style из preflight остаётся solid, чтобы класс border работал. */
+    border-width: 0;
   }
   input:-webkit-autofill {
     -webkit-text-fill-color: var(--ink);
     transition: background-color 5000s ease-in-out 0s;
+  }
+  /* Встроенный «глазик» Edge дублирует свой переключатель в Input. */
+  input::-ms-reveal,
+  input::-ms-clear {
+    display: none;
   }
 }
 

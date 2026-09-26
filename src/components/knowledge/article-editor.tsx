@@ -44,6 +44,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Toggle } from "@/components/ui/toggle";
+import { Select } from "@/components/ui/select";
 import { parseVideoEmbed, type KbBlock } from "@/lib/knowledge";
 import { useAutosave, useUnsavedChangesWarning } from "@/hooks/use-autosave";
 
@@ -56,17 +57,22 @@ function wrap(block: KbBlock): EditBlock {
 export type ArticleInitial = {
   id: string | null;
   title: string;
-  category: string;
+  /** Пустая строка — без категории. */
+  categoryId: string;
   excerpt: string;
   published: boolean;
   blocks: KbBlock[];
 };
 
+export type ArticleCategoryOption = { id: string; name: string; parentId: string | null };
+
+const NO_CATEGORY = "__none";
+
 /** Тело запроса на сохранение; его же строка служит снимком для «есть правки». */
 function articlePayload(a: Omit<ArticleInitial, "id">) {
   return JSON.stringify({
     title: a.title.trim(),
-    category: a.category.trim() || null,
+    categoryId: a.categoryId || null,
     excerpt: a.excerpt.trim() || null,
     blocks: a.blocks,
     published: a.published,
@@ -77,11 +83,17 @@ function timeLabel(d: Date) {
   return d.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
 }
 
-export function ArticleEditor({ initial }: { initial: ArticleInitial }) {
+export function ArticleEditor({
+  initial,
+  categories,
+}: {
+  initial: ArticleInitial;
+  categories: ArticleCategoryOption[];
+}) {
   const router = useRouter();
   const [articleId, setArticleId] = React.useState(initial.id);
   const [title, setTitle] = React.useState(initial.title);
-  const [category, setCategory] = React.useState(initial.category);
+  const [categoryId, setCategoryId] = React.useState(initial.categoryId);
   const [excerpt, setExcerpt] = React.useState(initial.excerpt);
   const [published, setPublished] = React.useState(initial.published);
   const [blocks, setBlocks] = React.useState<EditBlock[]>(initial.blocks.map(wrap));
@@ -91,9 +103,22 @@ export function ArticleEditor({ initial }: { initial: ArticleInitial }) {
   const [autosavedAt, setAutosavedAt] = React.useState<Date | null>(null);
   const inFlight = React.useRef(false);
 
+  const categoryOptions = React.useMemo(() => {
+    const options: { value: string; label: string; search: string }[] = [
+      { value: NO_CATEGORY, label: "Без категории", search: "без категории" },
+    ];
+    for (const root of categories.filter((c) => !c.parentId)) {
+      options.push({ value: root.id, label: root.name, search: root.name });
+      for (const child of categories.filter((c) => c.parentId === root.id)) {
+        options.push({ value: child.id, label: `${root.name} / ${child.name}`, search: `${root.name} ${child.name}` });
+      }
+    }
+    return options;
+  }, [categories]);
+
   const payload = articlePayload({
     title,
-    category,
+    categoryId,
     excerpt,
     published,
     blocks: blocks.map((b) => b.block),
@@ -203,11 +228,13 @@ export function ArticleEditor({ initial }: { initial: ArticleInitial }) {
           placeholder="Например: Как выпустить лицензию"
         />
         <div className="grid sm:grid-cols-2 gap-3">
-          <Input
-            label="Раздел (необязательно)"
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            placeholder="Например: Инструкции"
+          <Select
+            label="Категория"
+            value={categoryId || NO_CATEGORY}
+            onChange={(v) => setCategoryId(v === NO_CATEGORY ? "" : v)}
+            options={categoryOptions}
+            searchable={categoryOptions.length > 8}
+            searchPlaceholder="Найти категорию"
           />
           <div className="flex items-end pb-2">
             <Toggle checked={published} onChange={setPublished} label="Опубликована" />

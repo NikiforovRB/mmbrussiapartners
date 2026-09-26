@@ -4,6 +4,7 @@ export const PERMISSIONS = {
   "dealers.edit": "Редактирование данных представителя",
   "dealers.suspend": "Блокировка представителей",
   "dealers.setLimit": "Управление лимитами лицензий",
+  "dealers.delete": "Удаление представителей",
   "licenses.view": "Просмотр лицензий",
   "licenses.create": "Создание лицензий",
   "licenses.edit": "Редактирование карточки лицензии",
@@ -24,7 +25,7 @@ export const PERMISSIONS = {
   "payments.refund": "Возвраты по платежам",
   "pricing.manage": "Справочник цен",
   "settings.edit": "Настройки компании",
-  "auditLog.view": "Журнал аудита",
+  "auditLog.view": "Просмотр логов",
   "templates.edit": "Редактирование email-шаблонов",
 } as const;
 
@@ -37,6 +38,7 @@ export const PERMISSION_GROUPS: Record<string, PermissionKey[]> = {
     "dealers.edit",
     "dealers.suspend",
     "dealers.setLimit",
+    "dealers.delete",
   ],
   Лицензии: [
     "licenses.view",

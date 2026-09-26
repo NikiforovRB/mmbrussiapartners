@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tag } from "@/components/ui/tag";
+import { formatRuDateTime } from "@/lib/dates";
 
 export type HumaxRecord = {
   id: string;
@@ -17,18 +18,6 @@ export type HumaxRecord = {
   createdAt: string;
   dealerEmail?: string | null;
 };
-
-function formatRuDateTime(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleString("ru-RU", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
 
 function CopyButton({ value, label = "Скопировать" }: { value: string; label?: string }) {
   const [copied, setCopied] = React.useState(false);

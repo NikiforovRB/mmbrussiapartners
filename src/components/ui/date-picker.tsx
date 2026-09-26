@@ -1,14 +1,12 @@
 "use client";
 
 import * as React from "react";
-import { Calendar, ChevronLeft, ChevronRight } from "lucide-react";
-import {
-  RU_MONTHS_NOM,
-  RU_WEEKDAYS_SHORT,
-  formatRuDate,
-  isSameMoscowDay,
-} from "@/lib/dates";
+import { Calendar as CalendarIcon } from "lucide-react";
+import { formatRuDate } from "@/lib/dates";
 import { cn } from "@/lib/utils";
+import { Button } from "./button";
+import { Calendar, localDayKey, parseDayKey, type DayKey } from "./calendar";
+import { Modal } from "./modal";
 
 export interface DatePickerProps {
   value: Date | null;
@@ -19,6 +17,58 @@ export interface DatePickerProps {
   max?: Date;
   className?: string;
   disabled?: boolean;
+}
+
+/** Кнопка-поле, открывающая окно выбора даты/времени. */
+export function PickerTrigger({
+  icon,
+  text,
+  placeholder,
+  open,
+  disabled,
+  onOpen,
+  onClear,
+}: {
+  icon: React.ReactNode;
+  text: string | null;
+  placeholder: string;
+  open: boolean;
+  disabled?: boolean;
+  onOpen: () => void;
+  onClear?: () => void;
+}) {
+  const clearable = Boolean(onClear && text && !disabled);
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={onOpen}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        className={cn(
+          "field-control flex h-12 w-full items-center gap-2 rounded-panel border border-hairline bg-white pl-4 text-left text-[14.5px] transition-colors",
+          clearable ? "pr-24" : "pr-4",
+          "focus-visible:outline-none focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20",
+          open && "border-accent",
+          !text && "text-ink-subtle",
+          disabled && "cursor-not-allowed bg-surface-muted text-ink-muted",
+        )}
+      >
+        <span className="shrink-0 text-ink-subtle">{icon}</span>
+        <span className="truncate">{text ?? placeholder}</span>
+      </button>
+      {clearable ? (
+        <button
+          type="button"
+          onClick={onClear}
+          className="absolute right-3 top-1/2 -translate-y-1/2 rounded-btn px-1.5 py-1 text-xs text-ink-subtle transition-colors hover:text-ink"
+        >
+          очистить
+        </button>
+      ) : null}
+    </div>
+  );
 }
 
 export function DatePicker({
@@ -32,177 +82,54 @@ export function DatePicker({
   disabled,
 }: DatePickerProps) {
   const [open, setOpen] = React.useState(false);
-  const ref = React.useRef<HTMLDivElement | null>(null);
-  const today = React.useMemo(() => new Date(), []);
-  const [view, setView] = React.useState<{ year: number; month: number }>(
-    () => {
-      const d = value ?? today;
-      return { year: d.getFullYear(), month: d.getMonth() };
-    },
-  );
+  const todayKey = localDayKey(new Date());
+  const minKey = min ? localDayKey(min) : null;
+  const maxKey = max ? localDayKey(max) : null;
 
-  React.useEffect(() => {
-    function onDoc(e: MouseEvent) {
-      if (!ref.current?.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, []);
+  const isDisabled = (key: DayKey) =>
+    (minKey !== null && key < minKey) || (maxKey !== null && key > maxKey);
 
-  const days = React.useMemo(
-    () => buildMonthGrid(view.year, view.month),
-    [view],
-  );
-
-  function shift(n: number) {
-    setView((v) => {
-      const nm = v.month + n;
-      const year = v.year + Math.floor(nm / 12);
-      const month = ((nm % 12) + 12) % 12;
-      return { year, month };
-    });
-  }
-
-  function isDisabled(d: Date) {
-    if (min && d.getTime() < startOfDay(min).getTime()) return true;
-    if (max && d.getTime() > startOfDay(max).getTime()) return true;
-    return false;
+  function pick(key: DayKey) {
+    const { year, month, day } = parseDayKey(key);
+    onChange(new Date(year, month, day));
+    setOpen(false);
   }
 
   return (
-    <div ref={ref} className={cn("space-y-1.5 relative", className)}>
-      {label ? (
-        <span className="block text-[12.5px]  text-ink-muted">{label}</span>
-      ) : null}
-      <button
-        type="button"
+    <div className={cn("space-y-1.5", className)}>
+      {label ? <span className="block text-[12.5px] text-ink-muted">{label}</span> : null}
+      <PickerTrigger
+        icon={<CalendarIcon className="h-4 w-4" />}
+        text={value ? formatRuDate(value) : null}
+        placeholder={placeholder}
+        open={open}
         disabled={disabled}
-        onClick={() => setOpen((v) => !v)}
-        className={cn(
-          "field-control w-full h-12 rounded-panel bg-white border border-hairline px-4 flex items-center justify-between gap-3 text-left text-[14.5px] transition-colors",
-          "focus-visible:outline-none focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20",
-          open && "border-accent",
-          !value && "text-ink-subtle",
-          disabled && "bg-surface-muted text-ink-muted cursor-not-allowed",
-        )}
-      >
-        <span className="flex items-center gap-2">
-          <Calendar className="h-4 w-4 text-ink-subtle" />
-          {value ? formatRuDate(value) : placeholder}
-        </span>
-        {value ? (
-          <span
-            role="button"
-            tabIndex={0}
-            onClick={(e) => {
-              e.stopPropagation();
-              onChange(null);
-            }}
-            className="text-xs text-ink-subtle hover:text-ink"
-          >
-            очистить
-          </span>
-        ) : null}
-      </button>
-      {open ? (
-        <div
-          className="absolute z-40 mt-2 w-[320px] rounded-panel bg-white border border-hairline p-4 animate-dropdown-in"
-          style={{ boxShadow: "0 24px 60px -24px rgba(11,16,32,0.18)" }}
-        >
-          <div className="flex items-center justify-between px-1">
-            <button
-              type="button"
-              onClick={() => shift(-1)}
-              className="grid h-9 w-9 place-items-center rounded-btn hover:bg-surface-muted"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-            <div className="text-sm tracking-tight">
-              {capitalize(RU_MONTHS_NOM[view.month])} {view.year}
-            </div>
-            <button
-              type="button"
-              onClick={() => shift(1)}
-              className="grid h-9 w-9 place-items-center rounded-btn hover:bg-surface-muted"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </button>
-          </div>
-          <div className="mt-3 grid grid-cols-7 gap-1 text-center text-[11px] uppercase tracking-tight text-ink-subtle">
-            {["пн", "вт", "ср", "чт", "пт", "сб", "вс"].map((d) => (
-              <div key={d}>{d}</div>
-            ))}
-          </div>
-          <div className="mt-1 grid grid-cols-7 gap-1">
-            {days.map((d, i) => {
-              const isCurrentMonth = d.getMonth() === view.month;
-              const selected = value ? isSameMoscowDay(value, d) : false;
-              const isToday = isSameMoscowDay(today, d);
-              const disabledDay = isDisabled(d);
-              return (
-                <button
-                  key={i}
-                  type="button"
-                  disabled={disabledDay}
-                  onClick={() => {
-                    onChange(d);
-                    setOpen(false);
-                  }}
-                  className={cn(
-                    "h-9 w-9 rounded-btn text-sm transition-colors duration-150",
-                    !isCurrentMonth && "text-ink-subtle/60",
-                    selected
-                      ? "bg-accent text-white"
-                      : isToday
-                        ? "bg-surface-muted text-ink"
-                        : "hover:bg-surface-muted",
-                    disabledDay && "opacity-30 cursor-not-allowed",
-                  )}
-                >
-                  {d.getDate()}
-                </button>
-              );
-            })}
-          </div>
-          <div className="mt-3 flex items-center justify-between text-xs text-ink-muted">
-            <button
-              type="button"
-              onClick={() => {
-                onChange(today);
-                setView({ year: today.getFullYear(), month: today.getMonth() });
-                setOpen(false);
-              }}
-              className="rounded-btn px-3 py-1.5 hover:bg-surface-muted"
-            >
+        onOpen={() => setOpen(true)}
+        onClear={() => onChange(null)}
+      />
+      <Modal
+        open={open}
+        onClose={() => setOpen(false)}
+        title={label ?? "Выберите дату"}
+        size="sm"
+        footer={
+          <>
+            <Button variant="ghost" disabled={isDisabled(todayKey)} onClick={() => pick(todayKey)}>
               Сегодня
-            </button>
-            <span className="text-[11px]">{formatRuDate(value ?? today)}</span>
-          </div>
-        </div>
-      ) : null}
+            </Button>
+            <Button variant="secondary" onClick={() => setOpen(false)}>
+              Отмена
+            </Button>
+          </>
+        }
+      >
+        <Calendar
+          selected={value ? localDayKey(value) : null}
+          today={todayKey}
+          onSelect={pick}
+          isDisabled={isDisabled}
+        />
+      </Modal>
     </div>
   );
-}
-
-function buildMonthGrid(year: number, month: number): Date[] {
-  const first = new Date(year, month, 1);
-  const offsetMonday = (first.getDay() + 6) % 7;
-  const start = new Date(year, month, 1 - offsetMonday);
-  const days: Date[] = [];
-  for (let i = 0; i < 42; i++) {
-    days.push(
-      new Date(start.getFullYear(), start.getMonth(), start.getDate() + i),
-    );
-  }
-  return days;
-}
-
-function startOfDay(d: Date) {
-  const x = new Date(d);
-  x.setHours(0, 0, 0, 0);
-  return x;
-}
-
-function capitalize(s: string) {
-  return s.charAt(0).toUpperCase() + s.slice(1);
 }

@@ -1,6 +1,17 @@
 import "server-only";
 import sanitizeHtmlLib from "sanitize-html";
+import { db } from "./db";
+import { badRequest } from "./api";
 import { isAllowedEmbed, type KbBlock, type VideoProvider } from "./knowledge";
+
+/** Проверяет категорию статьи: пустое значение — «без категории». */
+export async function resolveCategoryId(raw: string | null | undefined): Promise<string | null> {
+  const id = raw?.trim();
+  if (!id) return null;
+  const exists = await db.knowledgeCategory.findUnique({ where: { id }, select: { id: true } });
+  if (!exists) throw badRequest("Категория не найдена — обновите страницу");
+  return id;
+}
 
 /**
  * Санитизация форматированного HTML из визуального редактора базы знаний.
