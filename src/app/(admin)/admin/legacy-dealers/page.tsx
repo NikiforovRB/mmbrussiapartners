@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Pagination, parsePage } from "@/components/cabinet/pagination";
 import { hasPermission } from "@/lib/permissions";
 import { requireAdminPage } from "@/lib/session";
-import { formatRuDate, formatRuDateTime } from "@/lib/dates";
+import { formatRuDateLong, formatRuDateTime } from "@/lib/dates";
 import { formatRub } from "@/lib/money";
 import { fioFromParts, plural } from "@/lib/utils";
 import { LegacyFilters } from "./legacy-filters";
@@ -246,8 +246,8 @@ export default async function LegacyDealersPage({
                         <div className="text-xs text-ink-muted">
                           {r.firstLicenseAt ? (
                             <>
-                              <div>с {formatRuDate(r.firstLicenseAt)}</div>
-                              <div>по {formatRuDate(r.lastLicenseAt)}</div>
+                              <div>с {formatRuDateLong(r.firstLicenseAt)}</div>
+                              <div>по {formatRuDateLong(r.lastLicenseAt)}</div>
                             </>
                           ) : (
                             "—"

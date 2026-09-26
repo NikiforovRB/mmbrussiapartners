@@ -191,11 +191,6 @@ export default async function AdminDealerPage({
   );
 }
 
-function flag(code: string | null): string {
-  if (!code || !/^[A-Za-z]{2}$/.test(code)) return "";
-  return String.fromCodePoint(...[...code.toUpperCase()].map((c) => 0x1f1a5 + c.charCodeAt(0)));
-}
-
 async function DealerIps({ userId, signupIp }: { userId: string; signupIp: string | null }) {
   const ips = await db.userIp.findMany({ where: { userId }, orderBy: { lastSeenAt: "desc" }, take: 200 });
   // Тот же адрес у других учёток — повод присмотреться (одна точка или передача доступа).
@@ -240,7 +235,7 @@ async function DealerIps({ userId, signupIp }: { userId: string; signupIp: strin
                 </div>
                 <div className="min-w-0">
                   <div>
-                    {flag(i.countryCode)} {[i.country, i.city].filter(Boolean).join(", ") || "Страна не определена"}
+                    {[i.country, i.city].filter(Boolean).join(", ") || "Страна не определена"}
                   </div>
                   {others.length > 0 ? (
                     <div className="mt-0.5 text-xs text-[#a16207]">
