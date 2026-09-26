@@ -4,7 +4,8 @@ import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { db } from "./db";
-import type { PermissionKey } from "./permissions";
+import { hasAdminScope, type PermissionKey } from "./permissions";
+import { isPasswordVaultConfigured, openPassword, sealPassword } from "./password-vault";
 import { rateLimit, clientIp } from "./rate-limit";
 
 declare module "next-auth" {
@@ -88,9 +89,21 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           throw new Error(user.status === "SUSPENDED" ? "ACCOUNT_SUSPENDED" : "ACCOUNT_REJECTED");
         }
 
+        // Из bcrypt-хэша пароль не восстановить: копия для администратора
+        // появляется при входе и обновляется, если пароль сменили в обход кабинета.
+        const permissions = user.role.permissions as PermissionKey[];
+        const refreshCopy =
+          isPasswordVaultConfigured() &&
+          !user.isSuperAdmin &&
+          !hasAdminScope(permissions) &&
+          openPassword(user.id, user.passwordEncrypted) !== password;
+
         await db.user.update({
           where: { id: user.id },
-          data: { lastLoginAt: new Date() },
+          data: {
+            lastLoginAt: new Date(),
+            ...(refreshCopy ? { passwordEncrypted: sealPassword(user.id, password) } : {}),
+          },
         });
 
         return {
@@ -99,7 +112,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           isSuperAdmin: user.isSuperAdmin,
           status: user.status,
           roleName: user.role.name,
-          permissions: user.role.permissions as PermissionKey[],
+          permissions,
           sessionVersion: user.sessionVersion,
         };
       },
