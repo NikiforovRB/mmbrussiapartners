@@ -1,4 +1,3 @@
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { mergeHomepageContent } from "@/lib/homepage-content";
 import {
@@ -14,12 +13,12 @@ import { PaymentSettingsPanel } from "./payment-settings-panel";
 import { PaymentSettingsForm } from "./payment-settings-form";
 import { getSiteSyncOverview } from "@/lib/site-dealers";
 import { SiteSyncPanel } from "./site-sync-panel";
+import { requireAdminPage } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminSettingsPage() {
-  const session = await auth();
-  if (!session?.user) return null;
+  const session = await requireAdminPage("settings.edit");
   const [me, settings, siteSync] = await Promise.all([
     db.user.findUnique({ where: { id: session.user.id }, include: { role: true } }),
     db.companySettings.findUnique({ where: { id: "singleton" } }),

@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { Topbar } from "@/components/cabinet/topbar";
 import { Tag } from "@/components/ui/tag";
@@ -14,6 +13,7 @@ import type { DealerProfile, UserStatus } from "@prisma/client";
 import { DealersFilters } from "./dealers-filters";
 import { DeleteDealerButton } from "./delete-dealer-button";
 import { Pagination, parsePage } from "@/components/cabinet/pagination";
+import { requireAdminPage } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -24,8 +24,7 @@ export default async function AdminDealersPage({
 }: {
   searchParams: Promise<{ q?: string; status?: string; pub?: string; page?: string }>;
 }) {
-  const session = await auth();
-  if (!session?.user) return null;
+  const session = await requireAdminPage("dealers.view");
   const user = await db.user.findUnique({
     where: { id: session.user.id },
     include: { role: true },

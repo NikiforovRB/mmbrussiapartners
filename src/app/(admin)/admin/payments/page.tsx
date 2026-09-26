@@ -1,5 +1,4 @@
 import { AlertTriangle, ExternalLink } from "lucide-react";
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { Topbar } from "@/components/cabinet/topbar";
 import { Card } from "@/components/ui/card";
@@ -10,6 +9,7 @@ import { Pagination, parsePage } from "@/components/cabinet/pagination";
 import { atolMissingEnv, isAtolConfigured } from "@/lib/payments/atol";
 import { atolPayMethodsPhrase, getPaymentProvider } from "@/lib/payments/provider";
 import { PaymentActions } from "./payment-actions";
+import { requireAdminPage } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -20,8 +20,7 @@ export default async function AdminPaymentsPage({
 }: {
   searchParams: Promise<{ page?: string }>;
 }) {
-  const session = await auth();
-  if (!session?.user) return null;
+  const session = await requireAdminPage("payments.view");
 
   const sp = await searchParams;
   const page = parsePage(sp.page);

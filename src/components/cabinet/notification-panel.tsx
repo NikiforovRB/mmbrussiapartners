@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatRuDateTime } from "@/lib/dates";
+import { useUnreadCount } from "./cabinet-user";
 
 type Notification = {
   id: string;
@@ -52,7 +53,7 @@ const STALE_ON_FOCUS_MS = 30_000;
 export function NotificationPanel({ initialUnread }: { initialUnread: number }) {
   const router = useRouter();
   const [open, setOpen] = React.useState(false);
-  const [unread, setUnread] = React.useState(initialUnread);
+  const [unread, setUnread] = useUnreadCount(initialUnread);
   const [items, setItems] = React.useState<Notification[] | null>(null);
   const [loading, setLoading] = React.useState(false);
   const [mounted, setMounted] = React.useState(false);
@@ -75,7 +76,7 @@ export function NotificationPanel({ initialUnread }: { initialUnread: number }) 
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [setUnread]);
 
   // Пока панель закрыта, список не нужен — обновляем только счётчик, и только
   // когда вкладку видно: фоновые вкладки базу не нагружают.
@@ -100,7 +101,7 @@ export function NotificationPanel({ initialUnread }: { initialUnread: number }) 
       clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [open]);
+  }, [open, setUnread]);
 
   React.useEffect(() => {
     if (open && items === null) void load();

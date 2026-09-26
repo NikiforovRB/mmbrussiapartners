@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { ApiError, badRequest, notFound, parseBody, route } from "@/lib/api";
+import { ApiError, badRequest, forbidden, notFound, parseBody, route } from "@/lib/api";
+import { hasPermission } from "@/lib/permissions";
 import {
   fiscalizePayment,
   markPaymentPaid,
@@ -10,6 +11,7 @@ import {
 } from "@/lib/payments/service";
 import { recordAdminAction } from "@/lib/admin-audit";
 import { notifyUser, notifyAdmins } from "@/lib/app-notifications";
+import { syncLicenseSlots } from "@/lib/license-slots";
 import { formatRub } from "@/lib/money";
 import { requirePermission } from "@/lib/session";
 
@@ -64,6 +66,7 @@ export const POST = route(async (req: Request, ctx: { params: Promise<{ id: stri
       case "cancel": {
         if (payment.status === "PAID") throw badRequest("Оплаченный платёж нельзя отменить");
         const updated = await db.payment.update({ where: { id }, data: { status: "CANCELLED" } });
+        await syncLicenseSlots(payment.dealerId);
         await recordAdminAction({
           actorId: session.user.id,
           entity: "PAYMENT",
@@ -100,6 +103,9 @@ export const POST = route(async (req: Request, ctx: { params: Promise<{ id: stri
       case "refund": {
         // Деньги возвращает администратор вручную (в банке/эквайринге), в
         // портале лишь фиксируем факт возврата — обычно при аннулировании.
+        if (!hasPermission(session.user.permissions, "payments.refund", session.user.isSuperAdmin)) {
+          throw forbidden("Нет права оформлять возвраты");
+        }
         if (payment.status !== "PAID") {
           throw badRequest("Вернуть можно только оплаченный платёж");
         }

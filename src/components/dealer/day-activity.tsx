@@ -44,13 +44,13 @@ export function DayActivity() {
 
   return (
     <Card>
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-        <div className="flex items-center gap-2">
-          <CalendarDays className="h-4 w-4 text-accent" />
-          <div className="font-display text-lg tracking-tight">Активность за день</div>
+      <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-3 mb-4">
+        <div className="flex items-center gap-2 min-w-0">
+          <CalendarDays className="h-4 w-4 shrink-0 text-accent" />
+          <div className="font-display text-lg tracking-tight whitespace-nowrap">Активность за день</div>
         </div>
-        <div className="w-full sm:w-56">
-          <DatePicker value={date} onChange={setDate} />
+        <div className="w-full sm:w-60 shrink-0 whitespace-nowrap">
+          <DatePicker value={date} onChange={setDate} clearable={false} />
         </div>
       </div>
 

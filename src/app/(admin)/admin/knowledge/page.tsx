@@ -1,17 +1,15 @@
 import Link from "next/link";
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { redirect } from "next/navigation";
 import { Topbar } from "@/components/cabinet/topbar";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tag } from "@/components/ui/tag";
 import { Plus, ChevronRight, BookOpen, FolderTree } from "lucide-react";
-import { hasPermission } from "@/lib/permissions";
 import { formatRuDateTime } from "@/lib/dates";
 import { KB_UNCATEGORIZED } from "@/lib/knowledge";
 import { loadKnowledgeBrowser } from "@/lib/knowledge-browse";
 import { KnowledgeBrowser } from "@/components/knowledge/knowledge-browser";
+import { requireAdminPage } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -20,11 +18,7 @@ export default async function AdminKnowledgePage({
 }: {
   searchParams: Promise<{ category?: string; q?: string }>;
 }) {
-  const session = await auth();
-  if (!session?.user) return null;
-  if (!hasPermission(session.user.permissions, "settings.edit", session.user.isSuperAdmin)) {
-    redirect("/admin");
-  }
+  const session = await requireAdminPage("settings.edit");
 
   const sp = await searchParams;
   const [me, data] = await Promise.all([

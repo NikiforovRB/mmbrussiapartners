@@ -112,6 +112,10 @@ model User {
   id              String     @id @default(cuid())
   email           String     @unique
   passwordHash    String
+  /// Пароль представителя, зашифрованный ключом DEALER_PASSWORD_KEY из
+  /// окружения сервера (AES-256-GCM): его видит администратор с правом
+  /// dealers.passwords. У сотрудников всегда null.
+  passwordEncrypted String?
   status          UserStatus @default(PENDING)
   isSuperAdmin    Boolean    @default(false)
   twoFactorSecret String?

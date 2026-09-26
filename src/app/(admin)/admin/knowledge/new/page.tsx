@@ -1,10 +1,8 @@
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { redirect } from "next/navigation";
 import { Topbar } from "@/components/cabinet/topbar";
 import { ArticleEditor } from "@/components/knowledge/article-editor";
-import { hasPermission } from "@/lib/permissions";
 import { loadKnowledgeCategories } from "@/lib/knowledge-browse";
+import { requireAdminPage } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -13,11 +11,7 @@ export default async function AdminKnowledgeNewPage({
 }: {
   searchParams: Promise<{ category?: string }>;
 }) {
-  const session = await auth();
-  if (!session?.user) return null;
-  if (!hasPermission(session.user.permissions, "settings.edit", session.user.isSuperAdmin)) {
-    redirect("/admin");
-  }
+  const session = await requireAdminPage("settings.edit");
 
   const sp = await searchParams;
   const [me, categories] = await Promise.all([

@@ -28,9 +28,17 @@ export const POST = route(async (req: Request, ctx: { params: Promise<{ id: stri
     include: { license: { include: { dealer: true } } },
   });
   if (!request) throw notFound("Заявка не найдена");
-  if (request.status !== "PENDING") throw badRequest("Заявка уже рассмотрена");
-
   const approved = action === "approve";
+  // Отклонённую заявку можно пересмотреть и одобрить, пока лицензия активна.
+  if (approved) {
+    if (request.status === "APPROVED") throw badRequest("Заявка уже одобрена");
+    if (request.status === "REJECTED" && request.license.status !== "ACTIVE") {
+      throw badRequest("Лицензия уже не активна — аннулировать нечего");
+    }
+  } else if (request.status !== "PENDING") {
+    throw badRequest("Заявка уже рассмотрена");
+  }
+
   const review = {
     status: approved ? ("APPROVED" as const) : ("REJECTED" as const),
     reviewedById: session.user.id,
@@ -84,6 +92,28 @@ export const POST = route(async (req: Request, ctx: { params: Promise<{ id: stri
     body: note || null,
     link: `/dealer/licenses/${request.licenseId}`,
   });
+
+  return NextResponse.json({ ok: true });
+});
+
+export const DELETE = route(async (_req: Request, ctx: { params: Promise<{ id: string }> }) => {
+  const session = await requirePermission("licenses.cancel");
+
+  const { id } = await ctx.params;
+  const request = await db.cancellationRequest.findUnique({ where: { id } });
+  if (!request) throw notFound("Заявка не найдена");
+
+  await db.$transaction([
+    db.cancellationRequest.delete({ where: { id } }),
+    db.licenseAuditLog.create({
+      data: {
+        licenseId: request.licenseId,
+        actorId: session.user.id,
+        action: "EDITED",
+        reason: `Удалена заявка на аннулирование: ${request.reason}`,
+      },
+    }),
+  ]);
 
   return NextResponse.json({ ok: true });
 });

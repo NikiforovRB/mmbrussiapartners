@@ -7,7 +7,6 @@ import {
   ArrowUpRight,
 } from "lucide-react";
 import Link from "next/link";
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { Topbar } from "@/components/cabinet/topbar";
 import { Card } from "@/components/ui/card";
@@ -16,12 +15,12 @@ import { Button } from "@/components/ui/button";
 import { addDays, formatRuDate, formatRuDateTime } from "@/lib/dates";
 import { fioFromParts } from "@/lib/utils";
 import { formatRub } from "@/lib/money";
+import { requireAdminPage } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminDashboard() {
-  const session = await auth();
-  if (!session?.user) return null;
+  const session = await requireAdminPage();
   const user = await db.user.findUnique({
     where: { id: session.user.id },
     include: { dealerProfile: true, role: true },

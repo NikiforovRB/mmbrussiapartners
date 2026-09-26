@@ -17,6 +17,8 @@ export interface DatePickerProps {
   max?: Date;
   className?: string;
   disabled?: boolean;
+  /** Кнопка «очистить». Выключают, когда без даты поле не имеет смысла. */
+  clearable?: boolean;
 }
 
 /** Кнопка-поле, открывающая окно выбора даты/времени. */
@@ -56,7 +58,7 @@ export function PickerTrigger({
         )}
       >
         <span className="shrink-0 text-ink-subtle">{icon}</span>
-        <span className="truncate">{text ?? placeholder}</span>
+        <span className="min-w-0 truncate">{text ?? placeholder}</span>
       </button>
       {clearable ? (
         <button
@@ -80,6 +82,7 @@ export function DatePicker({
   max,
   className,
   disabled,
+  clearable = true,
 }: DatePickerProps) {
   const [open, setOpen] = React.useState(false);
   const todayKey = localDayKey(new Date());
@@ -105,7 +108,7 @@ export function DatePicker({
         open={open}
         disabled={disabled}
         onOpen={() => setOpen(true)}
-        onClear={() => onChange(null)}
+        onClear={clearable ? () => onChange(null) : undefined}
       />
       <Modal
         open={open}

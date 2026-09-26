@@ -1,7 +1,6 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { Tags } from "lucide-react";
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { hasAdminScope, hasPermission } from "@/lib/permissions";
 import { getDownloadUrl } from "@/lib/s3";
@@ -9,14 +8,16 @@ import { Topbar } from "@/components/cabinet/topbar";
 import { Button } from "@/components/ui/button";
 import { fioFromParts } from "@/lib/utils";
 import { isSiteSyncConfigured } from "@/lib/site-dealers";
+import { isPasswordVaultConfigured } from "@/lib/password-vault";
 import { DealerEditor } from "./dealer-editor";
+import { DealerPasswordCard } from "./dealer-password-card";
 import { SitePublicationCard } from "./site-publication-card";
+import { requireAdminPage } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminDealerPage({ params }: { params: Promise<{ id: string }> }) {
-  const session = await auth();
-  if (!session?.user) redirect("/login");
+  const session = await requireAdminPage("dealers.view");
   const { id } = await params;
   const dealer = await db.user.findUnique({
     where: { id },
@@ -39,11 +40,14 @@ export default async function AdminDealerPage({ params }: { params: Promise<{ id
     Boolean(dealer.dealerProfile) &&
     hasPermission(session.user.permissions, "pricing.manage", session.user.isSuperAdmin);
 
+  const isStaffAccount = dealer.isSuperAdmin || hasAdminScope(dealer.role.permissions);
   const deletable =
     hasPermission(session.user.permissions, "dealers.delete", session.user.isSuperAdmin) &&
     dealer.id !== session.user.id &&
-    !dealer.isSuperAdmin &&
-    !hasAdminScope(dealer.role.permissions);
+    !isStaffAccount;
+  const canManagePassword =
+    !isStaffAccount &&
+    hasPermission(session.user.permissions, "dealers.passwords", session.user.isSuperAdmin);
 
   const avatarUrl = dealer.dealerProfile?.avatarKey
     ? await getDownloadUrl(dealer.dealerProfile.avatarKey, 3600)
@@ -100,6 +104,15 @@ export default async function AdminDealerPage({ params }: { params: Promise<{ id
           }}
           avatarUrl={avatarUrl}
           deletable={deletable}
+          passwordCard={
+            canManagePassword ? (
+              <DealerPasswordCard
+                dealerId={dealer.id}
+                known={Boolean(dealer.passwordEncrypted)}
+                configured={isPasswordVaultConfigured()}
+              />
+            ) : null
+          }
           sitePublication={
             p ? (
               <SitePublicationCard

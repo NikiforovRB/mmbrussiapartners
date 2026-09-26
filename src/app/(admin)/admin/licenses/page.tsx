@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { Plus } from "lucide-react";
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { hasPermission } from "@/lib/permissions";
 import { Topbar } from "@/components/cabinet/topbar";
@@ -8,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { LicenseTable } from "@/components/licenses/license-table";
 import { LICENSE_LIST_SELECT, toLicenseRow } from "@/lib/license-list";
 import { Pagination, parsePage } from "@/components/cabinet/pagination";
+import { requireAdminPage } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -18,8 +18,7 @@ export default async function AdminLicensesPage({
 }: {
   searchParams: Promise<{ q?: string; status?: string; type?: string; page?: string }>;
 }) {
-  const session = await auth();
-  if (!session?.user) return null;
+  const session = await requireAdminPage("licenses.view");
   const sp = await searchParams;
   const where = buildWhere(sp);
   const page = parsePage(sp.page);

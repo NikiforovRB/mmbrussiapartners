@@ -18,7 +18,11 @@ export default async function LicenseDetailDealerPage({
   const license = await db.license.findUnique({
     where: { id },
     include: {
-      auditLogs: { orderBy: { createdAt: "desc" }, take: 50, include: { actor: true } },
+      auditLogs: {
+        orderBy: { createdAt: "desc" },
+        take: 50,
+        include: { actor: { select: { email: true } } },
+      },
       cancellationRequests: { orderBy: { createdAt: "desc" }, take: 1 },
     },
   });

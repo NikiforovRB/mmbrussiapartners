@@ -1,13 +1,11 @@
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { redirect } from "next/navigation";
 import { Topbar } from "@/components/cabinet/topbar";
 import { Card } from "@/components/ui/card";
 import { fioFromParts } from "@/lib/utils";
 import { formatRub } from "@/lib/money";
 import { Money } from "@/components/ui/money";
 import { formatRuDateTime } from "@/lib/dates";
-import { hasPermission } from "@/lib/permissions";
+import { requireAdminPage } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -25,11 +23,7 @@ type Row = {
 };
 
 export default async function AdminFinancePage() {
-  const session = await auth();
-  if (!session?.user) return null;
-  if (!hasPermission(session.user.permissions, "payments.view", session.user.isSuperAdmin)) {
-    redirect("/admin");
-  }
+  const session = await requireAdminPage("payments.view");
 
   const me = await db.user.findUnique({
     where: { id: session.user.id },

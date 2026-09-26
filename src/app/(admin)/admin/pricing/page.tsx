@@ -1,10 +1,8 @@
-import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { hasPermission } from "@/lib/permissions";
 import { priceKey } from "@/lib/pricing";
 import { Topbar } from "@/components/cabinet/topbar";
 import { PricingManager, type PriceItem } from "./pricing-manager";
+import { requireAdminPage } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -14,11 +12,7 @@ export default async function AdminPricingPage({
   searchParams: Promise<{ dealer?: string }>;
 }) {
   const { dealer: dealerParam } = await searchParams;
-  const session = await auth();
-  if (!session?.user) redirect("/login?callbackUrl=/admin/pricing");
-  if (!hasPermission(session.user.permissions, "pricing.manage", session.user.isSuperAdmin)) {
-    redirect("/admin");
-  }
+  const session = await requireAdminPage("pricing.manage");
 
   const [me, rows, dealers] = await Promise.all([
     db.user.findUnique({ where: { id: session.user.id }, include: { role: true } }),

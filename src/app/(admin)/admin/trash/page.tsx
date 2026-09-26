@@ -1,4 +1,3 @@
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { Topbar } from "@/components/cabinet/topbar";
 import { Card } from "@/components/ui/card";
@@ -6,6 +5,7 @@ import { Tag } from "@/components/ui/tag";
 import { TrashRow } from "./trash-row";
 import { formatRuDateTime } from "@/lib/dates";
 import { Pagination, parsePage } from "@/components/cabinet/pagination";
+import { requireAdminPage } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -16,8 +16,7 @@ export default async function AdminTrashPage({
 }: {
   searchParams: Promise<{ page?: string }>;
 }) {
-  const session = await auth();
-  if (!session?.user) return null;
+  const session = await requireAdminPage("licenses.restore");
 
   const sp = await searchParams;
   const page = parsePage(sp.page);

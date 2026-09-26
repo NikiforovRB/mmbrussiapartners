@@ -7,6 +7,7 @@ import { createPayment } from "@/lib/payments/service";
 import { defaultLicensePrice, getPaymentProvider } from "@/lib/payments/provider";
 import { resolvePrice } from "@/lib/pricing";
 import { notifyAdmins } from "@/lib/app-notifications";
+import { syncLicenseSlots } from "@/lib/license-slots";
 import { formatRub } from "@/lib/money";
 import { requireApprovedUser } from "@/lib/session";
 
@@ -32,6 +33,7 @@ export const POST = route(async (req: Request) => {
   );
 
   let licenseId: string | null = null;
+  let dealerId = session.user.id;
   let catalogPrice: number | null = null;
   if (body.licenseId) {
     const license = await db.license.findUnique({
@@ -43,6 +45,8 @@ export const POST = route(async (req: Request) => {
         product: true,
         bundle: true,
         productRegion: true,
+        repeatGeneration: true,
+        issuedWithoutPayment: true,
         payment: { select: { id: true } },
       },
     });
@@ -51,7 +55,10 @@ export const POST = route(async (req: Request) => {
       throw forbidden("Лицензия принадлежит другому представителю");
     }
     if (license.payment) throw badRequest("По этой лицензии счёт уже выставлен");
+    if (license.repeatGeneration) throw badRequest("Повторная генерация бесплатна — счёт не выставляется");
+    if (license.issuedWithoutPayment) throw badRequest("Лицензия выдана без оплаты");
     licenseId = license.id;
+    dealerId = license.dealerId;
     if (license.product) {
       const resolved = await resolvePrice(license.dealerId, {
         product: license.product,
@@ -70,27 +77,32 @@ export const POST = route(async (req: Request) => {
     throw badRequest("Не задана стоимость. Заполните справочник цен.");
   }
 
-  const profile = await db.dealerProfile.findUnique({ where: { userId: session.user.id } });
+  const payer = await db.user.findUnique({
+    where: { id: dealerId },
+    select: { email: true, dealerProfile: { select: { phone: true } } },
+  });
+  const payerEmail = payer?.email ?? session.user.email;
 
   let payment;
   try {
     payment = await createPayment({
-      dealerId: session.user.id,
+      dealerId,
       amount,
       description: body.description ?? "Генерация лицензии MMB RUSSIA",
       licenseId,
-      email: session.user.email,
-      phone: profile?.phone ?? null,
-      receiptEmail: (body.receiptEmail && body.receiptEmail.trim()) || session.user.email,
+      email: payerEmail,
+      phone: payer?.dealerProfile?.phone ?? null,
+      receiptEmail: (body.receiptEmail && body.receiptEmail.trim()) || payerEmail,
     });
   } catch (e) {
     throw new ApiError("UPSTREAM", (e as Error).message);
   }
+  if (licenseId) await syncLicenseSlots(dealerId);
 
   await notifyAdmins(["payments.manage"], {
     type: "PAYMENT_CREATED",
     title: `Новый счёт на ${formatRub(amount)}`,
-    body: session.user.email,
+    body: payerEmail,
     link: "/admin/payments",
   });
 

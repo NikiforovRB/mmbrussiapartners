@@ -60,13 +60,29 @@ export function SettingsTabs({
           </button>
         ))}
       </div>
-      {tab === "general" ? <SettingsForm initial={general} /> : null}
-      {tab === "homepage" ? <HomepageEditorForm initial={homepage} /> : null}
-      {tab === "announcement" ? <AnnouncementForm initial={announcement} /> : null}
-      {tab === "support" ? <SupportForm initial={support} /> : null}
-      {tab === "generation" ? <GenerationForm initial={generation} /> : null}
-      {tab === "payment" ? payment : null}
-      {tab === "site" ? site : null}
+      {/* Вкладки не размонтируем: форма заново брала бы initial из первого
+          рендера страницы и показывала значения до сохранения. */}
+      <TabPanel active={tab === "general"}>
+        <SettingsForm initial={general} />
+      </TabPanel>
+      <TabPanel active={tab === "homepage"}>
+        <HomepageEditorForm initial={homepage} />
+      </TabPanel>
+      <TabPanel active={tab === "announcement"}>
+        <AnnouncementForm initial={announcement} />
+      </TabPanel>
+      <TabPanel active={tab === "support"}>
+        <SupportForm initial={support} />
+      </TabPanel>
+      <TabPanel active={tab === "generation"}>
+        <GenerationForm initial={generation} />
+      </TabPanel>
+      <TabPanel active={tab === "payment"}>{payment}</TabPanel>
+      <TabPanel active={tab === "site"}>{site}</TabPanel>
     </div>
   );
+}
+
+function TabPanel({ active, children }: { active: boolean; children: React.ReactNode }) {
+  return <div hidden={!active}>{children}</div>;
 }

@@ -4,6 +4,7 @@ import { z } from "zod";
 import { headers } from "next/headers";
 import { db } from "@/lib/db";
 import { hashPassword } from "@/lib/auth";
+import { sealPassword } from "@/lib/password-vault";
 import { normalizePhone } from "@/lib/utils";
 import { notifyAdmins } from "@/lib/app-notifications";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
@@ -95,6 +96,10 @@ export async function registerDealerAction(formData: FormData) {
       },
     },
   });
+  const sealed = sealPassword(created.id, data.password);
+  if (sealed) {
+    await db.user.update({ where: { id: created.id }, data: { passwordEncrypted: sealed } });
+  }
 
   await notifyAdmins(["dealers.approve"], {
     type: "DEALER_REGISTERED",

@@ -8,8 +8,10 @@ import {
 } from "@/lib/drivemods";
 import { ApiError, badRequest, route } from "@/lib/api";
 import { db } from "@/lib/db";
-import { hasAdminScope } from "@/lib/permissions";
+import { hasAdminScope, hasPermission } from "@/lib/permissions";
+import { generationBlockReason, mergeGenerationSettings } from "@/lib/site-settings";
 import { resolvePrices } from "@/lib/pricing";
+import { isRepeatGeneration } from "@/lib/repeat-generation";
 import { requireApprovedUser } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -34,6 +36,21 @@ export const POST = route(async (req: Request) => {
 
   try {
     const info = await licInfo(buf.toString("base64"));
+
+    // Те же ограничения, что и при генерации (/createlic), — чтобы дилер узнал
+    // о запрете сразу, а не после заполнения всех шагов.
+    const bypassesRules =
+      session.user.isSuperAdmin ||
+      hasPermission(session.user.permissions, "dealers.setLimit", session.user.isSuperAdmin);
+    if (!bypassesRules) {
+      const settings = await db.companySettings.findUnique({
+        where: { id: "singleton" },
+        select: { generation: true },
+      });
+      const reason = generationBlockReason(mergeGenerationSettings(settings?.generation), info.version_custom);
+      if (reason) throw badRequest(reason);
+    }
+
     if (info.items.length === 0) {
       throw badRequest(
         "Не найдено доступных продуктов для этого устройства. " +
@@ -41,8 +58,10 @@ export const POST = route(async (req: Request) => {
       );
     }
     // Цены считает сервер по справочнику и правилам этого представителя:
-    // ровно та же сумма попадёт в счёт, что бы ни прислал браузер.
-    const prices = await resolvePrices(session.user.id, info.items);
+    // ровно та же сумма попадёт в счёт, что бы ни прислал браузер. Повторная
+    // генерация бесплатна.
+    const repeat = await isRepeatGeneration(info.device_id, info.recoverable);
+    const prices = repeat ? null : await resolvePrices(session.user.id, info.items);
 
     // Представитель видит только свои прошлые выдачи по этому ШГУ,
     // администратор — любые.
@@ -67,7 +86,7 @@ export const POST = route(async (req: Request) => {
       // DRIVEMODS отдаёт признак прошлой выдачи: recoverable означает, что
       // лицензия для этого ШГУ у него уже есть.
       recoverable: info.recoverable,
-      repeat: info.recoverable || previous !== null,
+      repeat,
       firstGeneratedAt,
       lastGeneratedAt,
       previous: previous
@@ -87,11 +106,11 @@ export const POST = route(async (req: Request) => {
         bundle: it.bundle,
         region: it.region,
         fullName: productFullName(it),
-        price: prices[index].price,
+        price: prices ? prices[index].price : 0,
         /** Цена взята из справочника, а не из запасной настройки. */
-        priced: prices[index].itemId !== null,
+        priced: prices ? prices[index].itemId !== null : true,
         /** Первая генерация позиции идёт по клиентской цене. */
-        firstAtClientPrice: prices[index].basis === "client_first",
+        firstAtClientPrice: prices ? prices[index].basis === "client_first" : false,
       })),
     });
   } catch (err) {

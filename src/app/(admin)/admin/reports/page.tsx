@@ -1,14 +1,13 @@
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { Topbar } from "@/components/cabinet/topbar";
 import { ReportsBuilder, type ReportDealerOption } from "@/components/reports/reports-builder";
 import { fioFromParts } from "@/lib/utils";
+import { requireAdminPage } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminReportsPage() {
-  const session = await auth();
-  if (!session?.user) return null;
+  const session = await requireAdminPage("reports.view");
   const me = await db.user.findUnique({
     where: { id: session.user.id },
     include: { role: true },
