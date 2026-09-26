@@ -371,6 +371,20 @@ model Payment {
    */
   receiptAttempt   Int           @default(0)
 
+  // Возврат средств и чек «Возврат прихода»
+  /// processing | done | fail; null — возврата не было (или отмечен до появления возвратов)
+  refundStatus          String?
+  /// atol_pay — деньги вернул эквайринг; manual — администратор вернул сам
+  refundMethod          String?
+  refundError           String?
+  refundedAt            DateTime?
+  refundReceiptUuid     String?
+  refundReceiptStatus   String?
+  refundReceiptUrl      String?
+  refundFiscalDocNumber String?
+  refundReceiptError    String?
+  refundReceiptAttempt  Int       @default(0)
+
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 

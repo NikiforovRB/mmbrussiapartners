@@ -18,6 +18,7 @@ import {
   ATOL_PAY_STATUS,
   getAtolPayOrderStatus,
   getPaymentProvider,
+  refundAtolPayOrder,
   type AtolPayOrderStatus,
   type CheckoutResult,
 } from "./provider";
@@ -307,9 +308,12 @@ export async function applyReceiptReport(paymentId: string, report: AtolReport) 
   return updated;
 }
 
-/** Опрашивает АТОЛ о судьбе чека — на случай, если колбэк не дошёл. */
+/** Опрашивает АТОЛ о судьбе чека — на случай, если колбэк не дошёл. После возврата — о чеке возврата. */
 export async function refreshReceipt(paymentId: string) {
   const payment = await db.payment.findUnique({ where: { id: paymentId } });
+  if (payment?.status === "REFUNDED" && payment.refundReceiptUuid) {
+    return applyRefundReceiptReport(paymentId, await getReceiptReport(payment.refundReceiptUuid));
+  }
   if (!payment?.receiptUuid) throw new Error("Чек по этому платежу ещё не отправлялся");
   const report = await getReceiptReport(payment.receiptUuid);
   return applyReceiptReport(paymentId, report);
@@ -319,9 +323,13 @@ export async function refreshReceipt(paymentId: string) {
 export async function handleAtolCallback(payload: Record<string, unknown>) {
   const report = normalizeReport(payload);
   if (!report.uuid) return null;
-  const payment = await db.payment.findFirst({ where: { receiptUuid: report.uuid } });
+  const payment = await db.payment.findFirst({
+    where: { OR: [{ receiptUuid: report.uuid }, { refundReceiptUuid: report.uuid }] },
+  });
   if (!payment) return null;
-  return applyReceiptReport(payment.id, report);
+  return payment.refundReceiptUuid === report.uuid
+    ? applyRefundReceiptReport(payment.id, report)
+    : applyReceiptReport(payment.id, report);
 }
 
 function payloadObject(value: unknown): Record<string, unknown> {
@@ -521,4 +529,170 @@ export async function handleAtolPayCallback(
   });
   if (!payment) return null;
   return syncAtolPayPayment(payment.id);
+}
+
+/** Возврат, прерванный падением процесса, через это время можно запустить снова. */
+const STALE_REFUND_MS = 10 * 60_000;
+
+/** Оплаченный заказ АТОЛ Pay по счёту; refunded — деньги по нему уже вернулись. */
+async function findPaidAtolPayOrder(payment: {
+  id: string;
+  externalId: string | null;
+  providerPayload: unknown;
+}): Promise<{ orderId: string; refunded: boolean }> {
+  for (const orderId of atolPayOrders(payment)) {
+    const status = await getAtolPayOrderStatus(orderId);
+    if (status?.code === ATOL_PAY_STATUS.success) return { orderId, refunded: false };
+    if (status?.code === ATOL_PAY_STATUS.refunded) return { orderId, refunded: true };
+  }
+  throw new Error(
+    "оплаченный заказ не найден. Если деньги пришли мимо АТОЛ Pay, верните их сами и отметьте возврат вручную.",
+  );
+}
+
+/**
+ * Возврат средств по оплаченному счёту. Онлайн-оплату возвращает АТОЛ Pay —
+ * туда, откуда платили; счёт на реквизиты (или деньги, которые администратор
+ * уже вернул сам) эквайринг не трогает. Затем пробивается чек «Возврат прихода».
+ */
+export async function refundPayment(paymentId: string, opts: { manual?: boolean } = {}) {
+  const payment = await db.payment.findUnique({
+    where: { id: paymentId },
+    select: { id: true, status: true, provider: true, externalId: true, providerPayload: true },
+  });
+  if (!payment) throw new Error("Платёж не найден");
+  if (payment.status !== "PAID") throw new Error("Вернуть можно только оплаченный платёж");
+  const viaAtolPay = payment.provider === "atol_pay" && !opts.manual;
+
+  // Два одновременных нажатия не должны вернуть деньги дважды.
+  const claimed = await db.payment.updateMany({
+    where: {
+      id: paymentId,
+      status: "PAID",
+      OR: [
+        { refundStatus: null },
+        { refundStatus: "fail" },
+        { refundStatus: "processing", updatedAt: { lt: new Date(Date.now() - STALE_REFUND_MS) } },
+      ],
+    },
+    data: { refundStatus: "processing", refundError: null },
+  });
+  if (claimed.count === 0) throw new Error("Возврат по этому платежу уже выполняется");
+
+  if (viaAtolPay) {
+    try {
+      const order = await findPaidAtolPayOrder(payment);
+      if (!order.refunded) await refundAtolPayOrder(order.orderId);
+    } catch (e) {
+      const message = `АТОЛ Pay: ${(e as Error).message}`;
+      await db.payment.update({
+        where: { id: paymentId },
+        data: { refundStatus: "fail", refundError: message },
+      });
+      throw new Error(message);
+    }
+  }
+
+  await db.payment.update({
+    where: { id: paymentId },
+    data: {
+      status: "REFUNDED",
+      refundStatus: "done",
+      refundMethod: viaAtolPay ? "atol_pay" : "manual",
+      refundedAt: new Date(),
+    },
+  });
+  return fiscalizeRefund(paymentId);
+}
+
+/**
+ * Чек «Возврат прихода». Нужен, только если по платежу пробит чек прихода;
+ * пробитый или ушедший в кассу чек повторно не отправляется.
+ */
+export async function fiscalizeRefund(paymentId: string) {
+  const load = () =>
+    db.payment.findUnique({
+      where: { id: paymentId },
+      include: { dealer: { include: { dealerProfile: true } } },
+    });
+  let payment = await load();
+  if (!payment) throw new Error("Платёж не найден");
+  if (payment.status !== "REFUNDED" || payment.refundStatus !== "done") {
+    throw new Error("Чек возврата пробивается только после возврата средств");
+  }
+  if (payment.refundReceiptStatus === "done" || payment.refundReceiptStatus === "wait") return payment;
+
+  // Чек прихода ещё в кассе — сначала узнаём его судьбу.
+  if (payment.receiptStatus === "wait" && payment.receiptUuid) {
+    try {
+      await applyReceiptReport(paymentId, await getReceiptReport(payment.receiptUuid));
+      payment = (await load()) ?? payment;
+    } catch (e) {
+      console.error(`[payments] не удалось обновить чек прихода ${paymentId}`, e);
+    }
+  }
+  if (payment.receiptStatus !== "done") return payment;
+
+  if (!isAtolConfigured()) {
+    return db.payment.update({
+      where: { id: paymentId },
+      data: {
+        refundReceiptStatus: "fail",
+        refundReceiptError: "Касса АТОЛ Онлайн не настроена (ATOL_LOGIN / ATOL_PASSWORD / ATOL_GROUP).",
+      },
+    });
+  }
+
+  const claimed = await db.payment.updateMany({
+    where: {
+      id: paymentId,
+      status: "REFUNDED",
+      OR: [{ refundReceiptStatus: null }, { refundReceiptStatus: { notIn: ["done", "wait"] } }],
+    },
+    data: { refundReceiptStatus: "wait", refundReceiptAttempt: { increment: 1 }, refundReceiptError: null },
+  });
+  if (claimed.count === 0) return payment;
+
+  const attempt =
+    (await db.payment.findUnique({ where: { id: paymentId }, select: { refundReceiptAttempt: true } }))
+      ?.refundReceiptAttempt ?? payment.refundReceiptAttempt + 1;
+  const settings = await loadPaymentSettings();
+  const amount = Number(payment.amount);
+
+  try {
+    const { uuid } = await registerReceipt({
+      operation: "sell_refund",
+      externalId: `${payment.id}-refund-${attempt}`,
+      items: [{ name: settings.serviceLabel, price: amount, quantity: 1, sum: amount }],
+      total: amount,
+      customerEmail: payment.receiptEmail || payment.dealer.email,
+      customerPhone: payment.dealer.dealerProfile?.phone ?? null,
+      vatType: settings.vatType,
+      paymentMethod: settings.paymentMethod,
+      callbackUrl: atolCallbackUrl(),
+    });
+    return await db.payment.update({
+      where: { id: paymentId },
+      data: { refundReceiptUuid: uuid, refundReceiptStatus: "wait", refundReceiptError: null },
+    });
+  } catch (e) {
+    return db.payment.update({
+      where: { id: paymentId },
+      data: { refundReceiptStatus: "fail", refundReceiptError: (e as Error).message },
+    });
+  }
+}
+
+async function applyRefundReceiptReport(paymentId: string, report: AtolReport) {
+  const current = await db.payment.findUnique({ where: { id: paymentId }, select: { providerPayload: true } });
+  return db.payment.update({
+    where: { id: paymentId },
+    data: {
+      refundReceiptStatus: report.status,
+      refundReceiptUrl: report.ofdReceiptUrl,
+      refundFiscalDocNumber: report.fiscalDocumentNumber,
+      refundReceiptError: report.errorText,
+      providerPayload: { ...payloadObject(current?.providerPayload), atolRefundReceipt: report.raw } as never,
+    },
+  });
 }

@@ -8,12 +8,56 @@ import { formatRuDateTime } from "@/lib/dates";
 import { Pagination, parsePage } from "@/components/cabinet/pagination";
 import { atolMissingEnv, isAtolConfigured } from "@/lib/payments/atol";
 import { atolPayMethodsPhrase, getPaymentProvider } from "@/lib/payments/provider";
+import { formatRub } from "@/lib/money";
 import { PaymentActions } from "./payment-actions";
 import { requireAdminPage } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 const PAGE_SIZE = 20;
+
+type RefundFields = {
+  refundStatus: string | null;
+  refundMethod: string | null;
+  refundError: string | null;
+  refundReceiptStatus: string | null;
+  refundReceiptUrl: string | null;
+  refundReceiptError: string | null;
+};
+
+function RefundInfo({ p }: { p: RefundFields }) {
+  if (!p.refundStatus) return null;
+  return (
+    <div className="mt-1.5 space-y-1">
+      <div className="flex flex-wrap items-center gap-2 text-xs text-ink-muted">
+        <span>
+          {p.refundStatus === "processing"
+            ? "Возврат выполняется…"
+            : p.refundStatus === "fail"
+              ? "Возврат не прошёл"
+              : p.refundMethod === "atol_pay"
+                ? "Возврат через АТОЛ Pay"
+                : "Возврат вручную"}
+        </span>
+        {p.refundReceiptStatus ? <StatusTag kind="receipt" status={p.refundReceiptStatus} /> : null}
+        {p.refundReceiptUrl ? (
+          <a
+            href={p.refundReceiptUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="text-accent inline-flex items-center gap-1"
+          >
+            Чек возврата <ExternalLink className="h-3 w-3" />
+          </a>
+        ) : null}
+      </div>
+      {p.refundError ? <div className="text-[11px] text-danger max-w-[280px]">{p.refundError}</div> : null}
+      {p.refundReceiptError ? (
+        <div className="text-[11px] text-danger max-w-[280px]">Чек возврата: {p.refundReceiptError}</div>
+      ) : null}
+    </div>
+  );
+}
 
 export default async function AdminPaymentsPage({
   searchParams,
@@ -115,12 +159,16 @@ export default async function AdminPaymentsPage({
                   {p.receiptError ? (
                     <div className="mt-1 text-[11px] text-danger">{p.receiptError}</div>
                   ) : null}
+                  <RefundInfo p={p} />
                   <div className="mt-3">
                     <PaymentActions
                       id={p.id}
                       status={p.status}
                       receiptStatus={p.receiptStatus}
                       provider={p.provider}
+                      amountLabel={formatRub(p.amount)}
+                      refundStatus={p.refundStatus}
+                      refundReceiptStatus={p.refundReceiptStatus}
                     />
                   </div>
                 </li>
@@ -172,6 +220,7 @@ export default async function AdminPaymentsPage({
                         {p.receiptError ? (
                           <div className="mt-1 text-[11px] text-danger max-w-[280px]">{p.receiptError}</div>
                         ) : null}
+                        <RefundInfo p={p} />
                       </td>
                       <td className="px-4 py-3">
                         <PaymentActions
@@ -179,6 +228,9 @@ export default async function AdminPaymentsPage({
                           status={p.status}
                           receiptStatus={p.receiptStatus}
                           provider={p.provider}
+                          amountLabel={formatRub(p.amount)}
+                          refundStatus={p.refundStatus}
+                          refundReceiptStatus={p.refundReceiptStatus}
                         />
                       </td>
                     </tr>

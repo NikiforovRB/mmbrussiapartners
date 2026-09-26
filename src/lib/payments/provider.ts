@@ -156,6 +156,26 @@ export async function getAtolPayOrderStatus(orderId: string): Promise<AtolPayOrd
 }
 
 /**
+ * Возврат оплаты заказа АТОЛ Pay: деньги уходят туда, откуда платили. Без суммы
+ * возвращается весь заказ; позиции нужны только при частичном возврате заказа
+ * с чеком АТОЛ Pay, а чеки у нас пробивает АТОЛ Онлайн.
+ */
+export async function refundAtolPayOrder(orderId: string): Promise<void> {
+  const token = process.env.ATOL_PAY_API_TOKEN;
+  if (!token) throw new Error("АТОЛ Pay не настроен (ATOL_PAY_API_TOKEN)");
+  const res = await fetchWithTimeout(`${atolPayBase()}/payments/${encodeURIComponent(orderId)}/cancel`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: atolPayAuthorization(token) },
+    timeoutMs: atolPayTimeout(),
+    body: JSON.stringify({}),
+  });
+  const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!res.ok || data.status !== "success") {
+    throw new Error(readAtolPayError(data) ?? `АТОЛ Pay не принял возврат (${res.status})`);
+  }
+}
+
+/**
  * АТОЛ Pay Ecom (интернет-эквайринг). Регистрируем платёж методом
  * POST /v1/ecom/payments и перенаправляем дилера на paymentUrls.main.
  * Токен из ЛК АТОЛ Pay (https://lk.atolpay.ru/, Настройки → API Токены)

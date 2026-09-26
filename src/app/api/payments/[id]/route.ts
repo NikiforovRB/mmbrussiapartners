@@ -5,8 +5,10 @@ import { ApiError, badRequest, forbidden, notFound, parseBody, route } from "@/l
 import { hasPermission } from "@/lib/permissions";
 import {
   fiscalizePayment,
+  fiscalizeRefund,
   markPaymentPaid,
   refreshReceipt,
+  refundPayment,
   syncAtolPayPayment,
 } from "@/lib/payments/service";
 import { recordAdminAction } from "@/lib/admin-audit";
@@ -19,13 +21,15 @@ export const runtime = "nodejs";
 
 const schema = z.object({
   action: z.enum(["confirm", "cancel", "fiscalize", "refresh-receipt", "refund", "sync"]),
+  /** Для refund: деньги администратор вернул сам, эквайринг не трогаем. */
+  manual: z.boolean().optional(),
 });
 
 export const POST = route(async (req: Request, ctx: { params: Promise<{ id: string }> }) => {
   const session = await requirePermission("payments.manage");
 
   const { id } = await ctx.params;
-  const { action } = await parseBody(req, schema);
+  const { action, manual } = await parseBody(req, schema);
 
   const payment = await db.payment.findUnique({
     where: { id },
@@ -77,13 +81,14 @@ export const POST = route(async (req: Request, ctx: { params: Promise<{ id: stri
         return NextResponse.json({ ok: true, payment: updated });
       }
       case "fiscalize": {
-        const updated = await fiscalizePayment(id);
+        const refund = payment.status === "REFUNDED";
+        const updated = refund ? await fiscalizeRefund(id) : await fiscalizePayment(id);
         await recordAdminAction({
           actorId: session.user.id,
           entity: "PAYMENT",
           entityId: id,
-          action: "FISCALIZED",
-          summary: `${licenseLabel} · ${updated.receiptStatus ?? "—"}`,
+          action: refund ? "REFUND_FISCALIZED" : "FISCALIZED",
+          summary: `${licenseLabel} · ${(refund ? updated.refundReceiptStatus : updated.receiptStatus) ?? "—"}`,
         });
         return NextResponse.json({ ok: true, payment: updated });
       }
@@ -101,31 +106,35 @@ export const POST = route(async (req: Request, ctx: { params: Promise<{ id: stri
         });
       }
       case "refund": {
-        // Деньги возвращает администратор вручную (в банке/эквайринге), в
-        // портале лишь фиксируем факт возврата — обычно при аннулировании.
         if (!hasPermission(session.user.permissions, "payments.refund", session.user.isSuperAdmin)) {
           throw forbidden("Нет права оформлять возвраты");
         }
         if (payment.status !== "PAID") {
           throw badRequest("Вернуть можно только оплаченный платёж");
         }
-        const updated = await db.payment.update({
-          where: { id },
-          data: { status: "REFUNDED" },
-        });
+        const updated = await refundPayment(id, { manual });
+        const viaAtolPay = updated.refundMethod === "atol_pay";
         await recordAdminAction({
           actorId: session.user.id,
           entity: "PAYMENT",
           entityId: id,
           action: "REFUNDED",
-          summary: `${licenseLabel} · ${amountLabel}`,
+          summary: `${licenseLabel} · ${amountLabel} · ${viaAtolPay ? "через АТОЛ Pay" : "вручную"}`,
         });
         await notifyUser(payment.dealerId, {
           type: "PAYMENT_PAID",
           title: `Возврат средств: ${amountLabel}`,
-          body: licenseLabel,
+          body: viaAtolPay ? `${licenseLabel}. Деньги вернутся туда, откуда была оплата.` : licenseLabel,
           link: `/dealer/payments/${id}`,
         });
+        if (updated.refundReceiptStatus === "fail") {
+          await notifyAdmins(["payments.manage"], {
+            type: "RECEIPT_FAILED",
+            title: `Чек возврата не пробит: ${amountLabel}`,
+            body: updated.refundReceiptError ?? licenseLabel,
+            link: "/admin/payments",
+          });
+        }
         return NextResponse.json({ ok: true, payment: updated });
       }
     }

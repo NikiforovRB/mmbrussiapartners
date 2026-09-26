@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { ArrowLeft, ExternalLink, Receipt } from "lucide-react";
+import { ArrowLeft, ExternalLink, Receipt, Undo2 } from "lucide-react";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { Topbar } from "@/components/cabinet/topbar";
@@ -135,7 +135,41 @@ export default async function DealerPaymentPage({
           ) : null}
         </Card>
 
-        {payment.status === "PAID" ? (
+        {payment.status === "REFUNDED" ? (
+          <Card>
+            <div className="flex items-center gap-2 mb-3">
+              <Undo2 className="h-4 w-4 text-accent" />
+              <div className="font-display tracking-tight">Возврат средств</div>
+            </div>
+            <p className="text-sm text-ink-muted">
+              {payment.refundedAt ? `${formatRuDateTime(payment.refundedAt)}. ` : null}
+              {payment.refundMethod === "atol_pay"
+                ? "Деньги возвращены туда, откуда была оплата. Срок зачисления зависит от банка — обычно несколько дней."
+                : "Деньги возвращены администратором."}
+            </p>
+            {payment.refundReceiptStatus ? (
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <span className="text-sm">Чек возврата</span>
+                <StatusTag kind="receipt" status={payment.refundReceiptStatus} />
+                {payment.refundFiscalDocNumber ? (
+                  <span className="text-xs text-ink-muted">ФД № {payment.refundFiscalDocNumber}</span>
+                ) : null}
+                {payment.refundReceiptUrl ? (
+                  <a
+                    href={payment.refundReceiptUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-accent inline-flex items-center gap-1 text-sm"
+                  >
+                    Открыть чек <ExternalLink className="h-3.5 w-3.5" />
+                  </a>
+                ) : null}
+              </div>
+            ) : null}
+          </Card>
+        ) : null}
+
+        {payment.status === "PAID" || (payment.status === "REFUNDED" && payment.receiptStatus) ? (
           <Card>
             <div className="flex items-center gap-2 mb-3">
               <Receipt className="h-4 w-4 text-accent" />
