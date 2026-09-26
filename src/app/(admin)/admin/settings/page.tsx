@@ -12,15 +12,18 @@ import { Topbar } from "@/components/cabinet/topbar";
 import { SettingsTabs } from "./settings-tabs";
 import { PaymentSettingsPanel } from "./payment-settings-panel";
 import { PaymentSettingsForm } from "./payment-settings-form";
+import { getSiteSyncOverview } from "@/lib/site-dealers";
+import { SiteSyncPanel } from "./site-sync-panel";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminSettingsPage() {
   const session = await auth();
   if (!session?.user) return null;
-  const [me, settings] = await Promise.all([
+  const [me, settings, siteSync] = await Promise.all([
     db.user.findUnique({ where: { id: session.user.id }, include: { role: true } }),
     db.companySettings.findUnique({ where: { id: "singleton" } }),
+    getSiteSyncOverview(),
   ]);
 
   return (
@@ -49,6 +52,7 @@ export default async function AdminSettingsPage() {
               />
             </div>
           }
+          site={<SiteSyncPanel overview={siteSync} />}
         />
       </div>
     </>

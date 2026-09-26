@@ -8,6 +8,7 @@ import { notifyUser } from "@/lib/app-notifications";
 import { deleteObject } from "@/lib/s3";
 import { fioFromParts, normalizePhone, plural } from "@/lib/utils";
 import { requireApprovedUser, requirePermission } from "@/lib/session";
+import { queueDealerSiteSync } from "@/lib/site-dealers";
 
 export const runtime = "nodejs";
 
@@ -20,9 +21,10 @@ const profileSchema = z.object({
   inn: z.string().nullable().optional(),
   city: z.string().nullable().optional(),
   region: z.string().nullable().optional(),
+  country: z.string().max(60, "Страна — не длиннее 60 символов").nullable().optional(),
   address: z.string().nullable().optional(),
+  siteComment: z.string().max(200, "Подпись на сайте — не длиннее 200 символов").nullable().optional(),
   licenseLimit: z.number().int().min(0).optional(),
-  phoneVisibleOnSite: z.boolean().optional(),
   driveModsAccess: z.boolean().optional(),
 });
 
@@ -43,10 +45,14 @@ const PLAIN_PROFILE_FIELDS = [
   "inn",
   "city",
   "region",
+  "country",
   "address",
-  "phoneVisibleOnSite",
+  "siteComment",
   "driveModsAccess",
 ] as const;
+
+/** Поля, которые видны в «Дилерской сети» на сайте. */
+const SITE_PROFILE_FIELDS = ["phone", "city", "country", "siteComment"] as const;
 
 const STATUS_LABEL: Record<string, string> = {
   PENDING: "на рассмотрении",
@@ -107,9 +113,10 @@ export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: str
       if (d.profile.inn !== undefined) profileUpdate.inn = d.profile.inn || null;
       if (d.profile.city !== undefined) profileUpdate.city = d.profile.city || null;
       if (d.profile.region !== undefined) profileUpdate.region = d.profile.region || null;
+      if (d.profile.country !== undefined) profileUpdate.country = d.profile.country?.trim() || null;
       if (d.profile.address !== undefined) profileUpdate.address = d.profile.address || null;
-      if (d.profile.phoneVisibleOnSite !== undefined) {
-        profileUpdate.phoneVisibleOnSite = d.profile.phoneVisibleOnSite;
+      if (d.profile.siteComment !== undefined) {
+        profileUpdate.siteComment = d.profile.siteComment?.trim() || null;
       }
       if (d.profile.driveModsAccess !== undefined) {
         profileUpdate.driveModsAccess = d.profile.driveModsAccess;
@@ -154,6 +161,11 @@ export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: str
       ...profileUpdate,
     },
   );
+
+  const statusChanged = wantsStatus && d.status !== target.status;
+  if (statusChanged || SITE_PROFILE_FIELDS.some((f) => f in diff)) {
+    queueDealerSiteSync(id, statusChanged ? "status" : "profile");
+  }
 
   await recordAdminAction({
     actorId: session.user.id,
@@ -227,6 +239,10 @@ export const DELETE = route(async (_req: Request, ctx: { params: Promise<{ id: s
   }
 
   await db.user.delete({ where: { id } });
+  const p = target.dealerProfile;
+  if (p && (p.siteListed || p.sitePublication === "APPROVED" || p.siteSyncStatus === "failed")) {
+    queueDealerSiteSync(id, "delete");
+  }
   if (target.dealerProfile?.avatarKey) {
     await deleteObject(target.dealerProfile.avatarKey).catch((err) =>
       console.error("[dealer-delete] не удалось удалить фото", err),

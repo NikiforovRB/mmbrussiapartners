@@ -59,6 +59,8 @@ enum AppNotificationType {
   PAYMENT_PAID
   RECEIPT_FAILED
   PRICE_MISSING
+  SITE_PUBLICATION_REQUESTED
+  SITE_PUBLICATION_REVIEWED
 }
 
 /** Область, к которой относится действие в журнале аудита. */
@@ -202,6 +204,26 @@ model DealerProfile {
   approvedById        String?
   rejectionReason     String?
   notes               String?
+  /// Страна для «Дилерской сети» на mmbrussia.ru (города там сгруппированы
+  /// по странам). Пусто — отправляется «Россия».
+  country             String?
+  /// Подпись к телефону в «Дилерской сети»: имя, район и т.п.
+  siteComment         String?
+  /// Модерация публикации телефона. На сайте телефон только при
+  /// phoneVisibleOnSite (согласие представителя) + APPROVED + активной учётке.
+  sitePublication     SitePublicationStatus @default(NONE)
+  /// Когда подана заявка или изменён её статус.
+  sitePublicationAt   DateTime?
+  sitePublicationById String?
+  /// Причина отклонения или снятия с сайта — её видит представитель.
+  sitePublicationNote String?
+  /// По последнему успешному ответу сайта запись есть в «Дилерской сети».
+  siteListed          Boolean  @default(false)
+  siteSyncedAt        DateTime?
+  /// Статус из ответа сайта: created, linked, updated, unchanged, removed,
+  /// conflict, error — либо failed, если сайт не ответил.
+  siteSyncStatus      String?
+  siteSyncMessage     String?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
@@ -211,6 +233,41 @@ model DealerProfile {
   @@index([region])
   @@index([city])
   @@index([phoneVisibleOnSite])
+  @@index([sitePublication])
+}
+
+enum SitePublicationStatus {
+  NONE
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+/**
+ * Обмены с «Дилерской сетью» mmbrussia.ru: каждое событие (upsert/remove) и
+ * каждая полная сверка (sync). Последняя сверка показывается в настройках.
+ */
+model SiteSyncLog {
+  id         String   @id @default(cuid())
+  /// upsert | remove | sync
+  action     String
+  /// Что вызвало обмен: profile, publication, status, delete, daily, manual, retry.
+  trigger    String
+  dryRun     Boolean  @default(false)
+  ok         Boolean
+  httpStatus Int?
+  /// Сколько представителей было в запросе.
+  dealers    Int      @default(0)
+  summary    Json?
+  warnings   Json?
+  /// Только проблемные строки ответа (conflict, error).
+  problems   Json?
+  error      String?
+  actorId    String?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([action, dryRun, createdAt])
 }
 
 model License {

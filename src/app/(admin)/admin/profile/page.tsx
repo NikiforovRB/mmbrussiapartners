@@ -46,11 +46,19 @@ export default async function AdminProfilePage() {
             inn: user.dealerProfile.inn ?? "",
             city: user.dealerProfile.city ?? "",
             region: user.dealerProfile.region ?? "",
+            country: user.dealerProfile.country ?? "",
             address: user.dealerProfile.address ?? "",
+            siteComment: user.dealerProfile.siteComment ?? "",
             phoneVisibleOnSite: user.dealerProfile.phoneVisibleOnSite,
             notifyByEmail: user.notifyByEmail,
             notifyByTelegram: user.notifyByTelegram,
             telegramChatId: user.telegramChatId ?? "",
+          }}
+          publication={{
+            status: user.dealerProfile.sitePublication,
+            at: user.dealerProfile.sitePublicationAt?.toISOString() ?? null,
+            note: user.dealerProfile.sitePublicationNote,
+            consent: user.dealerProfile.phoneVisibleOnSite,
           }}
           email={user.email}
         />
