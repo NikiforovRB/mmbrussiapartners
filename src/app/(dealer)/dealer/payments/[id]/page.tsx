@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ArrowLeft, ExternalLink, Receipt, Undo2 } from "lucide-react";
@@ -91,7 +92,18 @@ export default async function DealerPaymentPage({
               label="Оплачен"
               value={payment.paidAt ? formatRuDateTime(payment.paidAt) : "—"}
             />
-            <Field label="Лицензия" value={payment.license?.number ?? "—"} />
+            <Field
+              label="Лицензия"
+              value={
+                payment.license ? (
+                  <Link href={`/dealer/licenses/${payment.license.id}`} className="text-accent hover:underline">
+                    {payment.license.number}
+                  </Link>
+                ) : (
+                  "—"
+                )
+              }
+            />
             <Field label="Плательщик" value={user.dealerProfile?.organization || fio || user.email} />
           </dl>
 
@@ -144,9 +156,18 @@ export default async function DealerPaymentPage({
             <p className="text-sm text-ink-muted">
               {payment.refundedAt ? `${formatRuDateTime(payment.refundedAt)}. ` : null}
               {payment.refundMethod === "atol_pay"
-                ? "Деньги возвращены туда, откуда была оплата. Срок зачисления зависит от банка — обычно несколько дней."
-                : "Деньги возвращены администратором."}
+                ? "Деньги возвращены на карту, с которой вы платили. Банк зачисляет их обычно за 1–10 рабочих дней; если за это время деньги не пришли — обратитесь в свой банк с чеком возврата."
+                : "Возврат оформлен администратором."}
             </p>
+            {payment.license ? (
+              <p className="mt-2 text-sm text-ink-muted">
+                Лицензия{" "}
+                <Link href={`/dealer/licenses/${payment.license.id}`} className="text-accent hover:underline">
+                  {payment.license.number}
+                </Link>{" "}
+                аннулирована и больше не действует. Если она снова понадобится — оформите новую лицензию.
+              </p>
+            ) : null}
             {payment.refundReceiptStatus ? (
               <div className="mt-3 flex flex-wrap items-center gap-3">
                 <span className="text-sm">Чек возврата</span>
@@ -203,7 +224,7 @@ export default async function DealerPaymentPage({
   );
 }
 
-function Field({ label, value }: { label: string; value: string }) {
+function Field({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div>
       <dt className="text-[11px] uppercase tracking-tight text-ink-subtle">{label}</dt>

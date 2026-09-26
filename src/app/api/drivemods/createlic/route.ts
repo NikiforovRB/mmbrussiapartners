@@ -33,7 +33,7 @@ const schema = z.object({
   region: z.string().nullable().optional(),
   versionSoftware: z.string().optional().or(z.literal("")),
   versionCustom: z.string().optional().or(z.literal("")),
-  dealerComment: z.string().optional().or(z.literal("")),
+  dealerComment: z.string().max(1000, "Комментарий слишком длинный").optional().or(z.literal("")),
   issuedWithoutPayment: z.boolean().optional(),
   /** Email получателя чека (тег 1008). По умолчанию — почта представителя. */
   receiptEmail: z.string().email().optional().or(z.literal("")),
@@ -170,7 +170,8 @@ export const POST = route(async (req: Request) => {
         region: p.region || null,
         versionSoftware: p.versionSoftware || "",
         versionCustom: p.versionCustom || "",
-        dealerComment,
+        // В DRIVEMODS комментарий однострочный; многострочный живёт на портале.
+        dealerComment: dealerComment.replace(/\s*\n+\s*/g, ", "),
         deviceId: device.device_id || p.deviceId || "",
       });
     } catch (err) {
@@ -193,9 +194,8 @@ export const POST = route(async (req: Request) => {
     const repeatGeneration = knownRepeat || (await isRepeatGeneration(deviceId, false));
 
     const position = { product: p.product, bundle: p.bundle, region: p.region };
-    const resolved =
-      issuedWithoutPayment || repeatGeneration ? null : await resolvePrice(actor.id, position);
-    const price = resolved?.price ?? 0;
+    const resolved = await resolvePrice(actor.id, position);
+    const price = issuedWithoutPayment || repeatGeneration ? 0 : resolved.price;
 
     const license = await db.$transaction(async (tx) => {
       const created = await tx.license.create({
@@ -205,6 +205,7 @@ export const POST = route(async (req: Request) => {
           type: p.type,
           status: "ACTIVE",
           price: price || null,
+          basePrice: resolved.basePrice,
           features: {},
           deviceId,
           deviceIdKey: deviceIdUpload.key,
@@ -293,7 +294,7 @@ export const POST = route(async (req: Request) => {
 
     // Цену не нашли в справочнике — счёт ушёл по запасной. Молчать нельзя:
     // иначе незаполненная позиция будет тихо продаваться не по своей цене.
-    if (resolved && resolved.itemId === null) {
+    if (price > 0 && resolved.itemId === null) {
       await notifyAdmins(["pricing.manage"], {
         type: "PRICE_MISSING",
         title: `Нет цены для ${positionLabel(position)}`,

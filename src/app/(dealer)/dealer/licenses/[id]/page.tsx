@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { fioFromParts } from "@/lib/utils";
 import { Topbar } from "@/components/cabinet/topbar";
 import { LicenseDetailEditor } from "@/components/licenses/license-detail-editor";
+import { LICENSE_PAYMENT_SELECT } from "@/lib/license-price";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,7 @@ export default async function LicenseDetailDealerPage({
         include: { actor: { select: { email: true } } },
       },
       cancellationRequests: { orderBy: { createdAt: "desc" }, take: 1 },
+      payment: { select: LICENSE_PAYMENT_SELECT },
     },
   });
   if (!license) notFound();
@@ -56,9 +58,9 @@ export default async function LicenseDetailDealerPage({
       />
       <div className="mt-6">
         <LicenseDetailEditor
-          // ID ШГУ вообще не уезжает в браузер представителя: его видят только
-          // администраторы.
-          license={JSON.parse(JSON.stringify({ ...license, deviceId: null }))}
+          // ID ШГУ и базовая цена вообще не уезжают в браузер представителя:
+          // их видят только администраторы.
+          license={JSON.parse(JSON.stringify({ ...license, deviceId: null, basePrice: undefined }))}
           context="dealer"
           latestRequest={latestRequest ? JSON.parse(JSON.stringify(latestRequest)) : null}
         />

@@ -1,5 +1,6 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import {
   LayoutDashboard,
   KeyRound,
@@ -24,6 +25,8 @@ import { db } from "@/lib/db";
 import { fioFromParts } from "@/lib/utils";
 import { getUserAvatarUrl } from "@/lib/user-avatar";
 import { SIDEBAR_COOKIE } from "@/lib/sidebar";
+import { clientIp } from "@/lib/rate-limit";
+import { trackUserIp } from "@/lib/user-ips";
 
 export default async function DealerLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
@@ -44,6 +47,8 @@ export default async function DealerLayout({ children }: { children: React.React
   if (user.isSuperAdmin) {
     redirect("/admin");
   }
+  const ip = clientIp(await headers());
+  after(() => trackUserIp(user.id, ip));
 
   const items: SidebarItem[] = [
     { href: "/dealer", label: "Дашборд", icon: <LayoutDashboard className="h-4 w-4" /> },

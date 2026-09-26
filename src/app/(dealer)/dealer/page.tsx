@@ -63,10 +63,7 @@ export default async function DealerDashboard() {
   const totalForBars = Math.max(1, licenses);
   const statusBreakdown: { key: string; label: string; count: number }[] = [
     { key: "ACTIVE", label: "Активные", count: statusCounts.ACTIVE ?? 0 },
-    { key: "EXPIRED", label: "Истекли", count: statusCounts.EXPIRED ?? 0 },
     { key: "CANCELLED", label: "Аннулированы", count: statusCounts.CANCELLED ?? 0 },
-    { key: "REVOKED", label: "Отозваны", count: statusCounts.REVOKED ?? 0 },
-    { key: "DRAFT", label: "Черновики", count: statusCounts.DRAFT ?? 0 },
   ].filter((s) => s.count > 0);
   const typeBreakdown: { key: string; count: number }[] = [
     { key: "Генерация", count: typeCounts["Генерация"] ?? 0 },

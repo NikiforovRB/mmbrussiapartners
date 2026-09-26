@@ -14,11 +14,20 @@ export default async function AdminReportsPage() {
   });
 
   // Список представителей для мультивыбора в фильтре отчёта.
-  const dealerUsers = await db.user.findMany({
-    where: { dealerProfile: { isNot: null } },
-    include: { dealerProfile: true },
-    orderBy: { createdAt: "desc" },
-  });
+  const [dealerUsers, productRows] = await Promise.all([
+    db.user.findMany({
+      where: { dealerProfile: { isNot: null } },
+      include: { dealerProfile: true },
+      orderBy: { createdAt: "desc" },
+    }),
+    db.license.findMany({
+      where: { deletedAt: null, product: { not: null } },
+      distinct: ["product"],
+      select: { product: true },
+      orderBy: { product: "asc" },
+    }),
+  ]);
+  const products = productRows.map((r) => r.product).filter((p): p is string => Boolean(p));
   const dealers: ReportDealerOption[] = dealerUsers.map((u) => {
     const fio = fioFromParts({
       firstName: u.dealerProfile?.firstName,
@@ -40,7 +49,7 @@ export default async function AdminReportsPage() {
         user={{ name: me?.email ?? "Admin", email: me?.email ?? "", role: me?.role.name ?? "Admin" }}
       />
       <div className="mt-6">
-        <ReportsBuilder context="admin" dealers={dealers} />
+        <ReportsBuilder context="admin" dealers={dealers} products={products} />
       </div>
     </>
   );

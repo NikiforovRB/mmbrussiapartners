@@ -28,7 +28,7 @@ export const POST = route(async (req: Request, ctx: { params: Promise<{ id: stri
     throw forbidden();
   }
 
-  if (license.status === "CANCELLED" || license.status === "REVOKED") {
+  if (license.status === "CANCELLED") {
     throw badRequest("Лицензия уже неактивна");
   }
 

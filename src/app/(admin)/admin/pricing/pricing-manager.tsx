@@ -32,7 +32,7 @@ export type PriceItem = {
   region: string;
   /** Дилерская цена (базовая). */
   price: number;
-  /** Наша цена/себестоимость (для маржи). */
+  /** Базовая цена (себестоимость) — для маржи, только администраторам. */
   myPrice: number | null;
   /** Клиентская (розничная) цена — первая генерация и субдилеры. */
   clientPrice: number | null;
@@ -289,7 +289,7 @@ function Catalog({ items, missing }: { items: PriceItem[]; missing: MissingPosit
                   <tr className="text-left text-[11px] uppercase tracking-tight text-ink-subtle">
                     <th className="px-4 py-2.5 font-normal">Комплектация</th>
                     <th className="px-4 py-2.5 font-normal">Регион</th>
-                    <th className="px-4 py-2.5 font-normal">Наша</th>
+                    <th className="px-4 py-2.5 font-normal">Базовая</th>
                     <th className="px-4 py-2.5 font-normal">Дилерская</th>
                     <th className="px-4 py-2.5 font-normal">Клиентская</th>
                     <th className="px-4 py-2.5" />
@@ -405,7 +405,7 @@ function ItemModal({
     const my = optionalAmount(myPrice);
     const client = optionalAmount(clientPrice);
     if (my === "invalid" || client === "invalid") {
-      toast.error("Наша и клиентская цены указаны неверно");
+      toast.error("Базовая и клиентская цены указаны неверно");
       return;
     }
     setSaving(true);
@@ -467,15 +467,15 @@ function ItemModal({
           value={price}
           onChange={setPrice}
           placeholder="10 000"
-          hint="Базовая цена, по которой платит представитель"
+          hint="Цена, по которой платит представитель"
         />
         <div className="grid sm:grid-cols-2 gap-3">
           <MoneyInput
-            label="Наша цена, ₽"
+            label="Базовая цена, ₽"
             value={myPrice}
             onChange={setMyPrice}
             placeholder="необязательно"
-            hint="Себестоимость — для маржи, дилеру не видна"
+            hint="Себестоимость для маржи — видна только администраторам"
           />
           <MoneyInput
             label="Клиентская цена, ₽"

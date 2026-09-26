@@ -293,7 +293,7 @@ async function testGeneration(dealer: Session, dealerId: string) {
   section("Лимит представителя");
   const profile = await prisma.dealerProfile.findUnique({ where: { userId: dealerId } });
   const realCount = await prisma.license.count({
-    where: { dealerId, deletedAt: null, status: { in: ["DRAFT", "ACTIVE", "EXPIRED"] } },
+    where: { dealerId, deletedAt: null, status: "ACTIVE" },
   });
   check(
     "licensesUsed совпадает с числом активных лицензий",

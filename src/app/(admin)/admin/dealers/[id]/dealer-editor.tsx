@@ -1,8 +1,21 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, XCircle, Save, Ban, ShieldOff, ShieldCheck, KeyRound, Camera, Loader2, Trash2 } from "lucide-react";
+import {
+  CheckCircle2,
+  XCircle,
+  Save,
+  Ban,
+  ShieldOff,
+  ShieldCheck,
+  KeyRound,
+  Camera,
+  Loader2,
+  Trash2,
+  History,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -14,7 +27,8 @@ import { Avatar } from "@/components/ui/avatar";
 import { Modal } from "@/components/ui/modal";
 import { Textarea } from "@/components/ui/textarea";
 import { fioFromParts } from "@/lib/utils";
-import { formatRuDateTime } from "@/lib/dates";
+import { formatRuDate, formatRuDateTime } from "@/lib/dates";
+import { formatRub } from "@/lib/money";
 import { usePermissions } from "@/hooks/use-permissions";
 import { DeleteDealerButton } from "../delete-dealer-button";
 
@@ -39,8 +53,21 @@ type Dealer = {
     licensesUsed: number;
     driveModsAccess: boolean;
     driveModsRequestedAt: string | null;
+    legacyDealer: boolean;
   } | null;
   role: { name: string };
+};
+
+/** Сводка по представителю из старого ЛК DriveMods, если он там найден. */
+export type LegacySummary = {
+  id: string;
+  name: string;
+  city: string | null;
+  source: string;
+  licenses: number;
+  amountTotal: number;
+  firstLicenseAt: string | null;
+  lastLicenseAt: string | null;
 };
 
 export function DealerEditor({
@@ -49,10 +76,12 @@ export function DealerEditor({
   deletable = false,
   sitePublication,
   passwordCard,
+  legacy = null,
 }: {
   dealer: Dealer;
   avatarUrl?: string | null;
   deletable?: boolean;
+  legacy?: LegacySummary | null;
   /** Карточка модерации публикации на сайте — рендерится страницей по данным из БД. */
   sitePublication?: React.ReactNode;
   /** Пароль от кабинета: только у администратора с правом dealers.passwords. */
@@ -64,7 +93,13 @@ export function DealerEditor({
   const canEdit = can("dealers.edit");
   const canSetLimit = can("dealers.setLimit") || canEdit;
   const canManageStatus = canApprove || canEdit || can("dealers.suspend");
+  const canSetLegacy = canEdit || can("pricing.manage");
   const [data, setData] = React.useState(dealer);
+  // Статус меняют и другие вкладки/администраторы: свежий ответ сервера
+  // после router.refresh() должен перекрывать локальное значение.
+  React.useEffect(() => {
+    setData((d) => (d.status === dealer.status ? d : { ...d, status: dealer.status }));
+  }, [dealer.status]);
   const [rejectOpen, setRejectOpen] = React.useState(false);
   const [rejectReason, setRejectReason] = React.useState("");
   const [busy, setBusy] = React.useState<string | null>(null);
@@ -101,8 +136,8 @@ export function DealerEditor({
     router.refresh();
   }
 
-  async function update(payload: Record<string, unknown>) {
-    setBusy("update");
+  async function update(payload: Record<string, unknown>, action = "update") {
+    setBusy(action);
     const res = await fetch(`/api/dealers/${data.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -118,7 +153,8 @@ export function DealerEditor({
   }
 
   async function approve() {
-    if (await update({ status: "APPROVED" })) {
+    if (busy) return;
+    if (await update({ status: "APPROVED" }, "status")) {
       setData((d) => ({ ...d, status: "APPROVED" }));
       toast.success("Дилер одобрен");
       router.refresh();
@@ -129,7 +165,8 @@ export function DealerEditor({
       toast.error("Минимум 6 символов");
       return;
     }
-    if (await update({ status: "REJECTED", rejectionReason: rejectReason })) {
+    if (busy) return;
+    if (await update({ status: "REJECTED", rejectionReason: rejectReason }, "status")) {
       setData((d) => ({ ...d, status: "REJECTED" }));
       toast.success("Заявка отклонена");
       setRejectOpen(false);
@@ -137,8 +174,9 @@ export function DealerEditor({
     }
   }
   async function suspend() {
+    if (busy) return;
     const next = data.status === "SUSPENDED" ? "APPROVED" : "SUSPENDED";
-    if (await update({ status: next })) {
+    if (await update({ status: next }, "status")) {
       setData((d) => ({ ...d, status: next }));
       toast.success(next === "APPROVED" ? "Разблокирован" : "Заблокирован");
       router.refresh();
@@ -220,7 +258,7 @@ export function DealerEditor({
                   <Button
                     disabled={!canApprove}
                     title={canApprove ? undefined : "Нет права на одобрение дилеров"}
-                    onClick={approve}
+                    loading={busy === "status"} onClick={approve}
                     icon={<CheckCircle2 className="h-4 w-4" />}
                   >
                     Одобрить
@@ -240,7 +278,7 @@ export function DealerEditor({
                 <Button
                   disabled={!canApprove}
                   title={canApprove ? "Пересмотреть отклонённую заявку и одобрить" : "Нет права на одобрение дилеров"}
-                  onClick={approve}
+                  loading={busy === "status"} onClick={approve}
                   icon={<CheckCircle2 className="h-4 w-4" />}
                 >
                   Одобрить
@@ -252,7 +290,7 @@ export function DealerEditor({
                   disabled={!canManageStatus}
                   title={canManageStatus ? undefined : "Нет права на блокировку дилеров"}
                   icon={<ShieldOff className="h-4 w-4" />}
-                  onClick={suspend}
+                  loading={busy === "status"} onClick={suspend}
                 >
                   Заблокировать
                 </Button>
@@ -262,7 +300,7 @@ export function DealerEditor({
                   disabled={!canManageStatus}
                   title={canManageStatus ? undefined : "Нет права на разблокировку дилеров"}
                   icon={<ShieldCheck className="h-4 w-4" />}
-                  onClick={suspend}
+                  loading={busy === "status"} onClick={suspend}
                 >
                   Разблокировать
                 </Button>
@@ -430,6 +468,64 @@ export function DealerEditor({
           ) : null}
         </Card>
 
+        {data.dealerProfile ? (
+          <Card>
+            <div className="font-display text-lg tracking-tight mb-4">Старый ЛК DriveMods</div>
+            <Toggle
+              checked={data.dealerProfile.legacyDealer}
+              disabled={!canSetLegacy}
+              onChange={async (v) => {
+                if (!canSetLegacy) return;
+                const prev = data.dealerProfile?.legacyDealer ?? false;
+                setData((d) => ({ ...d, dealerProfile: d.dealerProfile && { ...d.dealerProfile, legacyDealer: v } }));
+                if (await update({ profile: { legacyDealer: v } }, "legacy")) {
+                  toast.success(v ? "Отмечен как дилер из старого ЛК" : "Отметка снята");
+                  router.refresh();
+                } else {
+                  setData((d) => ({
+                    ...d,
+                    dealerProfile: d.dealerProfile && { ...d.dealerProfile, legacyDealer: prev },
+                  }));
+                }
+              }}
+              label={
+                <span className="flex items-center gap-2">
+                  <History className="h-4 w-4" /> Работал в старом ЛК
+                </span>
+              }
+              description="Первая генерация каждой позиции идёт по дилерской цене, а не по клиентской, как у новичков."
+            />
+            {legacy ? (
+              <div className="mt-3 rounded-panel border border-hairline p-3 text-xs text-ink-muted space-y-1">
+                <div className="text-ink">
+                  {legacy.name}
+                  {legacy.city ? ` · ${legacy.city}` : ""}
+                </div>
+                <div>
+                  Лицензий в старом ЛК: <span className="text-ink">{legacy.licenses}</span> на{" "}
+                  <span className="text-ink">{formatRub(legacy.amountTotal)}</span>
+                </div>
+                {legacy.firstLicenseAt && legacy.lastLicenseAt ? (
+                  <div>
+                    {formatRuDate(legacy.firstLicenseAt)} — {formatRuDate(legacy.lastLicenseAt)}
+                  </div>
+                ) : null}
+                <Link href={`/admin/legacy-dealers?q=${encodeURIComponent(legacy.name)}`} className="text-accent hover:underline">
+                  Статистика старого ЛК
+                </Link>
+              </div>
+            ) : (
+              <div className="mt-3 text-xs text-ink-subtle">
+                В выгрузке старого ЛК совпадений по email и телефону нет. Привязать запись можно в разделе{" "}
+                <Link href="/admin/legacy-dealers" className="text-accent hover:underline">
+                  «Старый ЛК DriveMods»
+                </Link>
+                .
+              </div>
+            )}
+          </Card>
+        ) : null}
+
         <Card>
           <div className="font-display text-lg  tracking-tight mb-2">Лимит лицензий</div>
           <div className="font-display text-3xl  tracking-tightest">
@@ -459,7 +555,7 @@ export function DealerEditor({
         />
         <div className="mt-6 flex justify-end gap-2">
           <Button variant="ghost" onClick={() => setRejectOpen(false)}>Отмена</Button>
-          <Button variant="danger" disabled={!canApprove} onClick={reject} icon={<Ban className="h-4 w-4" />}>
+          <Button variant="danger" disabled={!canApprove} loading={busy === "status"} onClick={reject} icon={<Ban className="h-4 w-4" />}>
             Отклонить
           </Button>
         </div>

@@ -18,12 +18,18 @@ const USER: Record<string, Entry> = {
 };
 
 const LICENSE: Record<string, Entry> = {
-  DRAFT: { label: "Черновик", tone: "neutral" },
   ACTIVE: { label: "Активна", tone: "success" },
-  EXPIRED: { label: "Истекла", tone: "muted" },
   CANCELLED: { label: "Аннулирована", tone: "warning" },
-  REVOKED: { label: "Отозвана", tone: "danger" },
 };
+
+/** Лицензия бывает только в этих двух статусах — для фильтров по всему сайту. */
+export const LICENSE_STATUS_FILTER_OPTIONS = [
+  { value: "", label: "Все" },
+  { value: "ACTIVE", label: "Активные" },
+  { value: "CANCELLED", label: "Аннулированы" },
+];
+
+export const LICENSE_STATUSES = ["ACTIVE", "CANCELLED"] as const;
 
 const PAYMENT: Record<string, Entry> = {
   PENDING: { label: "Ожидает оплаты", tone: "warning" },

@@ -9,6 +9,7 @@ import { deleteObject } from "@/lib/s3";
 import { fioFromParts, normalizePhone, plural } from "@/lib/utils";
 import { requireApprovedUser, requirePermission } from "@/lib/session";
 import { queueDealerSiteSync } from "@/lib/site-dealers";
+import { linkLegacyDealer } from "@/lib/legacy-dealers";
 
 export const runtime = "nodejs";
 
@@ -26,6 +27,8 @@ const profileSchema = z.object({
   siteComment: z.string().max(200, "Подпись на сайте — не длиннее 200 символов").nullable().optional(),
   licenseLimit: z.number().int().min(0).optional(),
   driveModsAccess: z.boolean().optional(),
+  /** Работал в старом ЛК DriveMods — первая генерация не по клиентской цене. */
+  legacyDealer: z.boolean().optional(),
 });
 
 const schema = z.object({
@@ -77,9 +80,13 @@ export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: str
   const wantsLimit = d.profile?.licenseLimit !== undefined;
   const wantsPlainEdit =
     d.profile !== undefined && PLAIN_PROFILE_FIELDS.some((f) => d.profile?.[f] !== undefined);
+  const wantsLegacy = d.profile?.legacyDealer !== undefined;
 
-  if (!wantsStatus && !wantsRole && !wantsLimit && !wantsPlainEdit) {
+  if (!wantsStatus && !wantsRole && !wantsLimit && !wantsPlainEdit && !wantsLegacy) {
     throw badRequest("Нечего сохранять");
+  }
+  if (wantsLegacy && !can("pricing.manage") && !can("dealers.edit")) {
+    throw forbidden("Нет права менять ценовые условия представителя");
   }
   if (wantsStatus) {
     const perm: PermissionKey = d.status === "SUSPENDED" ? "dealers.suspend" : "dealers.approve";
@@ -123,6 +130,7 @@ export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: str
       }
     }
     if (wantsLimit) profileUpdate.licenseLimit = d.profile.licenseLimit;
+    if (wantsLegacy) profileUpdate.legacyDealer = d.profile.legacyDealer;
   }
   if (d.status === "APPROVED") {
     profileUpdate.approvedById = session.user.id;
@@ -151,6 +159,7 @@ export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: str
       status: target.status,
       roleId: target.roleId,
       licenseLimit: target.dealerProfile?.licenseLimit,
+      legacyDealer: target.dealerProfile?.legacyDealer,
       ...Object.fromEntries(
         PLAIN_PROFILE_FIELDS.map((f) => [f, target.dealerProfile?.[f] ?? null]),
       ),
@@ -163,6 +172,9 @@ export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: str
   );
 
   const statusChanged = wantsStatus && d.status !== target.status;
+  if (statusChanged && d.status === "APPROVED") {
+    await linkLegacyDealer(id).catch((err) => console.error("[dealers] сверка со старым ЛК не удалась", err));
+  }
   if (statusChanged || SITE_PROFILE_FIELDS.some((f) => f in diff)) {
     queueDealerSiteSync(id, statusChanged ? "status" : "profile");
   }

@@ -1,13 +1,7 @@
 import "server-only";
 
-import type { LicenseStatus, PaymentStatus } from "@prisma/client";
+import type { PaymentStatus } from "@prisma/client";
 import { db } from "./db";
-
-/**
- * Статусы, при которых лицензия может занимать слот лимита. Аннулированная,
- * отозванная и удалённая слот освобождают.
- */
-const OCCUPYING: LicenseStatus[] = ["DRAFT", "ACTIVE", "EXPIRED"];
 
 /** Счёт ещё ждёт денег. Оплаченный, отменённый и возвращённый слот не держат. */
 const UNPAID: PaymentStatus[] = ["PENDING", "FAILED"];
@@ -19,8 +13,10 @@ const UNPAID: PaymentStatus[] = ["PENDING", "FAILED"];
  * занимает только лицензия с неоплаченным счётом. Оплатил — слот свободен;
  * бесплатные (повторная генерация, выдача без оплаты) слот не занимают вовсе.
  *
- * Именно пересчёт, а не «минус один»: аннулирование, отзыв и удаление могут
- * прийти к одной лицензии подряд, и на инкрементах счётчик уехал бы в минус.
+ * Аннулированная и удалённая лицензия слот освобождает.
+ *
+ * Именно пересчёт, а не «минус один»: аннулирование и удаление могут прийти
+ * к одной лицензии подряд, и на инкрементах счётчик уехал бы в минус.
  */
 export async function syncLicenseSlots(dealerId: string): Promise<void> {
   try {
@@ -28,7 +24,7 @@ export async function syncLicenseSlots(dealerId: string): Promise<void> {
       where: {
         dealerId,
         deletedAt: null,
-        status: { in: OCCUPYING },
+        status: "ACTIVE",
         payment: { is: { status: { in: UNPAID } } },
       },
     });

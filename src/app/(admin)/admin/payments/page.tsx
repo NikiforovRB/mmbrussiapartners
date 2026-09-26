@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { AlertTriangle, ExternalLink } from "lucide-react";
 import { db } from "@/lib/db";
 import { Topbar } from "@/components/cabinet/topbar";
@@ -23,6 +24,7 @@ type RefundFields = {
   refundReceiptStatus: string | null;
   refundReceiptUrl: string | null;
   refundReceiptError: string | null;
+  refundedAt: Date | null;
 };
 
 function RefundInfo({ p }: { p: RefundFields }) {
@@ -38,6 +40,7 @@ function RefundInfo({ p }: { p: RefundFields }) {
               : p.refundMethod === "atol_pay"
                 ? "Возврат через АТОЛ Pay"
                 : "Возврат вручную"}
+          {p.refundedAt ? ` · ${formatRuDateTime(p.refundedAt)}` : ""}
         </span>
         {p.refundReceiptStatus ? <StatusTag kind="receipt" status={p.refundReceiptStatus} /> : null}
         {p.refundReceiptUrl ? (
@@ -140,7 +143,11 @@ export default async function AdminPaymentsPage({
                     {formatRuDateTime(p.createdAt)} · {p.dealer.email}
                   </div>
                   <div className="mt-1 text-sm">
-                    {p.license?.number ? <span className="text-ink">{p.license.number}</span> : null}
+                    {p.license?.number ? (
+                      <Link href={`/admin/licenses/${p.license.id}`} className="text-ink hover:text-accent">
+                        {p.license.number}
+                      </Link>
+                    ) : null}
                     {p.description ? <span className="text-ink-muted"> · {p.description}</span> : null}
                   </div>
                   <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -193,7 +200,15 @@ export default async function AdminPaymentsPage({
                     <tr key={p.id} className="transition-colors hover:bg-surface-muted">
                       <td className="px-4 py-3 whitespace-nowrap">{formatRuDateTime(p.createdAt)}</td>
                       <td className="px-4 py-3">{p.dealer.email}</td>
-                      <td className="px-4 py-3">{p.license?.number ?? "—"}</td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        {p.license ? (
+                          <Link href={`/admin/licenses/${p.license.id}`} className="hover:text-accent">
+                            {p.license.number}
+                          </Link>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-ink-muted">{p.description ?? "—"}</td>
                       <td className="px-4 py-3"><Money value={Number(p.amount)} /></td>
                       <td className="px-4 py-3">

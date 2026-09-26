@@ -36,7 +36,14 @@ export default async function NewLicensePage() {
         <LicenseStepper
           limit={limit}
           used={used}
-          dealerName={fio || user.email}
+          dealerName={
+            [user.dealerProfile.firstName, user.dealerProfile.city]
+              .map((v) => v?.trim())
+              .filter(Boolean)
+              .join(", ") ||
+            fio ||
+            user.email
+          }
           defaultEmail={user.email}
         />
       </div>

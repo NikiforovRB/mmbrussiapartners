@@ -2,6 +2,7 @@ import "server-only";
 
 import type { AppNotificationType } from "@prisma/client";
 import { db } from "./db";
+import { ADMIN_SCOPE_PERMISSIONS, type PermissionKey } from "./permissions";
 
 type NotifyInput = {
   type: AppNotificationType;
@@ -33,17 +34,27 @@ export async function notifyUser(userId: string, input: NotifyInput): Promise<vo
 
 /**
  * Рассылает событие всем, кто способен на него отреагировать: суперадминам и
- * обладателям одного из указанных прав. Дилеры сюда не попадают.
+ * обладателям одного из указанных прав. Дилеры сюда не попадают, даже если
+ * указано право, которое есть и у них (licenses.view и т. п.): события
+ * админской ленты касаются чужих лицензий и представителей.
  */
 export async function notifyAdmins(
-  permissions: string[],
+  permissions: PermissionKey[],
   input: NotifyInput,
 ): Promise<void> {
   try {
     const admins = await db.user.findMany({
       where: {
         status: "APPROVED",
-        OR: [{ isSuperAdmin: true }, { role: { permissions: { hasSome: permissions } } }],
+        OR: [
+          { isSuperAdmin: true },
+          {
+            AND: [
+              { role: { permissions: { hasSome: permissions } } },
+              { role: { permissions: { hasSome: ADMIN_SCOPE_PERMISSIONS } } },
+            ],
+          },
+        ],
       },
       select: { id: true },
     });

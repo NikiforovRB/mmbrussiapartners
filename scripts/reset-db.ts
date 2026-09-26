@@ -1,16 +1,32 @@
+/**
+ * Удаляет ВСЕ таблицы и enum-типы в схеме public базы из DATABASE_URL.
+ * Запуск только с явным подтверждением имени базы:
+ *
+ *   $env:RESET_DB_CONFIRM="<имя базы>"; npx tsx scripts/reset-db.ts
+ */
+import "dotenv/config";
 import { Client } from "pg";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+
+const raw = process.env.DATABASE_URL;
+if (!raw) throw new Error("DATABASE_URL не задан");
+const url = new URL(raw);
+const database = decodeURIComponent(url.pathname.replace(/^\//, ""));
+if (process.env.RESET_DB_CONFIRM !== database) {
+  console.error(`Отказ: чтобы удалить всё в «${database}» на ${url.hostname}, задайте RESET_DB_CONFIRM=${database}`);
+  process.exit(1);
+}
 
 const ca = readFileSync(resolve(process.cwd(), "certs/timeweb-ca.crt"), "utf8");
 
 (async () => {
   const c = new Client({
-    host: "216.57.107.241",
-    port: 5432,
-    user: "gen_user",
-    password: "38O0Mpkm89GH45699",
-    database: "default_db",
+    host: url.hostname,
+    port: Number(url.port || 5432),
+    user: decodeURIComponent(url.username),
+    password: decodeURIComponent(url.password),
+    database,
     ssl: { ca, rejectUnauthorized: true, checkServerIdentity: () => undefined },
     connectionTimeoutMillis: 8000,
   });

@@ -1,5 +1,6 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import {
   LayoutDashboard,
   Users,
@@ -18,6 +19,7 @@ import {
   BarChart3,
   BellRing,
   BookOpen,
+  Archive,
 } from "lucide-react";
 import { Sidebar, type SidebarItem } from "@/components/cabinet/sidebar";
 import { MobileNavProvider } from "@/components/cabinet/mobile-nav";
@@ -32,6 +34,8 @@ import { hasPermission, hasAdminScope } from "@/lib/permissions";
 import { fioFromParts } from "@/lib/utils";
 import { getUserAvatarUrl } from "@/lib/user-avatar";
 import { SIDEBAR_COOKIE } from "@/lib/sidebar";
+import { clientIp } from "@/lib/rate-limit";
+import { trackUserIp } from "@/lib/user-ips";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
@@ -58,11 +62,15 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   // Права вида licenses.view есть и у представителя — по ним админку
   // открывал бы любой дилер. Пускает только выход за пределы своего кабинета.
   if (!hasAdminScope(user.role.permissions, user.isSuperAdmin)) redirect("/dealer");
+  const ip = clientIp(await headers());
+  after(() => trackUserIp(user.id, ip));
 
   const items: SidebarItem[] = [];
   items.push({ href: "/admin", label: "Дашборд", icon: <LayoutDashboard className="h-4 w-4" /> });
   if (user.isSuperAdmin || hasPermission(user.role.permissions, "dealers.view", user.isSuperAdmin))
     items.push({ href: "/admin/dealers", label: "Представители", icon: <Users className="h-4 w-4" /> });
+  if (user.isSuperAdmin || hasPermission(user.role.permissions, "dealers.view", user.isSuperAdmin))
+    items.push({ href: "/admin/legacy-dealers", label: "Старый ЛК DriveMods", icon: <Archive className="h-4 w-4" /> });
   if (user.isSuperAdmin || hasPermission(user.role.permissions, "licenses.view", user.isSuperAdmin))
     items.push({ href: "/admin/licenses", label: "Лицензии", icon: <KeyRound className="h-4 w-4" /> });
   if (user.isSuperAdmin || hasPermission(user.role.permissions, "licenses.view", user.isSuperAdmin))

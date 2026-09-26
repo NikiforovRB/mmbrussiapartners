@@ -8,6 +8,7 @@ import { fioFromParts } from "@/lib/utils";
 import { LicenseTable } from "@/components/licenses/license-table";
 import { LICENSE_LIST_SELECT, toLicenseRow } from "@/lib/license-list";
 import { Pagination, parsePage } from "@/components/cabinet/pagination";
+import { LICENSE_STATUSES } from "@/lib/status-labels";
 
 export const dynamic = "force-dynamic";
 
@@ -85,7 +86,7 @@ function buildWhere(
   dealerId: string,
 ) {
   const where: Record<string, unknown> = { dealerId, deletedAt: null };
-  if (sp.status && ["ACTIVE", "EXPIRED", "CANCELLED", "REVOKED", "DRAFT"].includes(sp.status)) {
+  if (sp.status && (LICENSE_STATUSES as readonly string[]).includes(sp.status)) {
     where.status = sp.status;
   }
   // Тип фильтра — синтетический: «Повторная генерация» это флаг, а не поле type.

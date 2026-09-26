@@ -46,7 +46,7 @@ export function DealersFilters({
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="ФИО, email, организация, телефон..."
+          placeholder="ФИО, email, телефон, организация, город, регион, страна…"
           className="bg-transparent w-full text-sm placeholder:text-ink-subtle"
         />
       </div>

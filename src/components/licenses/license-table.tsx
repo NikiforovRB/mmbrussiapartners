@@ -22,12 +22,13 @@ import { fileSafeName } from "@/components/licenses/utils";
 import { toast } from "sonner";
 import { usePermissions } from "@/hooks/use-permissions";
 import { LICENSE_KIND_FILTER_OPTIONS } from "@/lib/license-options";
+import { LICENSE_STATUS_FILTER_OPTIONS } from "@/lib/status-labels";
 
 type License = {
   id: string;
   number: string;
   type: string;
-  status: "ACTIVE" | "EXPIRED" | "CANCELLED" | "REVOKED" | "DRAFT";
+  status: "ACTIVE" | "CANCELLED";
   product?: string | null;
   versionSoftware?: string | null;
   dealerComment?: string | null;
@@ -114,10 +115,10 @@ export function LicenseTable({
     setWithdrawLoading(false);
     if (!res.ok) {
       const j = await res.json().catch(() => ({}));
-      toast.error(j.error ?? "Не удалось отозвать заявку");
+      toast.error(j.error ?? "Не удалось отменить заявку");
       return;
     }
-    toast.success("Заявка отозвана");
+    toast.success("Заявка отменена");
     setWithdrawTarget(null);
     router.refresh();
   }
@@ -218,14 +219,7 @@ export function LicenseTable({
               value={status}
               onChange={(v) => setStatus(v)}
               placeholder="Все статусы"
-              options={[
-                { value: "", label: "Все статусы" },
-                { value: "ACTIVE", label: "Активные" },
-                { value: "EXPIRED", label: "Истекли" },
-                { value: "CANCELLED", label: "Аннулированы" },
-                { value: "REVOKED", label: "Отозваны" },
-                { value: "DRAFT", label: "Черновики" },
-              ]}
+              options={LICENSE_STATUS_FILTER_OPTIONS}
             />
             <Select
               label="Тип лицензии"
@@ -270,7 +264,7 @@ export function LicenseTable({
               </div>
               {l.product ? <div className="mt-2 text-xs text-ink-muted">{l.product}</div> : null}
               {l.dealerComment ? (
-                <div className="mt-1 text-xs text-ink-muted">{l.dealerComment}</div>
+                <div className="mt-1 whitespace-pre-line break-words text-xs text-ink-muted">{l.dealerComment}</div>
               ) : null}
               {l.versionSoftware ? (
                 <div className="mt-1 text-xs text-ink-muted break-all">Версия ПО: {l.versionSoftware}</div>
@@ -301,7 +295,7 @@ export function LicenseTable({
                     icon={<RotateCcw className="h-4 w-4" />}
                     onClick={() => setWithdrawTarget(l)}
                   >
-                    Отозвать заявку
+                    Отменить заявку
                   </Button>
                 ) : null}
                 {l.status === "ACTIVE" && !(!isAdmin && l.pendingCancellation) ? (
@@ -374,7 +368,9 @@ export function LicenseTable({
                       <div className="text-xs text-ink-muted mt-1">{l.product}</div>
                     ) : null}
                   </td>
-                  <td className="px-4 py-3 text-ink-muted">{l.dealerComment || "—"}</td>
+                  <td className="px-4 py-3 text-ink-muted whitespace-pre-line break-words max-w-[260px]">
+                    {l.dealerComment || "—"}
+                  </td>
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap items-center gap-1.5">
                       <StatusTag kind="license" status={l.status} />
@@ -442,7 +438,7 @@ export function LicenseTable({
                                   icon={<RotateCcw className="h-4 w-4" />}
                                   onClick={() => setWithdrawTarget(l)}
                                 >
-                                  Отозвать заявку
+                                  Отменить заявку
                                 </Button>
                               );
                             }
@@ -517,7 +513,7 @@ export function LicenseTable({
       <Modal
         open={!!withdrawTarget}
         onClose={() => setWithdrawTarget(null)}
-        title={`Отозвать заявку ${withdrawTarget?.number ?? ""}`}
+        title={`Отменить заявку ${withdrawTarget?.number ?? ""}`}
         description="Заявка на аннулирование будет снята с рассмотрения. Позже её можно подать заново."
       >
         <div className="mt-6 flex justify-end gap-2">
@@ -530,7 +526,7 @@ export function LicenseTable({
             icon={<RotateCcw className="h-4 w-4" />}
             onClick={onWithdraw}
           >
-            Отозвать заявку
+            Отменить заявку
           </Button>
         </div>
       </Modal>
