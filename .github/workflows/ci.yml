@@ -32,12 +32,16 @@ jobs:
       NEXT_TELEMETRY_DISABLED: "1"
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 20
           cache: npm
+
+      # Как на ВМ: Node 20 + npm 11. npm 10 из комплекта Node 20 иначе трактует
+      # опциональные peer-зависимости и отвергает lock-файл.
+      - run: npm install -g npm@11
 
       - run: npm ci
 
