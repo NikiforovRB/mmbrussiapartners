@@ -1,9 +1,6 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { ClipboardList } from "lucide-react";
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { hasPermission } from "@/lib/permissions";
 import { Topbar } from "@/components/cabinet/topbar";
 import { Card } from "@/components/ui/card";
 import { Tag } from "@/components/ui/tag";
@@ -12,6 +9,7 @@ import { Pagination, parsePage } from "@/components/cabinet/pagination";
 import { formatRuDateTime } from "@/lib/dates";
 import { fioFromParts } from "@/lib/utils";
 import { RequestActions } from "./request-actions";
+import { requireAdminPage } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -23,13 +21,7 @@ export default async function CancellationRequestsPage({
 }: {
   searchParams: Promise<{ status?: string; page?: string }>;
 }) {
-  const session = await auth();
-  if (!session?.user) redirect("/login");
-
-  const canReview =
-    session.user.isSuperAdmin ||
-    hasPermission(session.user.permissions, "licenses.cancel", session.user.isSuperAdmin);
-  if (!canReview) redirect("/admin");
+  const session = await requireAdminPage("licenses.cancel");
 
   const sp = await searchParams;
   const status = STATUSES.includes(sp.status as (typeof STATUSES)[number])
@@ -53,7 +45,7 @@ export default async function CancellationRequestsPage({
       include: {
         license: true,
         requestedBy: { include: { dealerProfile: true } },
-        reviewedBy: true,
+        reviewedBy: { select: { email: true } },
       },
     }),
   ]);
@@ -127,7 +119,11 @@ export default async function CancellationRequestsPage({
                           </div>
                         ) : null}
                       </div>
-                      {r.status === "PENDING" ? <RequestActions id={r.id} /> : null}
+                      <RequestActions
+                        id={r.id}
+                        status={r.status}
+                        licenseActive={r.license.status === "ACTIVE"}
+                      />
                     </div>
                   </li>
                 );

@@ -1,20 +1,13 @@
 import { redirect } from "next/navigation";
 import { Topbar } from "@/components/cabinet/topbar";
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { hasPermission } from "@/lib/permissions";
 import { LicenseStepper } from "@/app/(dealer)/dealer/licenses/new/license-stepper";
+import { requireAdminPage } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminNewLicensePage() {
-  const session = await auth();
-  if (!session?.user) redirect("/login");
-
-  const canCreate =
-    session.user.isSuperAdmin ||
-    hasPermission(session.user.permissions, "licenses.create", session.user.isSuperAdmin);
-  if (!canCreate) redirect("/admin/licenses");
+  const session = await requireAdminPage("licenses.create");
 
   const user = await db.user.findUnique({
     where: { id: session.user.id },

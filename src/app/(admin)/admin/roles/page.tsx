@@ -1,13 +1,12 @@
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { Topbar } from "@/components/cabinet/topbar";
 import { RolesManager } from "./roles-manager";
+import { requireAdminPage } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminRolesPage() {
-  const session = await auth();
-  if (!session?.user) return null;
+  const session = await requireAdminPage("roles.manage");
   const [roles, me] = await Promise.all([
     db.role.findMany({ orderBy: [{ isSystem: "desc" }, { name: "asc" }] }),
     db.user.findUnique({ where: { id: session.user.id }, include: { role: true } }),

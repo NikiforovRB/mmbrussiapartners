@@ -1,10 +1,9 @@
 import { redirect } from "next/navigation";
 import { Topbar } from "@/components/cabinet/topbar";
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { hasPermission } from "@/lib/permissions";
 import { HumaxPanel } from "@/components/humax/humax-panel";
 import { Pagination, parsePage } from "@/components/cabinet/pagination";
+import { requireAdminPage } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -15,12 +14,7 @@ export default async function AdminHumaxPage({
 }: {
   searchParams: Promise<{ page?: string }>;
 }) {
-  const session = await auth();
-  if (!session?.user) redirect("/login");
-  const canView =
-    session.user.isSuperAdmin ||
-    hasPermission(session.user.permissions, "licenses.view", session.user.isSuperAdmin);
-  if (!canView) redirect("/admin");
+  const session = await requireAdminPage("licenses.view");
 
   const user = await db.user.findUnique({
     where: { id: session.user.id },

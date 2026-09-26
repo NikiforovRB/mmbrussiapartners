@@ -176,8 +176,8 @@ export function LicenseStepper({
     if (!selectedItem || !deviceBase64 || !info) return;
     const email = receiptEmail.trim();
     // Email обязателен, когда будет выставлен счёт (чек уйдёт на этот адрес).
-    // При выдаче без оплаты (право админа) чек не пробивается — email не нужен.
-    const needsEmail = !(canIssueFree && withoutPayment);
+    // Без оплаты (повторная генерация или право админа) чека нет — email не нужен.
+    const needsEmail = !info.repeat && !(canIssueFree && withoutPayment);
     if (needsEmail && !EMAIL_RE.test(email)) {
       toast.error("Укажите корректный Email — на него придёт чек об оплате");
       return;
@@ -198,11 +198,10 @@ export function LicenseStepper({
         versionSoftware: info.versionSoftware,
         versionCustom: info.versionCustom,
         dealerComment: dealerComment.trim(),
-        recoverable: info.recoverable,
         // Дата прошлой генерации из DRIVEMODS — для уведомления о повторной выдаче.
         previousGeneratedAt: info.lastGeneratedAt ?? info.firstGeneratedAt ?? null,
         ...(EMAIL_RE.test(email) ? { receiptEmail: email } : {}),
-        ...(canIssueFree ? { issuedWithoutPayment: withoutPayment } : {}),
+        ...(canIssueFree && !info.repeat ? { issuedWithoutPayment: withoutPayment } : {}),
       }),
     });
     setSubmitting(false);
@@ -334,6 +333,11 @@ export function LicenseStepper({
                       <Tag tone="muted">Лицензия уже есть</Tag>
                     ) : null}
                   </div>
+                  {info.repeat ? (
+                    <p className="mt-2 text-xs text-ink-muted">
+                      Повторная генерация бесплатна: счёт не выставляется, лимит лицензий не расходуется.
+                    </p>
+                  ) : null}
                   {info.previous ? (
                     <p className="mt-2 text-xs text-ink-muted">
                       По этому ШГУ уже выдавалась лицензия {info.previous.number} (
@@ -381,6 +385,7 @@ export function LicenseStepper({
                           <BundleButton
                             key={it.index}
                             item={it}
+                            free={info.repeat}
                             active={String(it.index) === productIndex}
                             onSelect={() => setProductIndex(String(it.index))}
                           />
@@ -450,9 +455,10 @@ export function LicenseStepper({
                       selectedItem ? (
                         <span className="flex flex-wrap items-center gap-1.5">
                           <span>
-                            {bundleLabel(selectedItem)} · <Money value={selectedItem.price} />
+                            {bundleLabel(selectedItem)} ·{" "}
+                            {info.repeat ? "бесплатно" : <Money value={selectedItem.price} />}
                           </span>
-                          {selectedItem.firstAtClientPrice ? (
+                          {selectedItem.firstAtClientPrice && !info.repeat ? (
                             <Tag tone="accent">Первая — по клиентской цене</Tag>
                           ) : null}
                         </span>
@@ -485,18 +491,24 @@ export function LicenseStepper({
                 </div>
 
                 <div className="divider my-5" />
-                <div className="max-w-md">
-                  <Input
-                    label="Email для чека"
-                    type="email"
-                    value={receiptEmail}
-                    onChange={(e) => setReceiptEmail(e.target.value)}
-                    placeholder="dealer@example.com"
-                    hint="Обязательное поле. На этот адрес придёт чек об оплате."
-                  />
-                </div>
+                {info.repeat ? (
+                  <p className="text-sm text-ink-muted">
+                    Повторная генерация бесплатна — счёт и чек не выставляются.
+                  </p>
+                ) : (
+                  <div className="max-w-md">
+                    <Input
+                      label="Email для чека"
+                      type="email"
+                      value={receiptEmail}
+                      onChange={(e) => setReceiptEmail(e.target.value)}
+                      placeholder="dealer@example.com"
+                      hint="Обязательное поле. На этот адрес придёт чек об оплате."
+                    />
+                  </div>
+                )}
 
-                {canIssueFree ? (
+                {canIssueFree && !info.repeat ? (
                   <>
                     <div className="divider my-5" />
                     <div className="rounded-panel border border-hairline p-4">
@@ -643,10 +655,12 @@ function bundleLabel(item: LicItem) {
 /** Комплектация как в админке DRIVEMODS: название и цена на одной кнопке. */
 function BundleButton({
   item,
+  free,
   active,
   onSelect,
 }: {
   item: LicItem;
+  free: boolean;
   active: boolean;
   onSelect: () => void;
 }) {
@@ -662,7 +676,11 @@ function BundleButton({
       }`}
     >
       <span className="tracking-tight">{bundleLabel(item)}</span>
-      <Money value={item.price} className={active ? "text-accent" : "text-ink-muted"} />
+      {free ? (
+        <span className={active ? "text-accent" : "text-ink-muted"}>бесплатно</span>
+      ) : (
+        <Money value={item.price} className={active ? "text-accent" : "text-ink-muted"} />
+      )}
     </button>
   );
 }

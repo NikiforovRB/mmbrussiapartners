@@ -291,7 +291,7 @@ function RingProgress({ pct, used, limit, remaining }: { pct: number; used: numb
         <div>
           <div className="font-display text-3xl  tracking-tight">{remaining}</div>
           <div className="text-[11px] text-white/60 mt-0.5">из {limit} осталось</div>
-          <div className="text-[11px] text-white/50 mt-2">использовано: {used}</div>
+          <div className="text-[11px] text-white/50 mt-2">не оплачено: {used}</div>
         </div>
       </div>
     </div>

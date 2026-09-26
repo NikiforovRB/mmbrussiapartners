@@ -4,7 +4,9 @@ import { db } from "@/lib/db";
 import { hasPermission } from "@/lib/permissions";
 import { ApiError, badRequest, forbidden, parseBody, route, unauthenticated } from "@/lib/api";
 import { uploadObject, getDownloadUrl, deleteObject } from "@/lib/s3";
-import { createLic, describeDriveModsFailure, isDriveModsConfigured } from "@/lib/drivemods";
+import { createLic, describeDriveModsFailure, isDriveModsConfigured, licInfo } from "@/lib/drivemods";
+import { syncLicenseSlots } from "@/lib/license-slots";
+import { isRepeatGeneration } from "@/lib/repeat-generation";
 import { generateLicenseNumber, fioFromParts } from "@/lib/utils";
 import { isLicenseType } from "@/lib/license-options";
 import { resolvePrice, positionLabel } from "@/lib/pricing";
@@ -35,8 +37,6 @@ const schema = z.object({
   issuedWithoutPayment: z.boolean().optional(),
   /** Email получателя чека (тег 1008). По умолчанию — почта представителя. */
   receiptEmail: z.string().email().optional().or(z.literal("")),
-  /** Признак прошлой выдачи из ответа /licinfo. */
-  recoverable: z.boolean().optional(),
   /** Дата прошлой генерации по данным DRIVEMODS (ISO) — для уведомления. */
   previousGeneratedAt: z.string().optional().nullable(),
 });
@@ -76,18 +76,36 @@ export const POST = route(async (req: Request) => {
     });
     const reason = generationBlockReason(mergeGenerationSettings(settings?.generation), p.versionCustom || "");
     if (reason) throw badRequest(reason);
+  }
 
-    // Предоплатный расчёт: у новых/недоверенных представителей не должно быть
-    // непогашенных счетов. Доверенным ставят postpaid — их это не касается.
-    if (actor.dealerProfile?.prepaid) {
-      const outstanding = await db.payment.count({
-        where: { dealerId: actor.id, status: "PENDING" },
-      });
-      if (outstanding > 0) {
-        throw badRequest(
-          "У вас есть неоплаченные счета. Оплатите их, чтобы продолжить генерацию лицензий.",
-        );
-      }
+  const deviceBuffer = Buffer.from(p.deviceBase64, "base64");
+  if (deviceBuffer.length === 0) throw badRequest("Некорректный файл device_id.bin");
+  if (deviceBuffer.length > MAX_DEVICE_BYTES) {
+    throw badRequest("Файл device_id.bin больше 5 МБ");
+  }
+
+  // Повторная генерация бесплатна: без счёта и без места в лимите. Признак
+  // узнаём у DRIVEMODS сами — присланному из браузера флагу верить нельзя.
+  let device;
+  try {
+    device = await licInfo(p.deviceBase64);
+  } catch (err) {
+    console.error("[createlic] проверка устройства в DRIVEMODS не удалась", err);
+    const { status, message } = describeDriveModsFailure(err);
+    throw new ApiError("UPSTREAM", message, status);
+  }
+  const knownRepeat = await isRepeatGeneration(device.device_id, device.recoverable);
+
+  // Предоплатный расчёт: у новых/недоверенных представителей не должно быть
+  // непогашенных счетов. Доверенным ставят postpaid — их это не касается.
+  if (!bypassesLimit && !knownRepeat && actor.dealerProfile?.prepaid) {
+    const outstanding = await db.payment.count({
+      where: { dealerId: actor.id, status: "PENDING" },
+    });
+    if (outstanding > 0) {
+      throw badRequest(
+        "У вас есть неоплаченные счета. Оплатите их, чтобы продолжить генерацию лицензий.",
+      );
     }
   }
 
@@ -101,7 +119,7 @@ export const POST = route(async (req: Request) => {
   // Слот занимаем до похода во внешний API: между проверкой остатка и
   // инкрементом лежат две загрузки в S3 и генерация, и без резервирования
   // два параллельных запроса пробили бы лимит.
-  const limited = Boolean(actor.dealerProfile) && !bypassesLimit;
+  const limited = Boolean(actor.dealerProfile) && !bypassesLimit && !knownRepeat;
   if (limited) {
     const reserved = await db.dealerProfile.updateMany({
       where: { userId: actor.id, licensesUsed: { lt: actor.dealerProfile!.licenseLimit } },
@@ -125,12 +143,6 @@ export const POST = route(async (req: Request) => {
   };
 
   try {
-    const deviceBuffer = Buffer.from(p.deviceBase64, "base64");
-    if (deviceBuffer.length === 0) throw badRequest("Некорректный файл device_id.bin");
-    if (deviceBuffer.length > MAX_DEVICE_BYTES) {
-      throw badRequest("Файл device_id.bin больше 5 МБ");
-    }
-
     const dealerName =
       fioFromParts({
         firstName: actor.dealerProfile?.firstName,
@@ -159,7 +171,7 @@ export const POST = route(async (req: Request) => {
         versionSoftware: p.versionSoftware || "",
         versionCustom: p.versionCustom || "",
         dealerComment,
-        deviceId: p.deviceId || "",
+        deviceId: device.device_id || p.deviceId || "",
       });
     } catch (err) {
       console.error("[createlic] генерация в DRIVEMODS не удалась", err);
@@ -175,18 +187,15 @@ export const POST = route(async (req: Request) => {
     );
     uploadedKeys.push(licenseUpload.key);
 
-    const position = { product: p.product, bundle: p.bundle, region: p.region };
-    const resolved = issuedWithoutPayment ? null : await resolvePrice(actor.id, position);
-    const price = resolved?.price ?? 0;
+    // По ID из ответа генератора повтор виден и тогда, когда параллельный
+    // запрос успел выдать лицензию на этот ШГУ раньше.
+    const deviceId = generated.device_id || device.device_id || "";
+    const repeatGeneration = knownRepeat || (await isRepeatGeneration(deviceId, false));
 
-    // Повторная генерация: так сказал DRIVEMODS в /licinfo либо по этому же
-    // ШГУ лицензия уже выдавалась через портал.
-    const deviceId = generated.device_id || p.deviceId || "";
-    const repeatGeneration =
-      p.recoverable === true ||
-      (deviceId
-        ? (await db.license.count({ where: { deviceId, deletedAt: null } })) > 0
-        : false);
+    const position = { product: p.product, bundle: p.bundle, region: p.region };
+    const resolved =
+      issuedWithoutPayment || repeatGeneration ? null : await resolvePrice(actor.id, position);
+    const price = resolved?.price ?? 0;
 
     const license = await db.$transaction(async (tx) => {
       const created = await tx.license.create({
@@ -293,12 +302,17 @@ export const POST = route(async (req: Request) => {
       });
     }
 
+    // Зарезервированный слот сверяем с фактом: бесплатная лицензия его не
+    // занимает, а счёт мог и не выставиться.
+    if (actor.dealerProfile) await syncLicenseSlots(actor.id);
+
     return NextResponse.json({
       licenseId: license.id,
       number: license.number,
       filename: generated.lic_filename,
       downloadUrl,
       payment,
+      repeatGeneration,
     });
   } catch (err) {
     await Promise.allSettled([releaseSlot(), cleanupUploads()]);

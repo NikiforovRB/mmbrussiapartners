@@ -24,6 +24,7 @@ export function PaymentActions({
   const router = useRouter();
   const { can } = usePermissions();
   const canManage = can("payments.manage");
+  const canRefund = can("payments.refund");
   const [busy, setBusy] = React.useState<Action | null>(null);
   const [refundOpen, setRefundOpen] = React.useState(false);
 
@@ -120,7 +121,7 @@ export function PaymentActions({
           Обновить
         </Button>
       ) : null}
-      {paid ? (
+      {paid && canRefund ? (
         <Button
           size="sm"
           variant="ghost"

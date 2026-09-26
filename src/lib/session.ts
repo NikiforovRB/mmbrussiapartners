@@ -1,7 +1,8 @@
 import "server-only";
+import { redirect } from "next/navigation";
 import { auth } from "./auth";
 import { forbidden, unauthenticated } from "./api";
-import { hasPermission, type PermissionKey } from "./permissions";
+import { hasAdminScope, hasPermission, type PermissionKey } from "./permissions";
 
 /**
  * Проверки доступа для API-роутов и серверных действий. Бросают ApiError,
@@ -35,5 +36,23 @@ export async function requirePermission(perm: PermissionKey | PermissionKey[], m
 export async function requireSuperAdmin() {
   const session = await requireApprovedUser();
   if (!session.user.isSuperAdmin) throw forbidden();
+  return session;
+}
+
+/**
+ * Сессия администратора для серверной страницы админки. Раскладка (admin)
+ * проверяет то же самое, но полагаться на неё нельзя: раскладка не
+ * перерисовывается при переходах, а страница выдаёт данные всей сети. Права
+ * вида licenses.view есть и у представителя, поэтому сначала — admin scope.
+ */
+export async function requireAdminPage(perm?: PermissionKey | PermissionKey[]) {
+  const session = await auth();
+  if (!session?.user) redirect("/login?callbackUrl=/admin");
+  if (session.user.status === "PENDING") redirect("/dealer");
+  if (session.user.status !== "APPROVED") redirect("/login?callbackUrl=/admin");
+  if (!hasAdminScope(session.user.permissions, session.user.isSuperAdmin)) redirect("/dealer");
+  if (perm && !hasPermission(session.user.permissions, perm, session.user.isSuperAdmin)) {
+    redirect("/admin");
+  }
   return session;
 }

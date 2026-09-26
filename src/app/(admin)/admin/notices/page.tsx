@@ -1,18 +1,12 @@
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { redirect } from "next/navigation";
 import { Topbar } from "@/components/cabinet/topbar";
-import { hasPermission } from "@/lib/permissions";
 import { NoticesManager, type NoticeRow } from "./notices-manager";
+import { requireAdminPage } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminNoticesPage() {
-  const session = await auth();
-  if (!session?.user) return null;
-  if (!hasPermission(session.user.permissions, "settings.edit", session.user.isSuperAdmin)) {
-    redirect("/admin");
-  }
+  const session = await requireAdminPage("settings.edit");
 
   const me = await db.user.findUnique({
     where: { id: session.user.id },

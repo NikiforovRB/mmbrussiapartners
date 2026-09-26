@@ -38,6 +38,7 @@ export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: str
 
   if (data.password) {
     update.passwordHash = await hashPassword(data.password);
+    update.passwordEncrypted = null;
     actions.push("USER_PASSWORD_RESET");
   }
 

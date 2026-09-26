@@ -1,8 +1,34 @@
 "use client";
 
 import * as React from "react";
+import { createPortal } from "react-dom";
 import { Check, ChevronDown, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+/** max-h-72 */
+const LIST_MAX_HEIGHT = 288;
+const LIST_GAP = 8;
+const VIEWPORT_MARGIN = 8;
+
+type ListPosition = {
+  left: number;
+  width: number;
+  top?: number;
+  bottom?: number;
+  maxHeight: number;
+};
+
+/** Список раскрывается вниз, а если снизу мало места — вверх. */
+function listPosition(anchor: HTMLElement): ListPosition {
+  const r = anchor.getBoundingClientRect();
+  const below = window.innerHeight - r.bottom - LIST_GAP - VIEWPORT_MARGIN;
+  const above = r.top - LIST_GAP - VIEWPORT_MARGIN;
+  const up = below < Math.min(LIST_MAX_HEIGHT, 180) && above > below;
+  const maxHeight = Math.max(120, Math.min(LIST_MAX_HEIGHT, up ? above : below));
+  return up
+    ? { left: r.left, width: r.width, bottom: window.innerHeight - r.top + LIST_GAP, maxHeight }
+    : { left: r.left, width: r.width, top: r.bottom + LIST_GAP, maxHeight };
+}
 
 export type SelectOption<T extends string = string> = {
   value: T;
@@ -45,24 +71,55 @@ export function Select<T extends string = string>({
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
   const ref = React.useRef<HTMLDivElement | null>(null);
+  const buttonRef = React.useRef<HTMLButtonElement | null>(null);
+  const listRef = React.useRef<HTMLDivElement | null>(null);
   const searchRef = React.useRef<HTMLInputElement | null>(null);
+  const [position, setPosition] = React.useState<ListPosition | null>(null);
 
   React.useEffect(() => {
     function onDocClick(e: MouseEvent) {
-      if (!ref.current) return;
-      if (!ref.current.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (ref.current?.contains(target) || listRef.current?.contains(target)) return;
+      setOpen(false);
     }
     document.addEventListener("mousedown", onDocClick);
     return () => document.removeEventListener("mousedown", onDocClick);
   }, []);
 
+  // Список живёт в body с position: fixed — иначе его обрезает любой предок
+  // с overflow (например, модальное окно). Поэтому место считаем сами и
+  // пересчитываем при прокрутке и изменении размеров окна.
+  React.useLayoutEffect(() => {
+    if (!open) {
+      setPosition(null);
+      return;
+    }
+    function place() {
+      if (buttonRef.current) setPosition(listPosition(buttonRef.current));
+    }
+    function onScroll(e: Event) {
+      if (e.target instanceof Node && listRef.current?.contains(e.target)) return;
+      place();
+    }
+    place();
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", onScroll, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", onScroll, true);
+    };
+  }, [open]);
+
+  const listShown = open && position !== null;
+
   // Список открывают, чтобы что-то найти: сразу отдаём фокус строке поиска
   // и забываем прошлый запрос.
   React.useEffect(() => {
-    if (!open) return;
-    setQuery("");
-    if (searchable) searchRef.current?.focus();
-  }, [open, searchable]);
+    if (open) setQuery("");
+  }, [open]);
+  React.useEffect(() => {
+    if (listShown && searchable) searchRef.current?.focus({ preventScroll: true });
+  }, [listShown, searchable]);
 
   const current = options.find((o) => o.value === value);
   const visible = React.useMemo(() => {
@@ -76,6 +133,7 @@ export function Select<T extends string = string>({
       {label ? <span className="block text-[12.5px]  text-ink-muted">{label}</span> : null}
       <div className="relative">
         <button
+          ref={buttonRef}
           type="button"
           disabled={disabled}
           onClick={() => !disabled && setOpen((v) => !v)}
@@ -95,10 +153,18 @@ export function Select<T extends string = string>({
             )}
           />
         </button>
-        {open ? (
+        {open && position ? createPortal(
           <div
-            className="absolute z-30 mt-2 w-full rounded-panel bg-white border border-hairline p-2 max-h-72 overflow-auto scrollbar-clean animate-dropdown-in"
-            style={{ boxShadow: "0 24px 60px -24px rgba(11,16,32,0.18)" }}
+            ref={listRef}
+            className="fixed z-[70] rounded-panel bg-white border border-hairline p-2 overflow-auto scrollbar-clean animate-dropdown-in"
+            style={{
+              left: position.left,
+              width: position.width,
+              top: position.top,
+              bottom: position.bottom,
+              maxHeight: position.maxHeight,
+              boxShadow: "0 24px 60px -24px rgba(11,16,32,0.18)",
+            }}
           >
             {searchable ? (
               <div className="sticky -top-2 z-10 -mx-2 -mt-2 mb-2 bg-white px-2 pt-2 pb-2 border-b border-hairline">
@@ -140,7 +206,8 @@ export function Select<T extends string = string>({
                 </button>
               );
             })}
-          </div>
+          </div>,
+          document.body,
         ) : null}
       </div>
     </div>

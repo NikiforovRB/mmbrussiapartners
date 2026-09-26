@@ -2,16 +2,26 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, XCircle } from "lucide-react";
+import { CheckCircle2, Trash2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { Textarea } from "@/components/ui/textarea";
 
-export function RequestActions({ id }: { id: string }) {
+export function RequestActions({
+  id,
+  status,
+  licenseActive,
+}: {
+  id: string;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  /** Одобрить можно, только пока лицензию есть что аннулировать. */
+  licenseActive: boolean;
+}) {
   const router = useRouter();
-  const [busy, setBusy] = React.useState<"approve" | "reject" | null>(null);
+  const [busy, setBusy] = React.useState<"approve" | "reject" | "delete" | null>(null);
   const [rejectOpen, setRejectOpen] = React.useState(false);
+  const [deleteOpen, setDeleteOpen] = React.useState(false);
   const [note, setNote] = React.useState("");
 
   async function send(action: "approve" | "reject", reviewNote?: string) {
@@ -33,23 +43,51 @@ export function RequestActions({ id }: { id: string }) {
     router.refresh();
   }
 
+  async function remove() {
+    setBusy("delete");
+    const res = await fetch(`/api/cancellation-requests/${id}`, { method: "DELETE" });
+    setBusy(null);
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      toast.error(j.error ?? "Не удалось удалить заявку");
+      return;
+    }
+    toast.success("Заявка удалена");
+    setDeleteOpen(false);
+    router.refresh();
+  }
+
+  const canApprove = status === "PENDING" || (status === "REJECTED" && licenseActive);
+
   return (
     <div className="flex items-center gap-2">
+      {canApprove ? (
+        <Button
+          size="sm"
+          loading={busy === "approve"}
+          icon={<CheckCircle2 className="h-4 w-4" />}
+          onClick={() => send("approve")}
+        >
+          Одобрить
+        </Button>
+      ) : null}
+      {status === "PENDING" ? (
+        <Button
+          size="sm"
+          variant="ghostDanger"
+          icon={<XCircle className="h-4 w-4" />}
+          onClick={() => setRejectOpen(true)}
+        >
+          Отклонить
+        </Button>
+      ) : null}
       <Button
         size="sm"
-        loading={busy === "approve"}
-        icon={<CheckCircle2 className="h-4 w-4" />}
-        onClick={() => send("approve")}
+        variant="ghost"
+        icon={<Trash2 className="h-4 w-4" />}
+        onClick={() => setDeleteOpen(true)}
       >
-        Одобрить
-      </Button>
-      <Button
-        size="sm"
-        variant="ghostDanger"
-        icon={<XCircle className="h-4 w-4" />}
-        onClick={() => setRejectOpen(true)}
-      >
-        Отклонить
+        Удалить
       </Button>
 
       <Modal
@@ -76,6 +114,27 @@ export function RequestActions({ id }: { id: string }) {
             onClick={() => send("reject", note)}
           >
             Отклонить заявку
+          </Button>
+        </div>
+      </Modal>
+
+      <Modal
+        open={deleteOpen}
+        onClose={() => setDeleteOpen(false)}
+        title="Удалить заявку?"
+        description="Заявка исчезнет из списка. Лицензия не изменится, а в её истории останется запись об удалении."
+      >
+        <div className="mt-2 flex justify-end gap-2">
+          <Button variant="ghost" onClick={() => setDeleteOpen(false)}>
+            Отмена
+          </Button>
+          <Button
+            variant="danger"
+            loading={busy === "delete"}
+            icon={<Trash2 className="h-4 w-4" />}
+            onClick={remove}
+          >
+            Удалить
           </Button>
         </div>
       </Modal>

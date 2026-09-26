@@ -1,20 +1,23 @@
-import { notFound, redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
+import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { Topbar } from "@/components/cabinet/topbar";
 import { LicenseDetailEditor } from "@/components/licenses/license-detail-editor";
+import { requireAdminPage } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminLicensePage({ params }: { params: Promise<{ id: string }> }) {
-  const session = await auth();
-  if (!session?.user) redirect("/login");
+  const session = await requireAdminPage("licenses.view");
   const { id } = await params;
   const license = await db.license.findUnique({
     where: { id },
     include: {
-      auditLogs: { orderBy: { createdAt: "desc" }, take: 50, include: { actor: true } },
-      dealer: true,
+      auditLogs: {
+        orderBy: { createdAt: "desc" },
+        take: 50,
+        include: { actor: { select: { email: true } } },
+      },
+      dealer: { select: { email: true } },
       cancellationRequests: { orderBy: { createdAt: "desc" }, take: 1 },
     },
   });

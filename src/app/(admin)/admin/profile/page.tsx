@@ -1,16 +1,15 @@
 import { redirect } from "next/navigation";
 import { Topbar } from "@/components/cabinet/topbar";
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getUserAvatarUrl } from "@/lib/user-avatar";
 import { fioFromParts } from "@/lib/utils";
 import { ProfileForm } from "@/app/(dealer)/dealer/profile/profile-form";
+import { requireAdminPage } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminProfilePage() {
-  const session = await auth();
-  if (!session?.user) redirect("/login");
+  const session = await requireAdminPage();
 
   const user = await db.user.findUnique({
     where: { id: session.user.id },

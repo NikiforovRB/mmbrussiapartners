@@ -16,7 +16,10 @@ export type CabinetUser = {
   isSuperAdmin: boolean;
 };
 
+type UnreadState = readonly [number, React.Dispatch<React.SetStateAction<number>>];
+
 const CabinetUserContext = React.createContext<CabinetUser | null>(null);
+const UnreadContext = React.createContext<UnreadState | null>(null);
 
 /**
  * Раскладка кабинета уже читает пользователя из базы, поэтому шапке незачем
@@ -30,9 +33,30 @@ export function CabinetUserProvider({
   value: CabinetUser;
   children: React.ReactNode;
 }) {
-  return <CabinetUserContext.Provider value={value}>{children}</CabinetUserContext.Provider>;
+  const [unread, setUnread] = React.useState(value.unreadCount);
+  // Раскладка перерисовывается только при router.refresh() — тогда число с
+  // сервера свежее и заменяет локальное.
+  React.useEffect(() => setUnread(value.unreadCount), [value.unreadCount]);
+  const unreadState = React.useMemo<UnreadState>(() => [unread, setUnread], [unread]);
+
+  return (
+    <CabinetUserContext.Provider value={value}>
+      <UnreadContext.Provider value={unreadState}>{children}</UnreadContext.Provider>
+    </CabinetUserContext.Provider>
+  );
 }
 
 export function useCabinetUser(): CabinetUser | null {
   return React.useContext(CabinetUserContext);
+}
+
+/**
+ * Счётчик непрочитанных уведомлений. Хранится в раскладке: шапка монтируется
+ * заново на каждой странице, и собственное состояние у неё сбрасывалось бы к
+ * числу из первого рендера раскладки — прочитанные снова считались бы новыми.
+ */
+export function useUnreadCount(fallback: number): UnreadState {
+  const shared = React.useContext(UnreadContext);
+  const [local, setLocal] = React.useState(fallback);
+  return shared ?? [local, setLocal];
 }

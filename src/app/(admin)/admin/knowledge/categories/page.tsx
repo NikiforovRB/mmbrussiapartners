@@ -1,21 +1,15 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { Topbar } from "@/components/cabinet/topbar";
-import { hasPermission } from "@/lib/permissions";
 import { loadKnowledgeCategories } from "@/lib/knowledge-browse";
 import { CategoriesEditor } from "./categories-editor";
+import { requireAdminPage } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 export default async function KnowledgeCategoriesPage() {
-  const session = await auth();
-  if (!session?.user) return null;
-  if (!hasPermission(session.user.permissions, "settings.edit", session.user.isSuperAdmin)) {
-    redirect("/admin");
-  }
+  const session = await requireAdminPage("settings.edit");
 
   const [me, categories, counts] = await Promise.all([
     db.user.findUnique({ where: { id: session.user.id }, include: { role: true } }),

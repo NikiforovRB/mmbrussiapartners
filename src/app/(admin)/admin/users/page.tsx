@@ -1,21 +1,15 @@
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { redirect } from "next/navigation";
 import { Topbar } from "@/components/cabinet/topbar";
 import { fioFromParts } from "@/lib/utils";
-import { hasPermission } from "@/lib/permissions";
 import { UsersManager, type ManagedUser, type AssignableRole } from "./users-manager";
+import { requireAdminPage } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 const DEALER_ROLE_NAME = "Представитель";
 
 export default async function AdminUsersPage() {
-  const session = await auth();
-  if (!session?.user) return null;
-  if (!hasPermission(session.user.permissions, "users.manage", session.user.isSuperAdmin)) {
-    redirect("/admin");
-  }
+  const session = await requireAdminPage("users.manage");
 
   const me = await db.user.findUnique({
     where: { id: session.user.id },

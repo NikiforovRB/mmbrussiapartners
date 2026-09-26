@@ -158,6 +158,7 @@ DATABASE_URL="postgresql://…"                    # внешняя БД
 DIRECT_URL="postgresql://…"
 MMB_SITE_URL="https://mmbrussia.ru"              # «Дилерская сеть» на сайте
 MMB_DEALERS_SYNC_SECRET="<= DEALERS_SYNC_SECRET на сайте>"
+DEALER_PASSWORD_KEY="<openssl rand -base64 32>"   # пароли представителей для админа
 # S3, SMTP, ATOL, DRIVEMODS и NEXT_PUBLIC_* — из .env.example
 ```
 

@@ -1,19 +1,17 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { LifeBuoy, Settings } from "lucide-react";
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { hasPermission } from "@/lib/permissions";
 import { Topbar } from "@/components/cabinet/topbar";
 import { Button } from "@/components/ui/button";
 import { mergeSupport } from "@/lib/site-settings";
 import { SupportLinkCard } from "@/components/support/support-channels";
+import { requireAdminPage } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminSupportPage() {
-  const session = await auth();
-  if (!session?.user) redirect("/login");
+  const session = await requireAdminPage();
 
   const [me, settings] = await Promise.all([
     db.user.findUnique({ where: { id: session.user.id }, include: { role: true } }),

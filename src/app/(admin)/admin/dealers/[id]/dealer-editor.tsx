@@ -48,12 +48,15 @@ export function DealerEditor({
   avatarUrl,
   deletable = false,
   sitePublication,
+  passwordCard,
 }: {
   dealer: Dealer;
   avatarUrl?: string | null;
   deletable?: boolean;
   /** Карточка модерации публикации на сайте — рендерится страницей по данным из БД. */
   sitePublication?: React.ReactNode;
+  /** Пароль от кабинета: только у администратора с правом dealers.passwords. */
+  passwordCard?: React.ReactNode;
 }) {
   const router = useRouter();
   const { can } = usePermissions();
@@ -233,6 +236,16 @@ export function DealerEditor({
                   </Button>
                 </>
               ) : null}
+              {data.status === "REJECTED" ? (
+                <Button
+                  disabled={!canApprove}
+                  title={canApprove ? "Пересмотреть отклонённую заявку и одобрить" : "Нет права на одобрение дилеров"}
+                  onClick={approve}
+                  icon={<CheckCircle2 className="h-4 w-4" />}
+                >
+                  Одобрить
+                </Button>
+              ) : null}
               {data.status === "APPROVED" ? (
                 <Button
                   variant="ghost"
@@ -386,6 +399,7 @@ export function DealerEditor({
       </div>
 
       <div className="space-y-5">
+        {passwordCard ?? null}
         {sitePublication ? sitePublication : null}
 
         <Card>
@@ -424,7 +438,10 @@ export function DealerEditor({
               {" "}/ {data.dealerProfile?.licenseLimit ?? 0}
             </span>
           </div>
-          <div className="text-xs text-ink-muted mt-1">использовано / всего</div>
+          <div className="text-xs text-ink-muted mt-1">не оплачено / лимит</div>
+          <div className="text-xs text-ink-subtle mt-2">
+            Лимит — сколько лицензий представитель может держать неоплаченными. Оплата освобождает место.
+          </div>
         </Card>
       </div>
 

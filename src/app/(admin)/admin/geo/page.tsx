@@ -1,15 +1,19 @@
+import { redirect } from "next/navigation";
 import { MapPinned, TrendingUp } from "lucide-react";
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { requireAny } from "@/lib/permissions";
 import { Topbar } from "@/components/cabinet/topbar";
 import { Card } from "@/components/ui/card";
 import { Tag } from "@/components/ui/tag";
+import { requireAdminPage } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminGeoPage() {
-  const session = await auth();
-  if (!session?.user) return null;
+  const session = await requireAdminPage();
+  if (!requireAny(session.user.permissions, ["stats.view", "geo.view"], session.user.isSuperAdmin)) {
+    redirect("/admin");
+  }
 
   // Группировки берём целиком: по ним считается число регионов, а верхушку
   // из двенадцати строк отрезаем уже при выводе.

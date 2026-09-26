@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { mergePaymentSettings, type PaymentSettings } from "@/lib/site-settings";
 import { notifyDealerReceipt } from "@/lib/notifications";
 import { notifyAdmins, notifyUser } from "@/lib/app-notifications";
+import { syncLicenseSlots } from "@/lib/license-slots";
 import { formatRub } from "@/lib/money";
 import {
   AtolError,
@@ -143,6 +144,7 @@ export async function markPaymentPaid(paymentId: string, confirmedById?: string 
   if (claimed.count === 0) {
     return (await db.payment.findUnique({ where: { id: paymentId } })) ?? payment;
   }
+  await syncLicenseSlots(payment.dealerId);
 
   return fiscalizePayment(paymentId);
 }
@@ -428,6 +430,7 @@ export async function syncAtolPayPayment(paymentId: string): Promise<AtolPaySync
     data: { status: "PAID", paidAt: new Date(), confirmedById: null, externalId: paidOrder },
   });
   if (claimed.count === 0) return { paid: true, current };
+  await syncLicenseSlots(payment.dealerId);
 
   const updated = await fiscalizePayment(payment.id);
   const amountLabel = formatRub(payment.amount);

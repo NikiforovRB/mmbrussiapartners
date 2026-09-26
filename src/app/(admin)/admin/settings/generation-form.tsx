@@ -1,19 +1,40 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { Save, Plus, X, Ban } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { Tag } from "@/components/ui/tag";
 import { Toggle } from "@/components/ui/toggle";
 import { DateTimePicker } from "@/components/ui/date-time-picker";
 import { usePermissions } from "@/hooks/use-permissions";
-import { parseMoscowLocal } from "@/lib/dates";
+import { formatRuDateTime, parseMoscowLocal } from "@/lib/dates";
 import type { GenerationSettings } from "@/lib/site-settings";
 
+/** Что запрет с такими настройками делает прямо сейчас — та же логика, что у проверки при генерации. */
+function blackoutState(enabled: boolean, start: string, end: string) {
+  if (!enabled) return { tone: "muted" as const, text: "Запрет выключен" };
+  const now = Date.now();
+  const from = parseMoscowLocal(start);
+  const to = parseMoscowLocal(end);
+  if (from && now < from.getTime()) {
+    return { tone: "warning" as const, text: `Запрет начнётся ${formatRuDateTime(from)} МСК` };
+  }
+  if (to && now > to.getTime()) {
+    return { tone: "muted" as const, text: `Период запрета закончился ${formatRuDateTime(to)} МСК` };
+  }
+  return {
+    tone: "danger" as const,
+    text: to ? `Запрет действует до ${formatRuDateTime(to)} МСК` : "Запрет действует, пока включён тумблер",
+  };
+}
+
 export function GenerationForm({ initial }: { initial: GenerationSettings }) {
+  const router = useRouter();
   const { can } = usePermissions();
   const canEdit = can("settings.edit");
   const [blackoutEnabled, setBlackoutEnabled] = React.useState(initial.blackoutEnabled);
@@ -64,7 +85,10 @@ export function GenerationForm({ initial }: { initial: GenerationSettings }) {
       return;
     }
     toast.success("Сохранено");
+    router.refresh();
   }
+
+  const state = blackoutState(blackoutEnabled, blackoutStart, blackoutEnd);
 
   return (
     <div className="grid lg:grid-cols-2 gap-5">
@@ -85,6 +109,7 @@ export function GenerationForm({ initial }: { initial: GenerationSettings }) {
             disabled={!canEdit}
             label="Запрет генерации включён"
           />
+          <Tag tone={state.tone}>{state.text}</Tag>
           <div className="grid sm:grid-cols-2 gap-3">
             <DateTimePicker
               label="Начало"
