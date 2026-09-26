@@ -177,6 +177,8 @@ const ACTION_LABEL: Record<string, string> = {
   CONFIRMED: "оплата подтверждена",
   CANCELLED: "отменён",
   FISCALIZED: "чек отправлен в кассу",
+  REFUNDED: "возврат средств",
+  REFUND_FISCALIZED: "чек возврата отправлен в кассу",
 };
 
 function licenseLabel(a: string) {

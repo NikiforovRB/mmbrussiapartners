@@ -41,6 +41,8 @@ export type AtolReceiptItem = {
 };
 
 export type AtolRegisterInput = {
+  /** sell — «Приход», sell_refund — «Возврат прихода». По умолчанию sell. */
+  operation?: "sell" | "sell_refund";
   /** Уникальный в пределах группы ККТ идентификатор документа. */
   externalId: string;
   items: AtolReceiptItem[];
@@ -188,10 +190,11 @@ function buildReceipt(input: AtolRegisterInput) {
 }
 
 /**
- * Регистрация чека «Приход». Возвращает uuid документа —
+ * Регистрация чека «Приход» или «Возврат прихода». Возвращает uuid документа —
  * фискальные реквизиты приходят позже, в колбэке или через report().
  */
 export async function registerReceipt(input: AtolRegisterInput): Promise<{ uuid: string }> {
+  const operation = input.operation ?? "sell";
   const body = {
     timestamp: atolTimestamp(),
     external_id: input.externalId,
@@ -200,7 +203,7 @@ export async function registerReceipt(input: AtolRegisterInput): Promise<{ uuid:
   };
 
   const send = async (token: string) =>
-    fetchWithTimeout(`${BASE_URL}/${GROUP}/sell`, {
+    fetchWithTimeout(`${BASE_URL}/${GROUP}/${operation}`, {
       method: "POST",
       headers: { "Content-Type": "application/json; charset=utf-8", Token: token },
       body: JSON.stringify(body),
