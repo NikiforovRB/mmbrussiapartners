@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { hasPermission } from "@/lib/permissions";
-import { forbidden, notFound, parseBody, route, unauthenticated } from "@/lib/api";
+import { notFound, parseBody, route } from "@/lib/api";
 import { recordAdminAction } from "@/lib/admin-audit";
 import { blocksSchema } from "@/lib/knowledge";
 import { sanitizeBlocks } from "@/lib/knowledge-server";
 import type { Prisma } from "@prisma/client";
+import { requirePermission } from "@/lib/session";
 
 export const runtime = "nodejs";
 
@@ -21,11 +20,7 @@ const schema = z.object({
 });
 
 export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: string }> }) => {
-  const session = await auth();
-  if (!session?.user) throw unauthenticated();
-  if (!hasPermission(session.user.permissions, "settings.edit", session.user.isSuperAdmin)) {
-    throw forbidden();
-  }
+  const session = await requirePermission("settings.edit");
 
   const { id } = await ctx.params;
   const article = await db.knowledgeArticle.findUnique({ where: { id } });
@@ -56,11 +51,7 @@ export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: str
 });
 
 export const DELETE = route(async (_req: Request, ctx: { params: Promise<{ id: string }> }) => {
-  const session = await auth();
-  if (!session?.user) throw unauthenticated();
-  if (!hasPermission(session.user.permissions, "settings.edit", session.user.isSuperAdmin)) {
-    throw forbidden();
-  }
+  const session = await requirePermission("settings.edit");
 
   const { id } = await ctx.params;
   const article = await db.knowledgeArticle.findUnique({ where: { id } });

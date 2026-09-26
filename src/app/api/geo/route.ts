@@ -1,22 +1,21 @@
 import { NextResponse } from "next/server";
+import { clientIp } from "@/lib/rate-limit";
+import { fetchWithTimeout } from "@/lib/http";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function clientIp(req: Request): string | null {
-  const xff = req.headers.get("x-forwarded-for");
-  if (xff) return xff.split(",")[0]?.trim() || null;
-  const real = req.headers.get("x-real-ip");
-  return real?.trim() || null;
-}
+const GEO_TIMEOUT_MS = 3_000;
 
 export async function GET(req: Request) {
   const base = process.env.GEO_LOOKUP_URL ?? "http://ip-api.com/json";
-  const ip = clientIp(req);
-  const url = `${base}/${ip ?? ""}?fields=status,country,countryCode,city,query&lang=ru`;
+  const detected = clientIp(req.headers);
+  const ip = detected === "unknown" ? null : detected;
+  if (!ip) return NextResponse.json({ ok: false, city: null, country: null, ip });
+  const url = `${base}/${encodeURIComponent(ip)}?fields=status,country,countryCode,city,query&lang=ru`;
 
   try {
-    const res = await fetch(url, { cache: "no-store" });
+    const res = await fetchWithTimeout(url, { timeoutMs: GEO_TIMEOUT_MS });
     const data = (await res.json()) as {
       status?: string;
       country?: string;

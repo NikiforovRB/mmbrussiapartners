@@ -1,6 +1,8 @@
 import "server-only";
 import nodemailer from "nodemailer";
 import { db } from "./db";
+import { fetchWithTimeout } from "./http";
+import { formatRub } from "./money";
 
 type SendEmailParams = {
   to: string;
@@ -24,6 +26,9 @@ function getTransport(): nodemailer.Transporter | null {
     port,
     secure: port === 465,
     auth: { user, pass },
+    connectionTimeout: 10_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 30_000,
   });
   return cachedTransport;
 }
@@ -83,7 +88,7 @@ export async function sendTelegram(opts: { chatId?: string; text: string; userId
   if (!token || !chatId) return { ok: false, reason: "Telegram not configured", logId: log.id };
 
   try {
-    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    const res = await fetchWithTimeout(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ chat_id: chatId, text: opts.text, parse_mode: "HTML" }),
@@ -185,7 +190,7 @@ export async function notifyDealerReceipt(params: {
   fiscalDocNumber?: string | null;
   userId?: string | null;
 }) {
-  const amountLabel = `${params.amount.toLocaleString("ru-RU")} ₽`;
+  const amountLabel = formatRub(params.amount);
   const subject = params.licenseNumber
     ? `Чек об оплате · лицензия ${params.licenseNumber}`
     : `Чек об оплате · ${amountLabel}`;

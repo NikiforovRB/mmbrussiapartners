@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
-import { auth, hashPassword } from "@/lib/auth";
+import { hashPassword } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { badRequest, notFound, parseBody, route, unauthenticated } from "@/lib/api";
+import { badRequest, notFound, parseBody, route } from "@/lib/api";
+import { requireApprovedUser } from "@/lib/session";
 
 export const runtime = "nodejs";
 
@@ -13,8 +14,7 @@ const schema = z.object({
 });
 
 export const PATCH = route(async (req: Request) => {
-  const session = await auth();
-  if (!session?.user) throw unauthenticated();
+  const session = await requireApprovedUser();
 
   const data = await parseBody(req, schema);
 
@@ -25,7 +25,12 @@ export const PATCH = route(async (req: Request) => {
   if (!ok) throw badRequest("Неверный текущий пароль");
 
   const passwordHash = await hashPassword(data.next);
-  await db.user.update({ where: { id: user.id }, data: { passwordHash } });
+  // Сессии на всех устройствах, включая текущую, отзываются: клиент выводит
+  // пользователя и просит войти с новым паролем.
+  await db.user.update({
+    where: { id: user.id },
+    data: { passwordHash, sessionVersion: { increment: 1 } },
+  });
 
   return NextResponse.json({ ok: true });
 });

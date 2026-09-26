@@ -1,15 +1,14 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { hasPermission } from "@/lib/permissions";
-import { badRequest, forbidden, notFound, parseBody, route, unauthenticated } from "@/lib/api";
+import { badRequest, notFound, parseBody, route } from "@/lib/api";
 import {
   notifyAdminsLicenseCancelled,
   notifyDealerCancellationReviewed,
 } from "@/lib/notifications";
 import { notifyUser } from "@/lib/app-notifications";
 import { syncLicenseSlots } from "@/lib/license-slots";
+import { requirePermission } from "@/lib/session";
 
 export const runtime = "nodejs";
 
@@ -19,11 +18,7 @@ const schema = z.object({
 });
 
 export const POST = route(async (req: Request, ctx: { params: Promise<{ id: string }> }) => {
-  const session = await auth();
-  if (!session?.user) throw unauthenticated();
-  if (!hasPermission(session.user.permissions, "licenses.cancel", session.user.isSuperAdmin)) {
-    throw forbidden();
-  }
+  const session = await requirePermission("licenses.cancel");
 
   const { id } = await ctx.params;
   const { action, note } = await parseBody(req, schema);

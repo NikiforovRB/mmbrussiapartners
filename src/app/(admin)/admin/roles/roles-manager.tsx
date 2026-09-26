@@ -12,6 +12,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Modal } from "@/components/ui/modal";
 import { PERMISSIONS, PERMISSION_GROUPS, type PermissionKey } from "@/lib/permissions";
 import { usePermissions } from "@/hooks/use-permissions";
+import { useUnsavedChangesWarning } from "@/hooks/use-autosave";
 
 type Role = {
   id: string;
@@ -33,12 +34,35 @@ export function RolesManager({ roles }: { roles: Role[] }) {
   const [description, setDescription] = React.useState(active?.description ?? "");
   const [saving, setSaving] = React.useState(false);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  React.useEffect(() => {
+  // Форма показывает черновик выбранной роли: при переключении на другую роль
+  // (или её удалении) черновик заменяется её сохранёнными значениями.
+  const [draftFor, setDraftFor] = React.useState(active?.id ?? null);
+  if ((active?.id ?? null) !== draftFor) {
+    setDraftFor(active?.id ?? null);
     setPerms(active?.permissions ?? []);
     setName(active?.name ?? "");
     setDescription(active?.description ?? "");
-  }, [active?.id]);
+  }
+
+  const dirty =
+    !!active &&
+    !active.isSystem &&
+    (name !== active.name ||
+      (description ?? "") !== (active.description ?? "") ||
+      [...perms].sort().join() !== [...active.permissions].sort().join());
+  useUnsavedChangesWarning(dirty);
+
+  /** Переключение роли не должно молча выбрасывать несохранённые правки. */
+  function confirmDiscard(): boolean {
+    return (
+      !dirty ||
+      confirm(`В роли «${active?.name}» есть несохранённые изменения. Продолжить без сохранения?`)
+    );
+  }
+  function selectRole(id: string) {
+    if (id === active?.id || !confirmDiscard()) return;
+    setActiveId(id);
+  }
 
   function toggle(p: PermissionKey) {
     setPerms((prev) => (prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]));
@@ -96,7 +120,7 @@ export function RolesManager({ roles }: { roles: Role[] }) {
             disabled={!canManage}
             title={canManage ? undefined : "Нет права на управление ролями"}
             icon={<Plus className="h-4 w-4" />}
-            onClick={() => setCreateOpen(true)}
+            onClick={() => confirmDiscard() && setCreateOpen(true)}
           >
             Создать
           </Button>
@@ -105,7 +129,7 @@ export function RolesManager({ roles }: { roles: Role[] }) {
           {roles.map((r) => (
             <li key={r.id}>
               <button
-                onClick={() => setActiveId(r.id)}
+                onClick={() => selectRole(r.id)}
                 className={`w-full flex items-center justify-between gap-2 rounded-panel px-3 py-2.5 text-sm text-left transition-colors ${
                   active?.id === r.id ? "bg-surface-muted" : "hover:bg-surface-muted"
                 }`}
@@ -156,7 +180,8 @@ export function RolesManager({ roles }: { roles: Role[] }) {
                   </div>
                 )}
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {dirty ? <Tag tone="accent">Есть несохранённые изменения</Tag> : null}
                 {!active.isSystem ? (
                   <>
                     <Button

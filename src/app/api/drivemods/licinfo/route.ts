@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { validateDeviceIdFile } from "@/lib/license-engine";
 import {
   licInfo,
@@ -7,18 +6,17 @@ import {
   describeDriveModsFailure,
   isDriveModsConfigured,
 } from "@/lib/drivemods";
-import { ApiError, badRequest, forbidden, route, unauthenticated } from "@/lib/api";
+import { ApiError, badRequest, route } from "@/lib/api";
 import { db } from "@/lib/db";
 import { hasAdminScope } from "@/lib/permissions";
 import { resolvePrices } from "@/lib/pricing";
+import { requireApprovedUser } from "@/lib/session";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export const POST = route(async (req: Request) => {
-  const session = await auth();
-  if (!session?.user) throw unauthenticated();
-  if (session.user.status !== "APPROVED") throw forbidden("Аккаунт не одобрен");
+  const session = await requireApprovedUser();
   if (!isDriveModsConfigured()) {
     throw new ApiError(
       "NOT_CONFIGURED",

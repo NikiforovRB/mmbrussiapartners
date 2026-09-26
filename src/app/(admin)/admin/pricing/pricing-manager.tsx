@@ -22,6 +22,7 @@ import { Tag } from "@/components/ui/tag";
 import { Toggle } from "@/components/ui/toggle";
 import { Modal } from "@/components/ui/modal";
 import { cn, formatPhone, plural } from "@/lib/utils";
+import { formatRub as rub, parseMoney } from "@/lib/money";
 
 export type PriceItem = {
   id: string;
@@ -58,10 +59,6 @@ const ADJUST_OPTIONS = [
   { value: "PERCENT", label: "Процент ко всем ценам" },
   { value: "FIXED", label: "Фиксированная сумма ко всем ценам" },
 ];
-
-function rub(value: number) {
-  return `${value.toLocaleString("ru-RU")} ₽`;
-}
 
 /** Тот же расчёт, что на сервере: показываем ровно ту сумму, что попадёт в счёт. */
 function withAdjust(base: number, kind: AdjustKind, value: number | null) {
@@ -385,17 +382,17 @@ function ItemModal({
 
   function optionalAmount(raw: string): number | null | "invalid" {
     if (raw.trim() === "") return null;
-    const n = Number(raw.replace(",", "."));
-    return Number.isFinite(n) && n >= 0 ? n : "invalid";
+    const n = parseMoney(raw);
+    return n !== null && n >= 0 ? n : "invalid";
   }
 
   async function save() {
-    const amount = Number(price.replace(",", "."));
+    const amount = parseMoney(price);
     if (!product.trim()) {
       toast.error("Укажите продукт");
       return;
     }
-    if (!Number.isFinite(amount) || amount < 0) {
+    if (amount === null || amount < 0) {
       toast.error("Укажите дилерскую цену");
       return;
     }
@@ -539,11 +536,11 @@ function DealerPrices({
     );
   }
 
-  const adjustValue = value.trim() === "" ? null : Number(value.replace(",", "."));
+  const adjustValue = parseMoney(value);
 
   async function save() {
     if (!dealer) return;
-    if (kind !== "NONE" && (adjustValue === null || !Number.isFinite(adjustValue))) {
+    if (kind !== "NONE" && adjustValue === null) {
       toast.error("Укажите величину пересчёта");
       return;
     }
@@ -551,7 +548,7 @@ function DealerPrices({
     const overrides = items.map((item) => {
       const raw = own[item.id];
       if (raw === undefined || raw.trim() === "") return { itemId: item.id, price: null };
-      return { itemId: item.id, price: Number(raw.replace(",", ".")) };
+      return { itemId: item.id, price: parseMoney(raw) ?? Number.NaN };
     });
     if (overrides.some((o) => o.price !== null && (!Number.isFinite(o.price) || o.price < 0))) {
       toast.error("Личная цена указана неверно");
@@ -607,6 +604,7 @@ function DealerPrices({
               label={kind === "PERCENT" ? "Процент" : "Сумма, ₽"}
               value={value}
               onChange={setValue}
+              allowNegative
               placeholder={kind === "PERCENT" ? "10 или -15" : "1 000 или -500"}
               hint="Отрицательное значение — скидка"
             />
@@ -664,9 +662,8 @@ function DealerPrices({
                 {items.map((item) => {
                   const adjusted = withAdjust(item.price, kind, adjustValue);
                   const raw = own[item.id];
-                  const personal =
-                    raw !== undefined && raw.trim() !== "" ? Number(raw.replace(",", ".")) : null;
-                  const total = personal !== null && Number.isFinite(personal) ? personal : adjusted;
+                  const personal = raw !== undefined ? parseMoney(raw) : null;
+                  const total = personal ?? adjusted;
                   return (
                     <tr key={item.id} className="transition-colors hover:bg-surface-muted">
                       <td className="px-4 py-3">

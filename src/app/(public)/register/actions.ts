@@ -7,21 +7,27 @@ import { hashPassword } from "@/lib/auth";
 import { normalizePhone } from "@/lib/utils";
 import { notifyAdmins } from "@/lib/app-notifications";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
+import { fetchWithTimeout } from "@/lib/http";
 
-async function lookupSignupGeo(): Promise<{ ip: string | null; country: string | null; city: string | null }> {
+/** Гео-сервис — не повод задерживать регистрацию. */
+const GEO_TIMEOUT_MS = 3_000;
+
+async function lookupSignupGeo(
+  ip: string,
+): Promise<{ ip: string | null; country: string | null; city: string | null }> {
+  // Без адреса клиента ip-api вернул бы расположение самого сервера.
+  if (ip === "unknown") return { ip: null, country: null, city: null };
   try {
-    const h = await headers();
-    const xff = h.get("x-forwarded-for");
-    const ip = xff ? xff.split(",")[0]?.trim() : h.get("x-real-ip")?.trim() ?? null;
     const base = process.env.GEO_LOOKUP_URL ?? "http://ip-api.com/json";
-    const res = await fetch(`${base}/${ip ?? ""}?fields=status,country,city,query&lang=ru`, {
-      cache: "no-store",
-    });
+    const res = await fetchWithTimeout(
+      `${base}/${encodeURIComponent(ip)}?fields=status,country,city,query&lang=ru`,
+      { timeoutMs: GEO_TIMEOUT_MS },
+    );
     const data = (await res.json()) as { status?: string; country?: string; city?: string; query?: string };
-    if (data.status !== "success") return { ip: ip ?? null, country: null, city: null };
-    return { ip: data.query ?? ip ?? null, country: data.country ?? null, city: data.city ?? null };
+    if (data.status !== "success") return { ip, country: null, city: null };
+    return { ip: data.query ?? ip, country: data.country ?? null, city: data.city ?? null };
   } catch {
-    return { ip: null, country: null, city: null };
+    return { ip, country: null, city: null };
   }
 }
 
@@ -40,7 +46,7 @@ const schema = z.object({
 export async function registerDealerAction(formData: FormData) {
   // Анти-спам: не более 5 регистраций с одного IP в час.
   const ip = clientIp(await headers());
-  if (!rateLimit(`register:${ip}`, { limit: 5, windowMs: 60 * 60 * 1000 }).ok) {
+  if (!(await rateLimit(`register:${ip}`, { limit: 5, windowMs: 60 * 60 * 1000 })).ok) {
     return { ok: false as const, error: "Слишком много попыток регистрации. Попробуйте позже." };
   }
 
@@ -63,7 +69,7 @@ export async function registerDealerAction(formData: FormData) {
   }
 
   const passwordHash = await hashPassword(data.password);
-  const geo = await lookupSignupGeo();
+  const geo = await lookupSignupGeo(ip);
 
   const created = await db.user.create({
     data: {

@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Plus, KeyRound, Shield, ShieldCheck, UserCog, Ban, RotateCcw } from "lucide-react";
+import { Plus, KeyRound, Shield, ShieldCheck, UserCog, Ban, RotateCcw, LogOut } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -64,6 +64,21 @@ export function UsersManager({
     router.refresh();
   }
 
+  async function revokeSessions(u: ManagedUser) {
+    if (!confirm(`Завершить все сеансы ${u.email}? Пользователю придётся войти заново.`)) return;
+    const res = await fetch(`/api/users/${u.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ revokeSessions: true }),
+    });
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      toast.error(j.error ?? "Ошибка");
+      return;
+    }
+    toast.success("Сеансы завершены — в течение 30 секунд");
+  }
+
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-end">
@@ -82,6 +97,7 @@ export function UsersManager({
         onPassword={setPasswordFor}
         onRole={setRoleFor}
         onStatus={setStatus}
+        onRevoke={revokeSessions}
       />
 
       <UserSection
@@ -94,6 +110,7 @@ export function UsersManager({
         onPassword={setPasswordFor}
         onRole={setRoleFor}
         onStatus={setStatus}
+        onRevoke={revokeSessions}
       />
 
       <AddUserModal
@@ -133,6 +150,7 @@ function UserSection({
   onPassword,
   onRole,
   onStatus,
+  onRevoke,
 }: {
   title: string;
   subtitle: string;
@@ -143,6 +161,7 @@ function UserSection({
   onPassword: (u: ManagedUser) => void;
   onRole: (u: ManagedUser) => void;
   onStatus: (u: ManagedUser, status: "APPROVED" | "SUSPENDED") => void;
+  onRevoke: (u: ManagedUser) => void;
 }) {
   return (
     <Card className="p-0 overflow-hidden">
@@ -202,6 +221,16 @@ function UserSection({
                     onClick={() => onRole(u)}
                   >
                     Роль
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    icon={<LogOut className="h-3.5 w-3.5" />}
+                    disabled={locked || isSelf || u.status === "SUSPENDED"}
+                    title={isSelf ? "Свои сеансы завершите выходом из кабинета" : "Выйти на всех устройствах"}
+                    onClick={() => onRevoke(u)}
+                  >
+                    Сеансы
                   </Button>
                   {u.status === "SUSPENDED" ? (
                     <Button

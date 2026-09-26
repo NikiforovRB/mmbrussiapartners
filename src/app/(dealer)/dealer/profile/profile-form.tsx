@@ -3,6 +3,7 @@
 import * as React from "react";
 import { Save, Phone, Building2, MapPin, Lock, Eye, Upload, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { signOut } from "next-auth/react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -109,8 +110,10 @@ export function ProfileForm({
       toast.error(j.error ?? "Ошибка смены пароля");
       return;
     }
-    toast.success("Пароль обновлён");
+    // Смена пароля отзывает сессии на всех устройствах, включая эту.
     setPwd({ current: "", next: "", confirm: "" });
+    await signOut({ redirect: false });
+    window.location.assign("/login?notice=password");
   }
 
   return (

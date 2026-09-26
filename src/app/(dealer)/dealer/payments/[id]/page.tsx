@@ -7,7 +7,8 @@ import { Topbar } from "@/components/cabinet/topbar";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatusTag } from "@/components/ui/status-tag";
-import { fioFromParts, formatCurrency } from "@/lib/utils";
+import { fioFromParts } from "@/lib/utils";
+import { formatRub } from "@/lib/money";
 import { formatRuDateTime } from "@/lib/dates";
 import { syncAtolPayPayment } from "@/lib/payments/service";
 import { atolPayMethodsPhrase } from "@/lib/payments/provider";
@@ -77,7 +78,7 @@ export default async function DealerPaymentPage({
             <div>
               <div className="text-[11px] uppercase tracking-tight text-ink-subtle">К оплате</div>
               <div className="mt-1 font-display text-4xl tracking-tightest">
-                {formatCurrency(Number(payment.amount))}
+                {formatRub(Number(payment.amount))}
               </div>
               <div className="mt-1 text-sm text-ink-muted">{payment.description ?? "Лицензия MMB RUSSIA"}</div>
             </div>

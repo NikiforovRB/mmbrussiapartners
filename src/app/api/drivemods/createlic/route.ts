@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { hasPermission } from "@/lib/permissions";
 import { ApiError, badRequest, forbidden, parseBody, route, unauthenticated } from "@/lib/api";
@@ -11,7 +10,9 @@ import { isLicenseType } from "@/lib/license-options";
 import { resolvePrice, positionLabel } from "@/lib/pricing";
 import { createPayment } from "@/lib/payments/service";
 import { notifyAdmins } from "@/lib/app-notifications";
+import { formatRub } from "@/lib/money";
 import { mergeGenerationSettings, generationBlockReason } from "@/lib/site-settings";
+import { requireApprovedUser } from "@/lib/session";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -40,9 +41,7 @@ const schema = z.object({
 });
 
 export const POST = route(async (req: Request) => {
-  const session = await auth();
-  if (!session?.user) throw unauthenticated();
-  if (session.user.status !== "APPROVED") throw forbidden("Аккаунт не одобрен");
+  const session = await requireApprovedUser();
   if (!isDriveModsConfigured()) {
     throw new ApiError(
       "NOT_CONFIGURED",
@@ -245,7 +244,7 @@ export const POST = route(async (req: Request) => {
         payment = { id: created.id, amount: Number(created.amount), payUrl: created.payUrl };
         await notifyAdmins(["payments.manage"], {
           type: "PAYMENT_CREATED",
-          title: `Новый счёт на ${Number(created.amount).toLocaleString("ru-RU")} ₽`,
+          title: `Новый счёт на ${formatRub(created.amount)}`,
           body: `Лицензия ${license.number}, представитель ${actor.email}`,
           link: `/admin/payments`,
         });
@@ -290,7 +289,7 @@ export const POST = route(async (req: Request) => {
       await notifyAdmins(["pricing.manage"], {
         type: "PRICE_MISSING",
         title: `Нет цены для ${positionLabel(position)}`,
-        body: `Лицензия ${license.number} выдана по запасной цене ${price.toLocaleString("ru-RU")} ₽. Добавьте позицию в справочник.`,
+        body: `Лицензия ${license.number} выдана по запасной цене ${formatRub(price)}. Добавьте позицию в справочник.`,
         link: "/admin/pricing",
       });
     }

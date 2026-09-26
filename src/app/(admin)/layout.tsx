@@ -40,6 +40,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     include: { role: true, dealerProfile: true },
   });
   if (!user) redirect("/login");
+  // Права роли действуют только у одобренной учётной записи: заблокированный
+  // администратор теряет доступ сразу, не дожидаясь обновления JWT.
+  if (user.status === "PENDING") redirect("/dealer");
+  if (user.status !== "APPROVED") redirect("/login?callbackUrl=/admin");
 
   const avatarUrl = await getUserAvatarUrl(user.id);
   const displayName =

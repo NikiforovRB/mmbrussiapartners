@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { badRequest, notFound, route, unauthenticated } from "@/lib/api";
+import { badRequest, notFound, route } from "@/lib/api";
 import { notifyAdmins } from "@/lib/app-notifications";
+import { requireApprovedUser } from "@/lib/session";
 
 export const runtime = "nodejs";
 
@@ -12,8 +12,7 @@ export const runtime = "nodejs";
  * выдаёт администратор вручную (флаг в профиле представителя).
  */
 export const POST = route(async () => {
-  const session = await auth();
-  if (!session?.user) throw unauthenticated();
+  const session = await requireApprovedUser();
 
   const profile = await db.dealerProfile.findUnique({
     where: { userId: session.user.id },

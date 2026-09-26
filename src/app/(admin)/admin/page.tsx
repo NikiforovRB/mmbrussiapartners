@@ -14,7 +14,8 @@ import { Card } from "@/components/ui/card";
 import { StatusTag } from "@/components/ui/status-tag";
 import { Button } from "@/components/ui/button";
 import { addDays, formatRuDate } from "@/lib/dates";
-import { fioFromParts, formatCurrency } from "@/lib/utils";
+import { fioFromParts } from "@/lib/utils";
+import { formatRub } from "@/lib/money";
 
 export const dynamic = "force-dynamic";
 
@@ -69,7 +70,7 @@ export default async function AdminDashboard() {
         <Kpi
           icon={<TrendingUp className="h-4 w-4" />}
           label="Оплачено"
-          value={formatCurrency(Number(revenue._sum.amount ?? 0))}
+          value={formatRub(Number(revenue._sum.amount ?? 0))}
         />
       </div>
 

@@ -3,7 +3,8 @@ import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { Topbar } from "@/components/cabinet/topbar";
 import { Card } from "@/components/ui/card";
-import { formatCurrency, fioFromParts } from "@/lib/utils";
+import { fioFromParts } from "@/lib/utils";
+import { formatRub } from "@/lib/money";
 import { formatRuDate } from "@/lib/dates";
 import { hasPermission } from "@/lib/permissions";
 
@@ -130,9 +131,9 @@ export default async function AdminFinancePage() {
       />
       <div className="mt-6 space-y-5">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard label="Оплачено всего" value={formatCurrency(totalPaid)} />
-          <StatCard label="Оплачено за 30 дней" value={formatCurrency(totalPaid30)} />
-          <StatCard label="Ожидает оплаты" value={formatCurrency(totalPending)} />
+          <StatCard label="Оплачено всего" value={formatRub(totalPaid)} />
+          <StatCard label="Оплачено за 30 дней" value={formatRub(totalPaid30)} />
+          <StatCard label="Ожидает оплаты" value={formatRub(totalPending)} />
           <StatCard label="Платящих дилеров" value={String(payingDealers)} />
         </div>
 
@@ -153,14 +154,14 @@ export default async function AdminFinancePage() {
                     <div className="truncate">{r.name}</div>
                     <div className="truncate text-xs text-ink-muted">{r.sub}</div>
                   </div>
-                  <div className="font-display tracking-tight shrink-0">{formatCurrency(r.paidAmount)}</div>
+                  <div className="font-display tracking-tight shrink-0">{formatRub(r.paidAmount)}</div>
                 </div>
                 <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-muted">
                   <span>Платежей: {r.paidCount}</span>
                   <span>Лицензий: {r.licenses}</span>
                   {r.pendingAmount > 0 ? (
                     <span className="text-[#a16207]">
-                      Долг: {formatCurrency(r.pendingAmount)} ({r.pendingCount})
+                      Долг: {formatRub(r.pendingAmount)} ({r.pendingCount})
                     </span>
                   ) : null}
                   <span>{r.lastPaidAt ? formatRuDate(r.lastPaidAt) : "—"}</span>
@@ -198,14 +199,14 @@ export default async function AdminFinancePage() {
                       <div className="text-xs text-ink-muted">{r.sub}</div>
                     </td>
                     <td className="px-5 py-3 text-right font-display tracking-tight">
-                      {formatCurrency(r.paidAmount)}
+                      {formatRub(r.paidAmount)}
                     </td>
-                    <td className="px-5 py-3 text-right text-ink-muted">{formatCurrency(r.paid30Amount)}</td>
+                    <td className="px-5 py-3 text-right text-ink-muted">{formatRub(r.paid30Amount)}</td>
                     <td className="px-5 py-3 text-right text-ink-muted">{r.paidCount}</td>
                     <td className="px-5 py-3 text-right">
                       {r.pendingAmount > 0 ? (
                         <span className="text-[#a16207]">
-                          {formatCurrency(r.pendingAmount)}
+                          {formatRub(r.pendingAmount)}
                           <span className="text-ink-subtle"> ({r.pendingCount})</span>
                         </span>
                       ) : (

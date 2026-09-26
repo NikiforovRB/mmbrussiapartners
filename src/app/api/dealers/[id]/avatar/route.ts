@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { hasPermission } from "@/lib/permissions";
-import { badRequest, forbidden, notFound, route, unauthenticated } from "@/lib/api";
+import { badRequest, notFound, route } from "@/lib/api";
 import { recordAdminAction } from "@/lib/admin-audit";
 import { uploadObject, getDownloadUrl, deleteObject } from "@/lib/s3";
+import { requirePermission } from "@/lib/session";
 
 export const runtime = "nodejs";
 
@@ -13,11 +12,7 @@ const ALLOWED = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 
 /** Администратор с правом dealers.edit загружает фото профиля представителя. */
 export const POST = route(async (req: Request, ctx: { params: Promise<{ id: string }> }) => {
-  const session = await auth();
-  if (!session?.user) throw unauthenticated();
-  if (!hasPermission(session.user.permissions, "dealers.edit", session.user.isSuperAdmin)) {
-    throw forbidden("Нет права редактировать представителей");
-  }
+  const session = await requirePermission("dealers.edit", "Нет права редактировать представителей");
   const { id } = await ctx.params;
 
   const form = await req.formData();
@@ -61,11 +56,7 @@ export const POST = route(async (req: Request, ctx: { params: Promise<{ id: stri
 });
 
 export const DELETE = route(async (_req: Request, ctx: { params: Promise<{ id: string }> }) => {
-  const session = await auth();
-  if (!session?.user) throw unauthenticated();
-  if (!hasPermission(session.user.permissions, "dealers.edit", session.user.isSuperAdmin)) {
-    throw forbidden("Нет права редактировать представителей");
-  }
+  const session = await requirePermission("dealers.edit", "Нет права редактировать представителей");
   const { id } = await ctx.params;
 
   const profile = await db.dealerProfile.findUnique({

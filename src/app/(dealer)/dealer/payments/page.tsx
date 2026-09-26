@@ -3,7 +3,8 @@ import { redirect } from "next/navigation";
 import { CreditCard, ExternalLink } from "lucide-react";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { fioFromParts, formatCurrency } from "@/lib/utils";
+import { fioFromParts } from "@/lib/utils";
+import { formatRub } from "@/lib/money";
 import { Topbar } from "@/components/cabinet/topbar";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -73,10 +74,10 @@ export default async function DealerPaymentsPage() {
             </div>
             <div className="rounded-panel surface-glass-dark p-5 text-center min-w-[180px]">
               <div className="text-xs text-white/60">Оплачено</div>
-              <div className="mt-1 font-display text-2xl tracking-tight">{formatCurrency(paid)}</div>
+              <div className="mt-1 font-display text-2xl tracking-tight">{formatRub(paid)}</div>
               {awaiting > 0 ? (
                 <div className="mt-2 text-[11px] text-white/60">
-                  ожидает оплаты: {formatCurrency(awaiting)}
+                  ожидает оплаты: {formatRub(awaiting)}
                 </div>
               ) : null}
             </div>
@@ -95,7 +96,7 @@ export default async function DealerPaymentsPage() {
               {payments.map((p) => (
                 <li key={p.id} className="p-4">
                   <div className="flex items-center justify-between gap-3">
-                    <div className="font-display tracking-tight">{formatCurrency(Number(p.amount))}</div>
+                    <div className="font-display tracking-tight">{formatRub(Number(p.amount))}</div>
                     <StatusTag kind="payment" status={p.status} />
                   </div>
                   <div className="mt-1 text-xs text-ink-muted">{formatRuDate(p.createdAt)}</div>
@@ -139,7 +140,7 @@ export default async function DealerPaymentsPage() {
                     <tr key={p.id} className="transition-colors hover:bg-surface-muted">
                       <td className="px-4 py-3">{formatRuDate(p.createdAt)}</td>
                       <td className="px-4 py-3">{p.description ?? "—"}</td>
-                      <td className="px-4 py-3 ">{formatCurrency(Number(p.amount))}</td>
+                      <td className="px-4 py-3 ">{formatRub(Number(p.amount))}</td>
                       <td className="px-4 py-3">
                         <StatusTag kind="payment" status={p.status} />
                       </td>

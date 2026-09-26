@@ -1,9 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { hasPermission } from "@/lib/permissions";
-import { ApiError, badRequest, forbidden, notFound, parseBody, route, unauthenticated } from "@/lib/api";
+import { ApiError, badRequest, notFound, parseBody, route } from "@/lib/api";
 import {
   fiscalizePayment,
   markPaymentPaid,
@@ -12,6 +10,8 @@ import {
 } from "@/lib/payments/service";
 import { recordAdminAction } from "@/lib/admin-audit";
 import { notifyUser, notifyAdmins } from "@/lib/app-notifications";
+import { formatRub } from "@/lib/money";
+import { requirePermission } from "@/lib/session";
 
 export const runtime = "nodejs";
 
@@ -20,11 +20,7 @@ const schema = z.object({
 });
 
 export const POST = route(async (req: Request, ctx: { params: Promise<{ id: string }> }) => {
-  const session = await auth();
-  if (!session?.user) throw unauthenticated();
-  if (!hasPermission(session.user.permissions, "payments.manage", session.user.isSuperAdmin)) {
-    throw forbidden();
-  }
+  const session = await requirePermission("payments.manage");
 
   const { id } = await ctx.params;
   const { action } = await parseBody(req, schema);
@@ -36,7 +32,7 @@ export const POST = route(async (req: Request, ctx: { params: Promise<{ id: stri
   if (!payment) throw notFound("Платёж не найден");
 
   const licenseLabel = payment.license?.number ? `Лицензия ${payment.license.number}` : "Счёт";
-  const amountLabel = `${Number(payment.amount).toLocaleString("ru-RU")} ₽`;
+  const amountLabel = formatRub(payment.amount);
 
   try {
     switch (action) {

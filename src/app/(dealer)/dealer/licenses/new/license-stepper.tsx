@@ -21,6 +21,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Card } from "@/components/ui/card";
 import { Tag } from "@/components/ui/tag";
 import { usePermissions } from "@/hooks/use-permissions";
+import { formatRub } from "@/lib/money";
 
 type Step = 1 | 2 | 3 | 4;
 
@@ -453,7 +454,7 @@ export function LicenseStepper({
                     value={
                       selectedItem ? (
                         <span className="flex flex-wrap items-center gap-1.5">
-                          <span>{`${bundleLabel(selectedItem)} · ${formatPrice(selectedItem.price)}`}</span>
+                          <span>{`${bundleLabel(selectedItem)} · ${formatRub(selectedItem.price)}`}</span>
                           {selectedItem.firstAtClientPrice ? (
                             <Tag tone="accent">Первая — по клиентской цене</Tag>
                           ) : null}
@@ -589,7 +590,7 @@ export function LicenseStepper({
                         </div>
                       </div>
                       <p className="mt-1 text-sm text-ink-muted">
-                        К оплате {result.payment.amount.toLocaleString("ru-RU")} ₽.
+                        К оплате {formatRub(result.payment.amount)}.
                         {receiptEmail.trim()
                           ? ` Фискальный чек придёт на ${receiptEmail.trim()} после оплаты.`
                           : " Фискальный чек придёт после оплаты."}
@@ -637,10 +638,6 @@ function ReadonlyField({ label, value }: { label: string; value: string }) {
   );
 }
 
-function formatPrice(value: number) {
-  return `${value.toLocaleString("ru-RU")} ₽`;
-}
-
 /** У части продуктов пакета и региона нет — тогда подписью служит сам продукт. */
 function bundleLabel(item: LicItem) {
   return [item.bundle, item.region].filter(Boolean).join(" ") || item.product;
@@ -669,7 +666,7 @@ function BundleButton({
     >
       <span className="tracking-tight">{bundleLabel(item)}</span>
       <span className={active ? "text-accent" : "text-ink-muted"}>
-        {formatPrice(item.price)}
+        {formatRub(item.price)}
       </span>
     </button>
   );

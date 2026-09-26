@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { mergePaymentSettings, type PaymentSettings } from "@/lib/site-settings";
 import { notifyDealerReceipt } from "@/lib/notifications";
 import { notifyAdmins, notifyUser } from "@/lib/app-notifications";
+import { formatRub } from "@/lib/money";
 import {
   AtolError,
   getReceiptReport,
@@ -112,7 +113,12 @@ export async function createPayment(input: CreatePaymentInput) {
       externalId: checkout.externalId,
       payUrl: checkout.payUrl,
       ...(provider.id === "atol_pay"
-        ? { providerPayload: { atolPayOrders: [checkout.externalId] } as never }
+        ? {
+            providerPayload: {
+              atolPayOrders: [checkout.externalId],
+              atolPayAmounts: withOrderAmount({}, checkout),
+            } as never,
+          }
         : {}),
     },
   });
@@ -330,10 +336,26 @@ function atolPayOrders(payment: { id: string; externalId: string | null; provide
   return [current, ...previous.filter((id) => id !== current)];
 }
 
+/** Суммы заказов АТОЛ Pay в копейках, как их подтвердил эквайринг при регистрации. */
+function atolPayAmounts(payment: { providerPayload: unknown }): Record<string, number> {
+  const raw = payloadObject(payloadObject(payment.providerPayload).atolPayAmounts);
+  return Object.fromEntries(
+    Object.entries(raw).filter((entry): entry is [string, number] => typeof entry[1] === "number"),
+  );
+}
+
+function withOrderAmount(amounts: Record<string, number>, checkout: CheckoutResult) {
+  return checkout.amountMinor === undefined
+    ? amounts
+    : { ...amounts, [checkout.externalId]: checkout.amountMinor };
+}
+
 export type AtolPaySync = {
   paid: boolean;
   /** Статус текущего заказа у АТОЛ Pay; null — заказа нет или сверка не нужна. */
   current: AtolPayOrderStatus | null;
+  /** Заказ оплачен, но на сумму, отличную от счёта: проводит только администратор. */
+  amountMismatch?: boolean;
 };
 
 /**
@@ -375,6 +397,30 @@ export async function syncAtolPayPayment(paymentId: string): Promise<AtolPaySync
   }
   if (!paidOrder) return { paid: false, current };
 
+  // Заказы до появления сверки сумм записаны без неё; сумма счёта после
+  // создания не меняется, поэтому они зарегистрированы ровно на неё.
+  const expectedMinor = Math.round(Number(payment.amount) * 100);
+  const registeredMinor = atolPayAmounts(payment)[paidOrder];
+  if (registeredMinor !== undefined && registeredMinor !== expectedMinor) {
+    const payload = payloadObject(payment.providerPayload);
+    if (payload.amountMismatchOrder !== paidOrder) {
+      await db.payment.update({
+        where: { id: payment.id },
+        data: { providerPayload: { ...payload, amountMismatchOrder: paidOrder } as never },
+      });
+      console.error(
+        `[payments] АТОЛ Pay: заказ ${paidOrder} оплачен на ${registeredMinor} коп., счёт ${payment.id} — на ${expectedMinor} коп.`,
+      );
+      await notifyAdmins(["payments.manage"], {
+        type: "PAYMENT_PAID",
+        title: "Оплата требует проверки: сумма не совпадает со счётом",
+        body: `Заказ АТОЛ Pay ${paidOrder}: ${formatRub(registeredMinor / 100)} вместо ${formatRub(expectedMinor / 100)}`,
+        link: "/admin/payments",
+      });
+    }
+    return { paid: false, current, amountMismatch: true };
+  }
+
   // Колбэк и возврат дилера на страницу счёта приходят почти одновременно:
   // провести оплату и разослать уведомления должен только один из них.
   const claimed = await db.payment.updateMany({
@@ -384,7 +430,7 @@ export async function syncAtolPayPayment(paymentId: string): Promise<AtolPaySync
   if (claimed.count === 0) return { paid: true, current };
 
   const updated = await fiscalizePayment(payment.id);
-  const amountLabel = `${Number(payment.amount).toLocaleString("ru-RU")} ₽`;
+  const amountLabel = formatRub(payment.amount);
   const licenseLabel = payment.license?.number ? `Лицензия ${payment.license.number}` : "Счёт";
   await notifyUser(payment.dealerId, {
     type: "PAYMENT_PAID",
@@ -416,7 +462,7 @@ export async function syncAtolPayPayment(paymentId: string): Promise<AtolPaySync
  */
 export async function atolPayCheckoutUrl(paymentId: string): Promise<string | null> {
   const sync = await syncAtolPayPayment(paymentId);
-  if (!sync || sync.paid) return null;
+  if (!sync || sync.paid || sync.amountMismatch) return null;
 
   const payment = await db.payment.findUnique({ where: { id: paymentId } });
   if (!payment || payment.status !== "PENDING") return null;
@@ -445,6 +491,7 @@ export async function atolPayCheckoutUrl(paymentId: string): Promise<string | nu
       providerPayload: {
         ...payloadObject(payment.providerPayload),
         atolPayOrders: [checkout.externalId, ...atolPayOrders(payment)],
+        atolPayAmounts: withOrderAmount(atolPayAmounts(payment), checkout),
       } as never,
     },
   });

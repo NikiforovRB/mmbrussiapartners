@@ -23,11 +23,29 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Toggle } from "@/components/ui/toggle";
 import { parseVideoEmbed, type KbBlock } from "@/lib/knowledge";
+import { useAutosave, useUnsavedChangesWarning } from "@/hooks/use-autosave";
 
 type EditBlock = { _id: string; block: KbBlock };
 
@@ -44,8 +62,24 @@ export type ArticleInitial = {
   blocks: KbBlock[];
 };
 
+/** Тело запроса на сохранение; его же строка служит снимком для «есть правки». */
+function articlePayload(a: Omit<ArticleInitial, "id">) {
+  return JSON.stringify({
+    title: a.title.trim(),
+    category: a.category.trim() || null,
+    excerpt: a.excerpt.trim() || null,
+    blocks: a.blocks,
+    published: a.published,
+  });
+}
+
+function timeLabel(d: Date) {
+  return d.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+}
+
 export function ArticleEditor({ initial }: { initial: ArticleInitial }) {
   const router = useRouter();
+  const [articleId, setArticleId] = React.useState(initial.id);
   const [title, setTitle] = React.useState(initial.title);
   const [category, setCategory] = React.useState(initial.category);
   const [excerpt, setExcerpt] = React.useState(initial.excerpt);
@@ -53,10 +87,24 @@ export function ArticleEditor({ initial }: { initial: ArticleInitial }) {
   const [blocks, setBlocks] = React.useState<EditBlock[]>(initial.blocks.map(wrap));
   const [saving, setSaving] = React.useState(false);
   const [titleError, setTitleError] = React.useState<string | null>(null);
+  const [savedPayload, setSavedPayload] = React.useState(() => articlePayload(initial));
+  const [autosavedAt, setAutosavedAt] = React.useState<Date | null>(null);
+  const inFlight = React.useRef(false);
 
-  // Перетаскивание блоков.
-  const dragId = React.useRef<string | null>(null);
-  const [overId, setOverId] = React.useState<string | null>(null);
+  const payload = articlePayload({
+    title,
+    category,
+    excerpt,
+    published,
+    blocks: blocks.map((b) => b.block),
+  });
+  const dirty = payload !== savedPayload;
+
+  const sensors = useSensors(
+    // Небольшой порог, чтобы клик по ручке не начинал перетаскивание.
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
 
   function update(id: string, next: KbBlock) {
     setBlocks((prev) => prev.map((b) => (b._id === id ? { ...b, block: next } : b)));
@@ -67,53 +115,73 @@ export function ArticleEditor({ initial }: { initial: ArticleInitial }) {
   function add(block: KbBlock) {
     setBlocks((prev) => [...prev, wrap(block)]);
   }
-  function reorder(fromId: string, toId: string) {
-    if (fromId === toId) return;
+  function onDragEnd({ active, over }: DragEndEvent) {
+    if (!over || active.id === over.id) return;
     setBlocks((prev) => {
-      const from = prev.findIndex((b) => b._id === fromId);
-      const to = prev.findIndex((b) => b._id === toId);
-      if (from < 0 || to < 0) return prev;
-      const copy = [...prev];
-      const [it] = copy.splice(from, 1);
-      copy.splice(to, 0, it);
-      return copy;
+      const from = prev.findIndex((b) => b._id === active.id);
+      const to = prev.findIndex((b) => b._id === over.id);
+      return from < 0 || to < 0 ? prev : arrayMove(prev, from, to);
     });
   }
 
-  async function save() {
+  /** Сохраняет текущее состояние. Новая статья после первого сохранения получает id. */
+  async function persist(mode: "manual" | "auto"): Promise<boolean> {
+    if (inFlight.current) return false;
     if (!title.trim()) {
-      setTitleError("Укажите заголовок");
-      return;
+      if (mode === "manual") setTitleError("Укажите заголовок");
+      return false;
     }
     setTitleError(null);
-    setSaving(true);
-    const payload = {
-      title: title.trim(),
-      category: category.trim() || null,
-      excerpt: excerpt.trim() || null,
-      blocks: blocks.map((b) => b.block),
-      published,
-    };
-    const res = await fetch(initial.id ? `/api/knowledge/${initial.id}` : "/api/knowledge", {
-      method: initial.id ? "PATCH" : "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    setSaving(false);
-    if (!res.ok) {
-      const j = await res.json().catch(() => ({}));
-      toast.error(j.error ?? "Ошибка сохранения");
-      return;
+    inFlight.current = true;
+    if (mode === "manual") setSaving(true);
+    const body = payload;
+    try {
+      const res = await fetch(articleId ? `/api/knowledge/${articleId}` : "/api/knowledge", {
+        method: articleId ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        const message = j.error ?? "Ошибка сохранения";
+        toast.error(mode === "auto" ? `Автосохранение не удалось: ${message}` : message);
+        return false;
+      }
+      if (!articleId) {
+        const j = (await res.json()) as { id: string };
+        setArticleId(j.id);
+        window.history.replaceState(null, "", `/admin/knowledge/${j.id}`);
+      }
+      setSavedPayload(body);
+      return true;
+    } catch {
+      toast.error(mode === "auto" ? "Автосохранение не удалось: нет связи" : "Нет связи с сервером");
+      return false;
+    } finally {
+      inFlight.current = false;
+      if (mode === "manual") setSaving(false);
     }
+  }
+
+  useAutosave(
+    async () => {
+      if (await persist("auto")) setAutosavedAt(new Date());
+    },
+    { dirty },
+  );
+  useUnsavedChangesWarning(dirty);
+
+  async function save() {
+    if (!(await persist("manual"))) return;
     toast.success("Статья сохранена");
     router.push("/admin/knowledge");
     router.refresh();
   }
 
   async function removeArticle() {
-    if (!initial.id) return;
+    if (!articleId) return;
     if (!confirm("Удалить статью безвозвратно?")) return;
-    const res = await fetch(`/api/knowledge/${initial.id}`, { method: "DELETE" });
+    const res = await fetch(`/api/knowledge/${articleId}`, { method: "DELETE" });
     if (!res.ok) {
       toast.error("Не удалось удалить");
       return;
@@ -159,29 +227,19 @@ export function ArticleEditor({ initial }: { initial: ArticleInitial }) {
             Добавьте первый блок содержимого ниже.
           </div>
         ) : null}
-        {blocks.map((b) => (
-          <BlockEditor
-            key={b._id}
-            block={b.block}
-            dragging={dragId.current === b._id}
-            over={overId === b._id}
-            onChange={(next) => update(b._id, next)}
-            onRemove={() => remove(b._id)}
-            onDragStart={() => {
-              dragId.current = b._id;
-            }}
-            onDragEnd={() => {
-              dragId.current = null;
-              setOverId(null);
-            }}
-            onDragOver={() => setOverId(b._id)}
-            onDrop={() => {
-              if (dragId.current) reorder(dragId.current, b._id);
-              dragId.current = null;
-              setOverId(null);
-            }}
-          />
-        ))}
+        <DndContext id="kb-blocks" sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+          <SortableContext items={blocks.map((b) => b._id)} strategy={verticalListSortingStrategy}>
+            {blocks.map((b) => (
+              <BlockEditor
+                key={b._id}
+                id={b._id}
+                block={b.block}
+                onChange={(next) => update(b._id, next)}
+                onRemove={() => remove(b._id)}
+              />
+            ))}
+          </SortableContext>
+        </DndContext>
       </div>
 
       {/* Добавление блоков — без внешней обводки. */}
@@ -194,8 +252,17 @@ export function ArticleEditor({ initial }: { initial: ArticleInitial }) {
         </div>
       </div>
 
-      <div className="flex justify-end gap-2 sticky bottom-4">
-        {initial.id ? (
+      <div className="flex flex-wrap items-center justify-end gap-2 sticky bottom-4">
+        <span className="mr-auto">
+          {dirty || autosavedAt ? (
+            <span className="rounded-btn bg-white/90 px-2 py-1 text-xs text-ink-muted">
+              {dirty
+                ? "Есть несохранённые изменения — автосохранение раз в 5 минут"
+                : `Автосохранено в ${timeLabel(autosavedAt!)}`}
+            </span>
+          ) : null}
+        </span>
+        {articleId ? (
           <Button variant="ghostDanger" icon={<Trash2 className="h-4 w-4" />} onClick={removeArticle}>
             Удалить
           </Button>
@@ -222,51 +289,38 @@ function AddButton({ icon, label, onClick }: { icon: React.ReactNode; label: str
 }
 
 function BlockEditor({
+  id,
   block,
-  dragging,
-  over,
   onChange,
   onRemove,
-  onDragStart,
-  onDragEnd,
-  onDragOver,
-  onDrop,
 }: {
+  id: string;
   block: KbBlock;
-  dragging: boolean;
-  over: boolean;
   onChange: (next: KbBlock) => void;
   onRemove: () => void;
-  onDragStart: () => void;
-  onDragEnd: () => void;
-  onDragOver: () => void;
-  onDrop: () => void;
 }) {
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } =
+    useSortable({ id });
   const label = block.type === "text" ? "Текст" : block.type === "image" ? "Фото" : "Видео";
   return (
     <div
-      onDragOver={(e) => {
-        e.preventDefault();
-        onDragOver();
-      }}
-      onDrop={(e) => {
-        e.preventDefault();
-        onDrop();
-      }}
+      ref={setNodeRef}
+      style={{ transform: CSS.Translate.toString(transform), transition }}
       className={
-        "group relative rounded-panel transition-colors " +
-        (over ? "ring-2 ring-accent/40 " : "") +
-        (dragging ? "opacity-50" : "")
+        "group relative rounded-panel bg-bg transition-shadow " +
+        (isDragging ? "z-10 opacity-90 ring-2 ring-accent/40 shadow-lg" : "")
       }
     >
       <div className="flex items-center gap-2 mb-2">
+        {/* touch-none: на тач-экране жест по ручке двигает блок, а не страницу. */}
         <button
           type="button"
-          draggable
-          onDragStart={onDragStart}
-          onDragEnd={onDragEnd}
+          ref={setActivatorNodeRef}
+          {...attributes}
+          {...listeners}
           title="Перетащите, чтобы изменить порядок"
-          className="grid h-7 w-7 place-items-center rounded-btn text-ink-subtle cursor-grab active:cursor-grabbing hover:bg-surface-muted"
+          aria-label={`Переместить блок «${label}»`}
+          className="grid h-9 w-9 place-items-center rounded-btn text-ink-subtle cursor-grab touch-none active:cursor-grabbing hover:bg-surface-muted"
         >
           <GripVertical className="h-4 w-4" />
         </button>

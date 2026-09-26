@@ -119,6 +119,8 @@ model User {
   telegramChatId  String?
   lastLoginAt     DateTime?
   lastLoginIp     String?
+  /// Увеличение отзывает все выданные JWT-сессии (смена пароля, блокировка).
+  sessionVersion  Int        @default(0)
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
 
@@ -384,6 +386,18 @@ model AppNotification {
 
   @@index([userId, createdAt])
   @@index([userId, readAt])
+}
+
+/**
+ * Счётчики rate-limit («фиксированное окно»), общие для всех инстансов и
+ * переживающие рестарт. Пишутся атомарным upsert в src/lib/rate-limit.ts.
+ */
+model RateLimitBucket {
+  key     String   @id
+  count   Int      @default(0)
+  resetAt DateTime @db.Timestamptz(3)
+
+  @@index([resetAt])
 }
 
 /**

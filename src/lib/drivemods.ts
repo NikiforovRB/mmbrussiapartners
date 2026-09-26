@@ -1,4 +1,5 @@
 import "server-only";
+import { fetchWithTimeout } from "@/lib/http";
 
 /**
  * Клиент REST API DRIVEMODS Store (личный кабинет представителя).
@@ -138,12 +139,11 @@ async function readBody(res: Response): Promise<{ data: Record<string, unknown>;
 
 async function post(path: string, body: unknown): Promise<Response> {
   try {
-    return await fetch(`${BASE_URL}${path}`, {
+    return await fetchWithTimeout(`${BASE_URL}${path}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
-      cache: "no-store",
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      timeoutMs: REQUEST_TIMEOUT_MS,
     });
   } catch (err) {
     const timedOut = err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError");
@@ -317,9 +317,8 @@ export async function huPass(huSerial: string, comment?: string): Promise<HuPass
 
 export async function health(): Promise<boolean> {
   try {
-    const res = await fetch(`${BASE_URL}/health`, {
-      cache: "no-store",
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    const res = await fetchWithTimeout(`${BASE_URL}/health`, {
+      timeoutMs: REQUEST_TIMEOUT_MS,
     });
     const { data } = await readBody(res);
     return res.ok && data.status === "ok";
