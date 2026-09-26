@@ -85,10 +85,24 @@ export function SitePublicationCard({
     return j as { live?: boolean; outcome?: Outcome };
   }
 
-  // Сайт получает изменения в фоне, уже после ответа, — подтягиваем его ответ чуть позже.
-  function refreshWithSiteResult() {
+  // Сайт получает изменения в фоне, уже после ответа (до 30 с): обновляем карточку, пока не придёт его ответ.
+  const [awaiting, setAwaiting] = React.useState<{ syncedAt: string | null; tries: number } | null>(null);
+  React.useEffect(() => {
+    if (!awaiting) return;
+    if (publication.syncedAt !== awaiting.syncedAt || awaiting.tries >= 20) {
+      setAwaiting(null);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      router.refresh();
+      setAwaiting((a) => (a ? { ...a, tries: a.tries + 1 } : a));
+    }, 2000);
+    return () => window.clearTimeout(timer);
+  }, [awaiting, publication.syncedAt, router]);
+
+  function refreshWithSiteResult(expectSend: boolean) {
     router.refresh();
-    window.setTimeout(() => router.refresh(), 4000);
+    if (expectSend) setAwaiting({ syncedAt: publication.syncedAt, tries: 0 });
   }
 
   async function approve() {
@@ -99,7 +113,7 @@ export function SitePublicationCard({
         ? "Публикация одобрена, телефон отправляется на сайт"
         : "Публикация одобрена. Телефон появится на сайте, когда учётная запись станет активной",
     );
-    refreshWithSiteResult();
+    refreshWithSiteResult(Boolean(j.live));
   }
 
   async function reject() {
@@ -108,7 +122,7 @@ export function SitePublicationCard({
     toast.success(approved ? "Телефон снимается с сайта" : "Заявка отклонена");
     setRejectOpen(false);
     setNote("");
-    refreshWithSiteResult();
+    refreshWithSiteResult(approved || publication.syncStatus === "failed");
   }
 
   async function resync() {
