@@ -27,7 +27,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { Modal } from "@/components/ui/modal";
 import { Textarea } from "@/components/ui/textarea";
 import { fioFromParts } from "@/lib/utils";
-import { formatRuDate, formatRuDateTime } from "@/lib/dates";
+import { formatRuDateLong, formatRuDateTime } from "@/lib/dates";
 import { formatRub } from "@/lib/money";
 import { usePermissions } from "@/hooks/use-permissions";
 import { DeleteDealerButton } from "../delete-dealer-button";
@@ -507,7 +507,7 @@ export function DealerEditor({
                 </div>
                 {legacy.firstLicenseAt && legacy.lastLicenseAt ? (
                   <div>
-                    {formatRuDate(legacy.firstLicenseAt)} — {formatRuDate(legacy.lastLicenseAt)}
+                    {formatRuDateLong(legacy.firstLicenseAt)} — {formatRuDateLong(legacy.lastLicenseAt)}
                   </div>
                 ) : null}
                 <Link href={`/admin/legacy-dealers?q=${encodeURIComponent(legacy.name)}`} className="text-accent hover:underline">
