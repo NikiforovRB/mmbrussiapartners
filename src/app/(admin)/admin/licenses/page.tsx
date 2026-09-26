@@ -8,6 +8,7 @@ import { LicenseTable } from "@/components/licenses/license-table";
 import { LICENSE_LIST_SELECT, toLicenseRow } from "@/lib/license-list";
 import { Pagination, parsePage } from "@/components/cabinet/pagination";
 import { requireAdminPage } from "@/lib/session";
+import { LICENSE_STATUSES } from "@/lib/status-labels";
 
 export const dynamic = "force-dynamic";
 
@@ -79,7 +80,7 @@ export default async function AdminLicensesPage({
 
 function buildWhere(sp: { q?: string; status?: string; type?: string }) {
   const where: Record<string, unknown> = { deletedAt: null };
-  if (sp.status && ["ACTIVE", "EXPIRED", "CANCELLED", "REVOKED", "DRAFT"].includes(sp.status)) {
+  if (sp.status && (LICENSE_STATUSES as readonly string[]).includes(sp.status)) {
     where.status = sp.status;
   }
   // Тип фильтра — синтетический: «Повторная генерация» это флаг, а не поле type.

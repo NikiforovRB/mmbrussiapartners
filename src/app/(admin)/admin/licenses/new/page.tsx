@@ -30,7 +30,12 @@ export default async function AdminNewLicensePage() {
           limit={limit}
           used={used}
           context="admin"
-          dealerName={user.email}
+          dealerName={
+            [user.dealerProfile?.firstName, user.dealerProfile?.city]
+              .map((v) => v?.trim())
+              .filter(Boolean)
+              .join(", ") || user.email
+          }
           defaultEmail={user.email}
         />
       </div>

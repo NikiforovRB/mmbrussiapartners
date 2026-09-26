@@ -16,11 +16,8 @@ enum UserStatus {
 }
 
 enum LicenseStatus {
-  DRAFT
   ACTIVE
-  EXPIRED
   CANCELLED
-  REVOKED
 }
 
 enum LicenseAction {
@@ -57,6 +54,7 @@ enum AppNotificationType {
   CANCELLATION_REVIEWED
   PAYMENT_CREATED
   PAYMENT_PAID
+  PAYMENT_REFUNDED
   RECEIPT_FAILED
   PRICE_MISSING
   SITE_PUBLICATION_REQUESTED
@@ -149,6 +147,8 @@ model User {
   prices                 DealerPrice[]         @relation("DealerPrices")
   humaxPasswords         HumaxPassword[]       @relation("DealerHumaxPasswords")
   loginNoticeAcks        LoginNoticeAck[]
+  ips                    UserIp[]
+  legacyDealer           LegacyDealer?         @relation("LegacyDealerLink")
 
   @@index([status])
   @@index([roleId])
@@ -167,6 +167,72 @@ model Session {
 
   @@index([userId])
   @@index([expiresAt])
+}
+
+/// IP-адреса, с которых пользователь заходил в кабинет. Страна и город
+/// определяются по адресу один раз, при первом появлении.
+model UserIp {
+  id          String   @id @default(cuid())
+  userId      String
+  ip          String
+  country     String?
+  countryCode String?
+  city        String?
+  /// Сколько раз адрес отметился (не чаще раза в несколько минут).
+  hits        Int      @default(1)
+  firstSeenAt DateTime @default(now())
+  lastSeenAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, ip])
+  @@index([userId, lastSeenAt])
+  @@index([ip])
+}
+
+/// Представитель из старого ЛК DriveMods (store.drivemods.ru) со статистикой
+/// выдач. account — своя учётка субдилера в ЛК; comment — лицензии, которые
+/// выписывали за него из общего кабинета, с именем и городом в комментарии.
+model LegacyDealer {
+  id             String    @id @default(cuid())
+  source         String
+  /// objectId учётки ЛК либо нормализованные «имя город» из комментария.
+  externalKey    String    @unique
+  name           String
+  email          String?
+  phone          String?
+  city           String?
+  country        String?
+  registeredAt   DateTime?
+  active         Boolean   @default(true)
+  licenses       Int       @default(0)
+  /// Выписаны самим субдилером в своей учётке.
+  viaAccount     Int       @default(0)
+  /// Выписаны из общего кабинета с его именем в комментарии.
+  viaComment     Int       @default(0)
+  paidLicenses   Int       @default(0)
+  unpaidLicenses Int       @default(0)
+  amountTotal    Decimal   @default(0) @db.Decimal(14, 2)
+  amountPaid     Decimal   @default(0) @db.Decimal(14, 2)
+  amountUnpaid   Decimal   @default(0) @db.Decimal(14, 2)
+  firstLicenseAt DateTime?
+  lastLicenseAt  DateTime?
+  /// Пополнения баланса в учётке ЛК (записи «Оплата» и «Внешняя оплата»).
+  payments       Int       @default(0)
+  paymentsAmount Decimal   @default(0) @db.Decimal(14, 2)
+  /// [{ position, count, amount }] по убыванию count.
+  products       Json      @default("[]")
+  /// Несколько исходных комментариев — чтобы сверить, о ком речь.
+  comments       Json      @default("[]")
+  /// Учётка портала, к которой привязан (по email/телефону или вручную).
+  userId         String?   @unique
+  importedAt     DateTime  @default(now())
+
+  user User? @relation("LegacyDealerLink", fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([source])
+  @@index([email])
+  @@index([phone])
 }
 
 model DealerProfile {
@@ -204,6 +270,9 @@ model DealerProfile {
   /// Предоплатный расчёт: до генерации нужно погасить неоплаченные счета.
   /// Доверенным представителям оставляют postpaid (false) — генерируют сразу.
   prepaid             Boolean  @default(false)
+  /// Работал с нами в старом ЛК DriveMods: первая генерация позиции идёт по
+  /// дилерской цене, а не по клиентской, как у новичков.
+  legacyDealer        Boolean  @default(false)
   approvedAt          DateTime?
   approvedById        String?
   rejectionReason     String?
@@ -279,7 +348,7 @@ model License {
   number                String        @unique
   dealerId              String
   type                  String        @default("Генерация")
-  status                LicenseStatus @default(DRAFT)
+  status                LicenseStatus @default(ACTIVE)
   features              Json          @default("{}")
   deviceId              String
   deviceIdKey           String?
@@ -299,6 +368,9 @@ model License {
   /// либо генерация по такому device_id уже была у нас.
   repeatGeneration      Boolean       @default(false)
   price                 Decimal?      @db.Decimal(12, 2)
+  /// Базовая цена позиции (себестоимость из справочника) на момент выдачи.
+  /// Видна только администраторам.
+  basePrice             Decimal?      @db.Decimal(12, 2)
   cancelledAt           DateTime?
   cancellationReason    String?
   deletedAt             DateTime?
@@ -599,7 +671,7 @@ model PriceListItem {
   region    String   @default("")
   /// Дилерская цена (базовая, по которой платит представитель).
   price     Decimal  @db.Decimal(12, 2)
-  /// Наша цена/себестоимость — видна только администраторам, для маржи.
+  /// Базовая цена (себестоимость) — видна только администраторам, для маржи.
   myPrice     Decimal? @db.Decimal(12, 2)
   /// Клиентская (розничная) цена. По ней идёт первая генерация позиции.
   clientPrice Decimal? @db.Decimal(12, 2)

@@ -555,10 +555,21 @@ async function findPaidAtolPayOrder(payment: {
  * туда, откуда платили; счёт на реквизиты (или деньги, которые администратор
  * уже вернул сам) эквайринг не трогает. Затем пробивается чек «Возврат прихода».
  */
-export async function refundPayment(paymentId: string, opts: { manual?: boolean } = {}) {
+export async function refundPayment(
+  paymentId: string,
+  opts: { manual?: boolean; actorId: string },
+) {
   const payment = await db.payment.findUnique({
     where: { id: paymentId },
-    select: { id: true, status: true, provider: true, externalId: true, providerPayload: true },
+    select: {
+      id: true,
+      status: true,
+      provider: true,
+      externalId: true,
+      providerPayload: true,
+      licenseId: true,
+      dealerId: true,
+    },
   });
   if (!payment) throw new Error("Платёж не найден");
   if (payment.status !== "PAID") throw new Error("Вернуть можно только оплаченный платёж");
@@ -602,7 +613,21 @@ export async function refundPayment(paymentId: string, opts: { manual?: boolean 
       refundedAt: new Date(),
     },
   });
+  if (payment.licenseId) await cancelRefundedLicense(payment.licenseId, payment.dealerId, opts.actorId);
   return fiscalizeRefund(paymentId);
+}
+
+/** За возвращённые деньги лицензия больше не действует. */
+async function cancelRefundedLicense(licenseId: string, dealerId: string, actorId: string) {
+  const cancelled = await db.license.updateMany({
+    where: { id: licenseId, status: "ACTIVE" },
+    data: { status: "CANCELLED", cancelledAt: new Date(), cancellationReason: "Возврат средств" },
+  });
+  if (cancelled.count === 0) return;
+  await db.licenseAuditLog.create({
+    data: { licenseId, actorId, action: "CANCELLED", reason: "Возврат средств" },
+  });
+  await syncLicenseSlots(dealerId);
 }
 
 /**

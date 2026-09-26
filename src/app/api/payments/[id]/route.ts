@@ -16,6 +16,7 @@ import { notifyUser, notifyAdmins } from "@/lib/app-notifications";
 import { syncLicenseSlots } from "@/lib/license-slots";
 import { formatRub } from "@/lib/money";
 import { requirePermission } from "@/lib/session";
+import { fioFromParts } from "@/lib/utils";
 
 export const runtime = "nodejs";
 
@@ -112,7 +113,7 @@ export const POST = route(async (req: Request, ctx: { params: Promise<{ id: stri
         if (payment.status !== "PAID") {
           throw badRequest("Вернуть можно только оплаченный платёж");
         }
-        const updated = await refundPayment(id, { manual });
+        const updated = await refundPayment(id, { manual, actorId: session.user.id });
         const viaAtolPay = updated.refundMethod === "atol_pay";
         await recordAdminAction({
           actorId: session.user.id,
@@ -121,11 +122,43 @@ export const POST = route(async (req: Request, ctx: { params: Promise<{ id: stri
           action: "REFUNDED",
           summary: `${licenseLabel} · ${amountLabel} · ${viaAtolPay ? "через АТОЛ Pay" : "вручную"}`,
         });
+        const licenseNote = payment.license
+          ? ` Лицензия ${payment.license.number} аннулирована и больше не действует.`
+          : "";
         await notifyUser(payment.dealerId, {
-          type: "PAYMENT_PAID",
+          type: "PAYMENT_REFUNDED",
           title: `Возврат средств: ${amountLabel}`,
-          body: viaAtolPay ? `${licenseLabel}. Деньги вернутся туда, откуда была оплата.` : licenseLabel,
-          link: `/dealer/payments/${id}`,
+          body:
+            (viaAtolPay
+              ? "Деньги возвращены на карту, с которой вы платили; банк зачислит их обычно за 1–10 рабочих дней."
+              : "Администратор оформил возврат средств.") + licenseNote,
+          link: payment.licenseId ? `/dealer/licenses/${payment.licenseId}` : `/dealer/payments/${id}`,
+        });
+        const dealer = await db.user.findUnique({
+          where: { id: payment.dealerId },
+          select: {
+            email: true,
+            dealerProfile: { select: { firstName: true, lastName: true, middleName: true, city: true } },
+          },
+        });
+        const dealerName =
+          fioFromParts({
+            firstName: dealer?.dealerProfile?.firstName,
+            lastName: dealer?.dealerProfile?.lastName,
+            middleName: dealer?.dealerProfile?.middleName,
+          }) || dealer?.email || "представитель";
+        await notifyAdmins(["payments.manage"], {
+          type: "PAYMENT_REFUNDED",
+          title: `Возврат ${amountLabel}: ${dealerName}`,
+          body: [
+            payment.license ? `Лицензия ${payment.license.number} аннулирована` : "Счёт без лицензии",
+            dealer?.dealerProfile?.city ?? null,
+            dealer?.email ?? null,
+            viaAtolPay ? "через АТОЛ Pay" : "вручную",
+          ]
+            .filter(Boolean)
+            .join(" · "),
+          link: payment.licenseId ? `/admin/licenses/${payment.licenseId}` : "/admin/payments",
         });
         if (updated.refundReceiptStatus === "fail") {
           await notifyAdmins(["payments.manage"], {

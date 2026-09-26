@@ -6,10 +6,10 @@ import { StatusTag } from "@/components/ui/status-tag";
 import { Button } from "@/components/ui/button";
 import { ChevronRight, Search } from "lucide-react";
 import { hasAdminScope, hasPermission } from "@/lib/permissions";
-import { fioFromParts, plural } from "@/lib/utils";
+import { cn, fioFromParts, plural } from "@/lib/utils";
 import { isPublishedOnSite, PUBLISHED_ON_SITE_WHERE } from "@/lib/site-dealers";
 import { SITE_PROBLEM_STATUSES } from "@/lib/site-sync-labels";
-import type { DealerProfile, UserStatus } from "@prisma/client";
+import type { DealerProfile, Role, User, UserStatus } from "@prisma/client";
 import { DealersFilters } from "./dealers-filters";
 import { DeleteDealerButton } from "./delete-dealer-button";
 import { Pagination, parsePage } from "@/components/cabinet/pagination";
@@ -44,16 +44,30 @@ export default async function AdminDealersPage({
     where.dealerProfile = { sitePublication: "REJECTED" };
   }
   if (sp.q && sp.q.trim()) {
-    const q = sp.q.trim();
-    Object.assign(where, {
-      OR: [
-        { email: { contains: q, mode: "insensitive" } },
-        { dealerProfile: { firstName: { contains: q, mode: "insensitive" } } },
-        { dealerProfile: { lastName: { contains: q, mode: "insensitive" } } },
-        { dealerProfile: { middleName: { contains: q, mode: "insensitive" } } },
-        { dealerProfile: { organization: { contains: q, mode: "insensitive" } } },
+    // Каждое слово запроса должно найтись хоть в одном поле: «Рагим Москва»
+    // находит Рагима из Москвы, а не всех Рагимов и всех москвичей.
+    const words = sp.q.trim().split(/\s+/).slice(0, 6);
+    where.AND = words.map((q) => {
+      const text = { contains: q, mode: "insensitive" };
+      const or: Record<string, unknown>[] = [
+        { email: text },
+        { dealerProfile: { firstName: text } },
+        { dealerProfile: { lastName: text } },
+        { dealerProfile: { middleName: text } },
+        { dealerProfile: { organization: text } },
         { dealerProfile: { phone: { contains: q } } },
-      ],
+        { dealerProfile: { city: text } },
+        { dealerProfile: { region: text } },
+        { dealerProfile: { country: text } },
+        { dealerProfile: { address: text } },
+        { dealerProfile: { signupCity: text } },
+        { dealerProfile: { signupCountry: text } },
+      ];
+      // Пустая страна у представителя означает Россию (так её видит и сайт).
+      if (q.length >= 3 && "россия".startsWith(q.toLowerCase())) {
+        or.push({ dealerProfile: { country: null } });
+      }
+      return { OR: or };
     });
   }
 
@@ -104,79 +118,139 @@ export default async function AdminDealersPage({
           initialPublication={sp.pub ?? ""}
         />
         <div className="mt-5 rounded-panel border border-hairline overflow-hidden">
-          <div className="overflow-x-auto scrollbar-clean">
-            <table className="w-full min-w-[720px] text-sm">
-              <thead>
-                <tr className="text-left text-[11.5px] uppercase tracking-tight text-ink-subtle">
-                  <th className="px-4 py-3">Представитель</th>
-                  <th className="px-4 py-3">Контакты</th>
-                  <th className="px-4 py-3">Регион</th>
-                  <th className="px-4 py-3">Статус</th>
-                  <th className="px-4 py-3">Лимит</th>
-                  <th className="px-4 py-3">Публикация</th>
-                  <th className="px-4 py-3" />
-                </tr>
-              </thead>
-              <tbody>
-                {dealers.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="px-4 py-12 text-center text-ink-muted">
-                      Ничего не найдено
+          {dealers.length === 0 ? (
+            <div className="px-4 py-12 text-center text-sm text-ink-muted">Ничего не найдено</div>
+          ) : null}
+
+          {/* До lg — карточки: таблица из шести колонок в узкий экран не влезает. */}
+          <ul className="lg:hidden divide-y divide-hairline">
+            {dealers.map((u) => {
+              const row = dealerRow(u);
+              const deletable = canDelete && isDeletable(u, user.id);
+              return (
+                <li key={u.id} className="p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <Link href={`/admin/dealers/${u.id}`} className="min-w-0">
+                      <div className="truncate font-medium hover:text-accent">{row.fio || u.email}</div>
+                      {row.organization ? (
+                        <div className="truncate text-xs text-ink-muted">{row.organization}</div>
+                      ) : null}
+                    </Link>
+                    <StatusTag kind="user" status={u.status} />
+                  </div>
+                  <div className="mt-2 space-y-0.5 text-xs text-ink-muted">
+                    <div className="break-all">
+                      {u.email}
+                      {u.dealerProfile?.phone ? ` · ${u.dealerProfile.phone}` : ""}
+                    </div>
+                    {row.place ? <div>{row.place}</div> : null}
+                  </div>
+                  <div className="mt-2.5 flex flex-wrap items-center gap-2 text-xs">
+                    <span className="text-ink-muted">
+                      Лимит {u.dealerProfile?.licensesUsed ?? 0} / {u.dealerProfile?.licenseLimit ?? 0}
+                    </span>
+                    <PublicationTag status={u.status} profile={u.dealerProfile} />
+                    {u.dealerProfile?.legacyDealer ? <Tag tone="accent">Старый ЛК</Tag> : null}
+                    <div className="ml-auto flex items-center gap-1">
+                      <Link href={`/admin/dealers/${u.id}`}>
+                        <Button size="sm" variant="ghost" iconRight={<ChevronRight className="h-4 w-4" />}>
+                          Открыть
+                        </Button>
+                      </Link>
+                      {deletable ? <DeleteDealerButton dealerId={u.id} name={row.fio || u.email} compact /> : null}
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+
+          <table className={cn("hidden w-full table-fixed text-sm", dealers.length > 0 && "lg:table")}>
+            <colgroup>
+              <col className="w-[23%]" />
+              <col className="w-[25%]" />
+              <col className="w-[17%]" />
+              <col className="w-[12%]" />
+              <col className="w-[8%]" />
+              <col className="w-[11%]" />
+              <col className="w-[88px]" />
+            </colgroup>
+            <thead>
+              <tr className="text-left text-[11.5px] uppercase tracking-tight text-ink-subtle">
+                <th className="px-3 py-3">Представитель</th>
+                <th className="px-3 py-3">Контакты</th>
+                <th className="px-3 py-3">Регион</th>
+                <th className="px-3 py-3">Статус</th>
+                <th className="px-3 py-3">Лимит</th>
+                <th className="px-3 py-3">Публикация</th>
+                <th className="px-3 py-3" />
+              </tr>
+            </thead>
+            <tbody>
+              {dealers.map((u) => {
+                const row = dealerRow(u);
+                const deletable = canDelete && isDeletable(u, user.id);
+                return (
+                  <tr key={u.id} className="border-t border-hairline align-top transition-colors hover:bg-surface-muted">
+                    <td className="px-3 py-3">
+                      <Link
+                        href={`/admin/dealers/${u.id}`}
+                        className="block truncate hover:text-accent"
+                        title={row.fio || u.email}
+                      >
+                        {row.fio || "—"}
+                      </Link>
+                      <div className="truncate text-xs text-ink-muted" title={row.organization ?? undefined}>
+                        {row.organization ?? "—"}
+                      </div>
+                      {u.dealerProfile?.legacyDealer ? (
+                        <Tag tone="accent" className="mt-1 px-2 py-0.5 text-[11px]">
+                          Старый ЛК
+                        </Tag>
+                      ) : null}
+                    </td>
+                    <td className="px-3 py-3 text-xs text-ink-muted">
+                      <div className="truncate" title={u.email}>
+                        {u.email}
+                      </div>
+                      <div className="truncate">{u.dealerProfile?.phone}</div>
+                    </td>
+                    <td className="px-3 py-3 text-xs text-ink-muted">
+                      <div className="truncate" title={row.place ?? undefined}>
+                        {u.dealerProfile?.city ?? "—"}
+                      </div>
+                      {row.regionLine ? <div className="truncate">{row.regionLine}</div> : null}
+                    </td>
+                    <td className="px-3 py-3">
+                      <StatusTag kind="user" status={u.status} />
+                    </td>
+                    <td className="px-3 py-3 whitespace-nowrap">
+                      {u.dealerProfile?.licensesUsed ?? 0} / {u.dealerProfile?.licenseLimit ?? 0}
+                    </td>
+                    <td className="px-3 py-3">
+                      <PublicationTag status={u.status} profile={u.dealerProfile} />
+                    </td>
+                    <td className="px-3 py-3">
+                      <div className="flex items-center justify-end gap-1">
+                        <Link href={`/admin/dealers/${u.id}`} title="Открыть">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="w-9 px-0"
+                            aria-label={`Открыть ${row.fio || u.email}`}
+                            icon={<ChevronRight className="h-4 w-4" />}
+                          />
+                        </Link>
+                        {deletable ? (
+                          <DeleteDealerButton dealerId={u.id} name={row.fio || u.email} compact />
+                        ) : null}
+                      </div>
                     </td>
                   </tr>
-                ) : null}
-                {dealers.map((u) => {
-                  const fio = fioFromParts({
-                    firstName: u.dealerProfile?.firstName,
-                    lastName: u.dealerProfile?.lastName,
-                    middleName: u.dealerProfile?.middleName,
-                  });
-                  const deletable =
-                    canDelete &&
-                    u.id !== user.id &&
-                    !u.isSuperAdmin &&
-                    !hasAdminScope(u.role.permissions);
-                  return (
-                    <tr key={u.id} className="transition-colors hover:bg-surface-muted">
-                      <td className="px-4 py-3">
-                        <div>{fio || "—"}</div>
-                        <div className="text-xs text-ink-muted">{u.dealerProfile?.organization ?? "—"}</div>
-                      </td>
-                      <td className="px-4 py-3 text-xs text-ink-muted">
-                        <div>{u.email}</div>
-                        <div>{u.dealerProfile?.phone}</div>
-                      </td>
-                      <td className="px-4 py-3 text-ink-muted">
-                        {u.dealerProfile?.city ?? "—"}
-                        {u.dealerProfile?.region ? ` · ${u.dealerProfile.region}` : ""}
-                      </td>
-                      <td className="px-4 py-3">
-                        <StatusTag kind="user" status={u.status} />
-                      </td>
-                      <td className="px-4 py-3 ">
-                        {u.dealerProfile?.licensesUsed ?? 0} / {u.dealerProfile?.licenseLimit ?? 0}
-                      </td>
-                      <td className="px-4 py-3">
-                        <PublicationTag status={u.status} profile={u.dealerProfile} />
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center justify-end gap-1">
-                          <Link href={`/admin/dealers/${u.id}`}>
-                            <Button size="sm" variant="ghost" iconRight={<ChevronRight className="h-4 w-4" />}>
-                              Открыть
-                            </Button>
-                          </Link>
-                          {deletable ? (
-                            <DeleteDealerButton dealerId={u.id} name={fio || u.email} compact />
-                          ) : null}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
         <Pagination
           page={page}
@@ -188,6 +262,20 @@ export default async function AdminDealersPage({
       </div>
     </>
   );
+}
+
+type DealerListUser = User & { dealerProfile: DealerProfile | null; role: Role };
+
+function dealerRow(u: DealerListUser) {
+  const p = u.dealerProfile;
+  const fio = fioFromParts({ firstName: p?.firstName, lastName: p?.lastName, middleName: p?.middleName });
+  const regionLine = [p?.region, p?.country].filter(Boolean).join(" · ") || null;
+  const place = [p?.city, p?.region, p?.country].filter(Boolean).join(" · ") || null;
+  return { fio, organization: p?.organization ?? null, regionLine, place };
+}
+
+function isDeletable(u: DealerListUser, meId: string) {
+  return u.id !== meId && !u.isSuperAdmin && !hasAdminScope(u.role.permissions);
 }
 
 function PublicationTag({

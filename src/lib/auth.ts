@@ -7,6 +7,7 @@ import { db } from "./db";
 import { hasAdminScope, type PermissionKey } from "./permissions";
 import { isPasswordVaultConfigured, openPassword, sealPassword } from "./password-vault";
 import { rateLimit, clientIp } from "./rate-limit";
+import { trackUserIp } from "./user-ips";
 
 declare module "next-auth" {
   interface Session {
@@ -102,9 +103,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           where: { id: user.id },
           data: {
             lastLoginAt: new Date(),
+            ...(ip !== "unknown" ? { lastLoginIp: ip } : {}),
             ...(refreshCopy ? { passwordEncrypted: sealPassword(user.id, password) } : {}),
           },
         });
+        // Гео-сервис не должен задерживать вход — адрес пишем в фоне.
+        void trackUserIp(user.id, ip, { force: true });
 
         return {
           id: user.id,

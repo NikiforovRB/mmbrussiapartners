@@ -11,12 +11,12 @@ import {
   FileBox,
   KeyRound,
   Download,
-  User as UserIcon,
   CreditCard,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card } from "@/components/ui/card";
 import { Tag } from "@/components/ui/tag";
@@ -400,12 +400,15 @@ export function LicenseStepper({
                   </div>
 
                   <div className="mt-5">
-                    <Input
+                    <Textarea
                       label="Комментарий дилера (имя субдилера) *"
                       value={dealerComment}
                       onChange={(e) => setDealerComment(e.target.value)}
-                      placeholder="Например: Артур, Москва"
-                      icon={<UserIcon className="h-4 w-4" />}
+                      placeholder={"Например: Артур, Москва\nBMW X5, VIN …"}
+                      rows={4}
+                      maxLength={1000}
+                      className="resize-y min-h-[96px]"
+                      hint="Enter — новая строка. Имя и город подставлены из профиля — поправьте, если лицензия для субдилера."
                     />
                   </div>
                 </Card>
@@ -480,7 +483,7 @@ export function LicenseStepper({
                   ) : null}
                   <Row
                     label="Комментарий дилера"
-                    value={dealerComment || "—"}
+                    value={<span className="whitespace-pre-line break-words">{dealerComment.trim() || "—"}</span>}
                   />
                   <Row
                     label="Файл device_id.bin"

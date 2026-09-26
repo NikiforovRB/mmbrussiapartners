@@ -82,8 +82,8 @@ export const DELETE = route(async (_req: Request, ctx: { params: Promise<{ id: s
 
   await notifyAdmins(["licenses.cancel"], {
     type: "CANCELLATION_REQUESTED",
-    title: `Заявка на аннулирование ${license.number} отозвана`,
-    body: `${license.dealer.email} отозвал заявку`,
+    title: `Заявка на аннулирование ${license.number} отменена`,
+    body: `${license.dealer.email} отменил заявку`,
     link: "/admin/cancellation-requests",
   });
 

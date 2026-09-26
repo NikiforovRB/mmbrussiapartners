@@ -28,6 +28,8 @@ export type ResolvedPrice = {
   personal: boolean;
   /** Как получена цена — для подсказок в интерфейсе. */
   basis: PriceBasis;
+  /** Базовая цена позиции (себестоимость) — только для администраторов. */
+  basePrice: number | null;
 };
 
 /**
@@ -92,7 +94,7 @@ export async function resolvePrices(
     dealerId
       ? db.dealerProfile.findUnique({
           where: { userId: dealerId },
-          select: { priceAdjustKind: true, priceAdjustValue: true, priceTier: true },
+          select: { priceAdjustKind: true, priceAdjustValue: true, priceTier: true, legacyDealer: true },
         })
       : Promise.resolve(null),
     dealerId
@@ -118,6 +120,10 @@ export async function resolvePrices(
     ),
   );
 
+  // Представитель, работавший в старом ЛК DriveMods, позиции уже покупал —
+  // просто не на этом портале, поэтому «первая генерация» к нему не относится.
+  const legacy = profile?.legacyDealer === true;
+
   return queries.map((q) => {
     const item = matchItem(items, q);
     if (!item) {
@@ -128,27 +134,30 @@ export async function resolvePrices(
         itemId: null,
         personal: false,
         basis: "fallback" as const,
+        basePrice: null,
       };
     }
+    const basePrice = item.myPrice == null ? null : toNumber(item.myPrice);
+    const base = { itemId: item.id, basePrice };
 
     // Личная цена представителя — высший приоритет, перекрывает всё.
     const own = personalById.get(item.id);
-    if (own !== undefined) return { price: own, itemId: item.id, personal: true, basis: "personal" as const };
+    if (own !== undefined) return { ...base, price: own, personal: true, basis: "personal" as const };
 
     const dealerPrice = applyAdjust(toNumber(item.price), kind, adjust);
     const clientPrice = item.clientPrice == null ? null : toNumber(item.clientPrice);
 
     // Субдилер (тариф CLIENT) всегда платит по клиентской цене.
     if (tier === "CLIENT" && clientPrice !== null) {
-      return { price: clientPrice, itemId: item.id, personal: false, basis: "client_tier" as const };
+      return { ...base, price: clientPrice, personal: false, basis: "client_tier" as const };
     }
 
     // Первая генерация этой позиции — по клиентской цене (если она задана).
-    if (clientPrice !== null && !seenPositions.has(priceKey(q))) {
-      return { price: clientPrice, itemId: item.id, personal: false, basis: "client_first" as const };
+    if (clientPrice !== null && !legacy && !seenPositions.has(priceKey(q))) {
+      return { ...base, price: clientPrice, personal: false, basis: "client_first" as const };
     }
 
-    return { price: dealerPrice, itemId: item.id, personal: false, basis: "dealer" as const };
+    return { ...base, price: dealerPrice, personal: false, basis: "dealer" as const };
   });
 }
 

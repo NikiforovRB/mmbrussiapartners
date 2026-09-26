@@ -12,6 +12,7 @@ import {
   KeyRound,
   ReceiptText,
   Tags,
+  Undo2,
   UserPlus,
   X,
 } from "lucide-react";
@@ -41,19 +42,15 @@ const ICONS: Record<string, React.ReactNode> = {
   CANCELLATION_REVIEWED: <ClipboardList className="h-4 w-4" />,
   PAYMENT_CREATED: <CreditCard className="h-4 w-4" />,
   PAYMENT_PAID: <CreditCard className="h-4 w-4" />,
+  PAYMENT_REFUNDED: <Undo2 className="h-4 w-4" />,
   RECEIPT_FAILED: <ReceiptText className="h-4 w-4" />,
   PRICE_MISSING: <Tags className="h-4 w-4" />,
 };
 
-/** Как часто подтягиваем счётчик, пока вкладка на экране. */
-const POLL_MS = 120_000;
-/** При возврате на вкладку обновляем счётчик, если он старше этого. */
-const STALE_ON_FOCUS_MS = 30_000;
-
 export function NotificationPanel({ initialUnread }: { initialUnread: number }) {
   const router = useRouter();
   const [open, setOpen] = React.useState(false);
-  const [unread, setUnread] = useUnreadCount(initialUnread);
+  const { unread, setUnread, track, mutate } = useUnreadCount(initialUnread);
   const [items, setItems] = React.useState<Notification[] | null>(null);
   const [loading, setLoading] = React.useState(false);
   const [mounted, setMounted] = React.useState(false);
@@ -65,47 +62,24 @@ export function NotificationPanel({ initialUnread }: { initialUnread: number }) 
 
   const load = React.useCallback(async () => {
     setLoading(true);
+    const commit = track();
     try {
       const res = await fetch("/api/notifications", { cache: "no-store" });
       if (!res.ok) return;
       const data = (await res.json()) as { items: Notification[]; unread: number };
       setItems(data.items);
-      setUnread(data.unread);
+      commit(data.unread);
     } catch {
       /* сеть моргнула — покажем прежнее состояние */
     } finally {
       setLoading(false);
     }
-  }, [setUnread]);
+  }, [track]);
 
-  // Пока панель закрыта, список не нужен — обновляем только счётчик, и только
-  // когда вкладку видно: фоновые вкладки базу не нагружают.
+  // Список каждый раз свежий: пока панель была закрыта, могли прийти новые.
   React.useEffect(() => {
-    if (open) return;
-    let lastPoll = Date.now();
-    const poll = () => {
-      lastPoll = Date.now();
-      fetch("/api/notifications/unread", { cache: "no-store" })
-        .then((r) => (r.ok ? r.json() : null))
-        .then((d: { unread: number } | null) => d && setUnread(d.unread))
-        .catch(() => {});
-    };
-    const timer = setInterval(() => {
-      if (document.visibilityState === "visible") poll();
-    }, POLL_MS);
-    const onVisible = () => {
-      if (document.visibilityState === "visible" && Date.now() - lastPoll > STALE_ON_FOCUS_MS) poll();
-    };
-    document.addEventListener("visibilitychange", onVisible);
-    return () => {
-      clearInterval(timer);
-      document.removeEventListener("visibilitychange", onVisible);
-    };
-  }, [open, setUnread]);
-
-  React.useEffect(() => {
-    if (open && items === null) void load();
-  }, [open, items, load]);
+    if (open) void load();
+  }, [open, load]);
 
   React.useEffect(() => {
     if (!open) return;
@@ -121,16 +95,22 @@ export function NotificationPanel({ initialUnread }: { initialUnread: number }) 
     };
   }, [open]);
 
+  function markRead(ids?: string[]) {
+    return mutate(() =>
+      fetch("/api/notifications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(ids ? { ids } : {}),
+      }),
+    );
+  }
+
   async function markAll() {
     setUnread(0);
     setItems((prev) =>
       prev?.map((n) => (n.readAt ? n : { ...n, readAt: new Date().toISOString() })) ?? prev,
     );
-    await fetch("/api/notifications", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
-    }).catch(() => {});
+    await markRead();
   }
 
   async function openItem(n: Notification) {
@@ -139,11 +119,7 @@ export function NotificationPanel({ initialUnread }: { initialUnread: number }) 
       setItems((prev) =>
         prev?.map((x) => (x.id === n.id ? { ...x, readAt: new Date().toISOString() } : x)) ?? prev,
       );
-      await fetch("/api/notifications", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ids: [n.id] }),
-      }).catch(() => {});
+      await markRead([n.id]);
     }
     if (n.link) {
       setOpen(false);

@@ -16,6 +16,14 @@ export default async function DealerReportsPage() {
   });
   if (!user) redirect("/login");
 
+  const productRows = await db.license.findMany({
+    where: { dealerId: user.id, deletedAt: null, product: { not: null } },
+    distinct: ["product"],
+    select: { product: true },
+    orderBy: { product: "asc" },
+  });
+  const products = productRows.map((r) => r.product).filter((p): p is string => Boolean(p));
+
   const fio = fioFromParts({
     firstName: user.dealerProfile?.firstName,
     lastName: user.dealerProfile?.lastName,
@@ -30,7 +38,7 @@ export default async function DealerReportsPage() {
         user={{ name: fio || user.email, email: user.email, role: user.role.name }}
       />
       <div className="mt-6">
-        <ReportsBuilder context="dealer" />
+        <ReportsBuilder context="dealer" products={products} />
       </div>
     </>
   );

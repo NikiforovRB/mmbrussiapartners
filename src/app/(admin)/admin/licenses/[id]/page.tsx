@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { Topbar } from "@/components/cabinet/topbar";
 import { LicenseDetailEditor } from "@/components/licenses/license-detail-editor";
 import { requireAdminPage } from "@/lib/session";
+import { LICENSE_PAYMENT_SELECT } from "@/lib/license-price";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +20,7 @@ export default async function AdminLicensePage({ params }: { params: Promise<{ i
       },
       dealer: { select: { email: true } },
       cancellationRequests: { orderBy: { createdAt: "desc" }, take: 1 },
+      payment: { select: LICENSE_PAYMENT_SELECT },
     },
   });
   if (!license) notFound();
