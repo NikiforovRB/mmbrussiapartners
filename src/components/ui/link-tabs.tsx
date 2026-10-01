@@ -11,14 +11,14 @@ export type LinkTab = {
 /** Вкладки-ссылки: раздел выбирается адресом, активная подчёркнута акцентом. */
 export function LinkTabs({ tabs, className, label }: { tabs: LinkTab[]; className?: string; label?: string }) {
   return (
-    <nav aria-label={label} className={cn("flex gap-1 overflow-x-auto border-b border-hairline scrollbar-clean", className)}>
+    <nav aria-label={label} className={cn("tab-strip scrollbar-none", className)}>
       {tabs.map((t) => (
         <Link
           key={t.href}
           href={t.href}
           aria-current={t.active ? "page" : undefined}
           className={cn(
-            "-mb-px flex shrink-0 items-center gap-2 border-b-2 px-3 py-2.5 text-sm transition-colors",
+            "flex shrink-0 items-center gap-2 border-b-2 px-3 py-2.5 text-sm transition-colors",
             t.active ? "border-accent text-ink" : "border-transparent text-ink-muted hover:text-ink",
           )}
         >

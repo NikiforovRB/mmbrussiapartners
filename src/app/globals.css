@@ -58,7 +58,7 @@
   b {
     font-weight: 500;
   }
-  button:not([role="switch"]) {
+  button:not([role="switch"]):not([role="tab"]) {
     border-radius: var(--radius-button) !important;
   }
   ::selection {
@@ -166,6 +166,20 @@
   }
   .scrollbar-clean::-webkit-scrollbar-track {
     background: transparent;
+  }
+  .scrollbar-none {
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+  /* Полоса вкладок: линия снизу — тенью, чтобы подчёркивание вкладки не выходило за край и не включало прокрутку */
+  .tab-strip {
+    display: flex;
+    gap: 0.25rem;
+    overflow-x: auto;
+    overflow-y: hidden;
+    box-shadow: inset 0 -1px 0 var(--hairline);
   }
 
   .grid-mesh {

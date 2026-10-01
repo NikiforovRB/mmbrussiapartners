@@ -263,7 +263,7 @@ export function NotificationPanel({ initialUnread }: { initialUnread: number }) 
                 <nav
                   role="tablist"
                   aria-label="Разделы уведомлений"
-                  className="flex gap-1 overflow-x-auto border-b border-hairline px-3 scrollbar-clean"
+                  className="tab-strip scrollbar-none px-3"
                 >
                   {tabs.map((t) => {
                     const count = unreadByTab[t.id] ?? 0;
@@ -276,7 +276,7 @@ export function NotificationPanel({ initialUnread }: { initialUnread: number }) 
                         aria-selected={active}
                         onClick={() => switchTab(t.id)}
                         className={cn(
-                          "-mb-px flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2.5 text-sm transition-colors",
+                          "flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2.5 text-sm transition-colors",
                           active ? "border-accent text-ink" : "border-transparent text-ink-muted hover:text-ink",
                         )}
                       >
