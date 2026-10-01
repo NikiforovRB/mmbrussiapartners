@@ -46,13 +46,13 @@ export default function RootLayout({
         <Toaster
           position="top-right"
           toastOptions={{
+            // Иконки sonner рисуются currentColor — белый текст делает белой и галочку.
             style: {
-              background: "rgba(255,255,255,0.85)",
-              backdropFilter: "blur(14px)",
+              background: "#2a9fff",
               borderRadius: 12,
               border: "none",
-              boxShadow: "none",
-              color: "#0b1020",
+              boxShadow: "0 12px 32px -12px rgba(10,120,216,0.55)",
+              color: "#ffffff",
               fontFamily: '"Gilroy", system-ui, sans-serif',
             },
           }}

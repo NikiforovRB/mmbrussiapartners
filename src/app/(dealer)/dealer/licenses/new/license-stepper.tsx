@@ -23,6 +23,7 @@ import { Tag } from "@/components/ui/tag";
 import { usePermissions } from "@/hooks/use-permissions";
 import { Money } from "@/components/ui/money";
 import { formatRuDateTime } from "@/lib/dates";
+import { DEALER_COMMENT_MAX } from "@/lib/license-options";
 
 type Step = 1 | 2 | 3 | 4;
 
@@ -48,6 +49,8 @@ type LicInfo = {
   recoverable: boolean;
   /** Признак повторной выдачи: по данным DRIVEMODS или по нашей базе. */
   repeat: boolean;
+  /** Повтор бесплатный: без счёта и без места в лимите (настройка генерации). */
+  free: boolean;
   /** Отметки времени первой и последней генерации по данным DRIVEMODS (ISO). */
   firstGeneratedAt: string | null;
   lastGeneratedAt: string | null;
@@ -177,7 +180,7 @@ export function LicenseStepper({
     const email = receiptEmail.trim();
     // Email обязателен, когда будет выставлен счёт (чек уйдёт на этот адрес).
     // Без оплаты (повторная генерация или право админа) чека нет — email не нужен.
-    const needsEmail = !info.repeat && !(canIssueFree && withoutPayment);
+    const needsEmail = !info.free && !(canIssueFree && withoutPayment);
     if (needsEmail && !EMAIL_RE.test(email)) {
       toast.error("Укажите корректный Email — на него придёт чек об оплате");
       return;
@@ -201,7 +204,7 @@ export function LicenseStepper({
         // Дата прошлой генерации из DRIVEMODS — для уведомления о повторной выдаче.
         previousGeneratedAt: info.lastGeneratedAt ?? info.firstGeneratedAt ?? null,
         ...(EMAIL_RE.test(email) ? { receiptEmail: email } : {}),
-        ...(canIssueFree && !info.repeat ? { issuedWithoutPayment: withoutPayment } : {}),
+        ...(canIssueFree && !info.free ? { issuedWithoutPayment: withoutPayment } : {}),
       }),
     });
     setSubmitting(false);
@@ -335,7 +338,9 @@ export function LicenseStepper({
                   </div>
                   {info.repeat ? (
                     <p className="mt-2 text-xs text-ink-muted">
-                      Повторная генерация бесплатна: счёт не выставляется, лимит лицензий не расходуется.
+                      {info.free
+                        ? "Повторная генерация бесплатна: счёт не выставляется, лимит лицензий не расходуется."
+                        : "Повторная генерация оплачивается как новая: будет выставлен счёт."}
                     </p>
                   ) : null}
                   {info.previous ? (
@@ -385,7 +390,7 @@ export function LicenseStepper({
                           <BundleButton
                             key={it.index}
                             item={it}
-                            free={info.repeat}
+                            free={info.free}
                             active={String(it.index) === productIndex}
                             onSelect={() => setProductIndex(String(it.index))}
                           />
@@ -405,10 +410,10 @@ export function LicenseStepper({
                       value={dealerComment}
                       onChange={(e) => setDealerComment(e.target.value)}
                       placeholder={"Например: Артур, Москва\nBMW X5, VIN …"}
-                      rows={4}
-                      maxLength={1000}
-                      className="resize-y min-h-[96px]"
-                      hint="Enter — новая строка. Имя и город подставлены из профиля — поправьте, если лицензия для субдилера."
+                      rows={2}
+                      maxLength={DEALER_COMMENT_MAX}
+                      counter
+                      hint={`До ${DEALER_COMMENT_MAX} символов. Имя и город подставлены из профиля — поправьте, если лицензия для субдилера.`}
                     />
                   </div>
                 </Card>
@@ -459,9 +464,9 @@ export function LicenseStepper({
                         <span className="flex flex-wrap items-center gap-1.5">
                           <span>
                             {bundleLabel(selectedItem)} ·{" "}
-                            {info.repeat ? "бесплатно" : <Money value={selectedItem.price} />}
+                            {info.free ? "бесплатно" : <Money value={selectedItem.price} />}
                           </span>
-                          {selectedItem.firstAtClientPrice && !info.repeat ? (
+                          {selectedItem.firstAtClientPrice && !info.free ? (
                             <Tag tone="accent">Первая — по клиентской цене</Tag>
                           ) : null}
                         </span>
@@ -494,7 +499,7 @@ export function LicenseStepper({
                 </div>
 
                 <div className="divider my-5" />
-                {info.repeat ? (
+                {info.free ? (
                   <p className="text-sm text-ink-muted">
                     Повторная генерация бесплатна — счёт и чек не выставляются.
                   </p>
@@ -511,7 +516,7 @@ export function LicenseStepper({
                   </div>
                 )}
 
-                {canIssueFree && !info.repeat ? (
+                {canIssueFree && !info.free ? (
                   <>
                     <div className="divider my-5" />
                     <div className="rounded-panel border border-hairline p-4">

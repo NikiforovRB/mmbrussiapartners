@@ -45,6 +45,7 @@ function iso(value: unknown): string | null {
 }
 
 function pointerId(value: unknown): string | null {
+  if (typeof value === "string") return value;
   if (!value || typeof value !== "object") return null;
   const v = value as Json;
   return (v.objectId as string) ?? (v.id as string) ?? null;
@@ -67,12 +68,27 @@ function slimUser(u: Json) {
   };
 }
 
+/** Позиции оплаты: какие записи (лицензии) она погасила. */
+function slimPayItems(value: unknown) {
+  if (!Array.isArray(value)) return null;
+  return value.map((it) => {
+    const item = (it ?? {}) as Json;
+    return {
+      id: typeof item.id === "string" ? item.id : pointerId(item),
+      sum: typeof item.sum === "number" ? item.sum : null,
+      quantity: typeof item.quantity === "number" ? item.quantity : null,
+    };
+  });
+}
+
+// Файл лицензии (licFile) и сертификаты учёток в выгрузку не попадают.
 function slimRecord(r: Json) {
   const by = (r.createdBy ?? {}) as Json;
   const num = (v: unknown) => (typeof v === "number" ? v : v == null ? null : Number(v));
   return {
     id: String(r.id ?? r.objectId),
     createdAt: iso(r.createdAt),
+    updatedAt: iso(r.updatedAt),
     type: num(r.type),
     licenseType: num(r.licenseType),
     product: (r.product as string) ?? null,
@@ -92,10 +108,16 @@ function slimRecord(r: Json) {
     dealerComment: typeof r.dealerComment === "string" ? r.dealerComment : null,
     recoverable: r.recoverable === true,
     isActive: r.isActive !== false,
+    activated: typeof r.activated === "boolean" ? r.activated : null,
+    outdated: typeof r.outdated === "boolean" ? r.outdated : null,
+    eolType: (r.eolType as string) ?? null,
+    adasType: (r.adasType as string) ?? null,
+    licFileName: (r.licFileName as string) ?? null,
     createdById: pointerId(by),
     createdByName: typeof by.name === "string" ? by.name.trim() : null,
     createdByEmail: (by.email as string) ?? null,
-    payItems: Array.isArray(r.payItems) ? r.payItems.length : null,
+    updatedById: pointerId(r.updatedBy),
+    payItems: slimPayItems(r.payItems),
   };
 }
 

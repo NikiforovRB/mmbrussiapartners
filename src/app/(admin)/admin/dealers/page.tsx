@@ -9,10 +9,11 @@ import { hasAdminScope, hasPermission } from "@/lib/permissions";
 import { cn, fioFromParts, plural } from "@/lib/utils";
 import { isPublishedOnSite, PUBLISHED_ON_SITE_WHERE } from "@/lib/site-dealers";
 import { SITE_PROBLEM_STATUSES } from "@/lib/site-sync-labels";
-import type { DealerProfile, Role, User, UserStatus } from "@prisma/client";
+import type { DealerProfile, Prisma, Role, User, UserStatus } from "@prisma/client";
 import { DealersFilters } from "./dealers-filters";
 import { DeleteDealerButton } from "./delete-dealer-button";
 import { Pagination, parsePage } from "@/components/cabinet/pagination";
+import { LinkTabs } from "@/components/ui/link-tabs";
 import { requireAdminPage } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -22,7 +23,7 @@ const PAGE_SIZE = 20;
 export default async function AdminDealersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; status?: string; pub?: string; page?: string }>;
+  searchParams: Promise<{ q?: string; status?: string; pub?: string; page?: string; tab?: string }>;
 }) {
   const session = await requireAdminPage("dealers.view");
   const user = await db.user.findUnique({
@@ -32,10 +33,17 @@ export default async function AdminDealersPage({
   if (!user) return null;
 
   const sp = await searchParams;
+  // «Активные» — все, кроме заблокированных (и заявки, и отклонённые);
+  // «Заблокированные» — отдельной вкладкой.
+  const tab = sp.tab === "blocked" ? "blocked" : "active";
+  const ACTIVE_STATUSES: Prisma.EnumUserStatusFilter = { not: "SUSPENDED" };
+  const ACTIVE_STATUS_VALUES: UserStatus[] = ["PENDING", "APPROVED", "REJECTED"];
+  const status: UserStatus | Prisma.EnumUserStatusFilter =
+    tab === "blocked"
+      ? "SUSPENDED"
+      : ACTIVE_STATUS_VALUES.find((s) => s === sp.status) ?? ACTIVE_STATUSES;
+  // Фильтры без статуса: по ним же считаются счётчики вкладок.
   const where: Record<string, unknown> = {};
-  if (sp.status && ["PENDING", "APPROVED", "REJECTED", "SUSPENDED"].includes(sp.status)) {
-    where.status = sp.status;
-  }
   if (sp.pub === "PENDING") {
     where.dealerProfile = { sitePublication: "PENDING", phoneVisibleOnSite: true };
   } else if (sp.pub === "PUBLISHED") {
@@ -72,17 +80,28 @@ export default async function AdminDealersPage({
   }
 
   const page = parsePage(sp.page);
-  const [total, dealers, pendingPublications] = await Promise.all([
-    db.user.count({ where }),
+  const listWhere = { ...where, status };
+  const [total, dealers, pendingPublications, activeCount, blockedCount] = await Promise.all([
+    db.user.count({ where: listWhere }),
     db.user.findMany({
-      where,
+      where: listWhere,
       include: { dealerProfile: true, role: true },
       orderBy: [{ status: "asc" }, { createdAt: "desc" }],
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
     }),
     db.dealerProfile.count({ where: { sitePublication: "PENDING", phoneVisibleOnSite: true } }),
+    db.user.count({ where: { ...where, status: ACTIVE_STATUSES } }),
+    db.user.count({ where: { ...where, status: "SUSPENDED" } }),
   ]);
+  const tabQuery = (t: "active" | "blocked") => {
+    const qs = new URLSearchParams();
+    if (t === "blocked") qs.set("tab", "blocked");
+    if (sp.q) qs.set("q", sp.q);
+    if (sp.pub) qs.set("pub", sp.pub);
+    const s = qs.toString();
+    return s ? `/admin/dealers?${s}` : "/admin/dealers";
+  };
 
   const canDelete = hasPermission(user.role.permissions, "dealers.delete", user.isSuperAdmin);
 
@@ -112,10 +131,20 @@ export default async function AdminDealersPage({
             </span>
           </Link>
         ) : null}
+        <LinkTabs
+          label="Представители по статусу"
+          className="mb-5"
+          tabs={[
+            { href: tabQuery("active"), label: "Активные", active: tab === "active", count: activeCount },
+            { href: tabQuery("blocked"), label: "Заблокированные", active: tab === "blocked", count: blockedCount },
+          ]}
+        />
         <DealersFilters
+          key={tab}
           initialQuery={sp.q ?? ""}
-          initialStatus={sp.status ?? ""}
+          initialStatus={tab === "active" ? (sp.status ?? "") : ""}
           initialPublication={sp.pub ?? ""}
+          showStatus={tab === "active"}
         />
         <div className="mt-5 rounded-panel border border-hairline overflow-hidden">
           {dealers.length === 0 ? (
@@ -223,6 +252,14 @@ export default async function AdminDealersPage({
                     </td>
                     <td className="px-3 py-3">
                       <StatusTag kind="user" status={u.status} />
+                      {u.status === "REJECTED" && u.dealerProfile?.rejectionReason ? (
+                        <div
+                          className="mt-1 truncate text-xs text-ink-muted"
+                          title={u.dealerProfile.rejectionReason}
+                        >
+                          {u.dealerProfile.rejectionReason}
+                        </div>
+                      ) : null}
                     </td>
                     <td className="px-3 py-3 whitespace-nowrap">
                       {u.dealerProfile?.licensesUsed ?? 0} / {u.dealerProfile?.licenseLimit ?? 0}
@@ -257,7 +294,12 @@ export default async function AdminDealersPage({
           pageSize={PAGE_SIZE}
           total={total}
           basePath="/admin/dealers"
-          query={{ q: sp.q, status: sp.status, pub: sp.pub }}
+          query={{
+            q: sp.q,
+            status: tab === "active" ? sp.status : undefined,
+            pub: sp.pub,
+            tab: tab === "blocked" ? "blocked" : undefined,
+          }}
         />
       </div>
     </>

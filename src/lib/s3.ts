@@ -86,13 +86,31 @@ export async function pingBucket(timeoutMs = 5_000): Promise<void> {
   });
 }
 
-export async function getDownloadUrl(key: string, expiresInSec = 60 * 5): Promise<string> {
+/**
+ * Подписанная ссылка на объект. downloadName задаёт имя сохраняемого файла:
+ * атрибут download у ссылки на другой домен браузер игнорирует, и без него
+ * файл назывался бы по ключу — с отметкой времени в начале.
+ */
+export async function getDownloadUrl(
+  key: string,
+  expiresInSec = 60 * 5,
+  downloadName?: string,
+): Promise<string> {
   return getSignedUrl(
     s3,
-    new GetObjectCommand({ Bucket: S3_BUCKET, Key: key }),
+    new GetObjectCommand({
+      Bucket: S3_BUCKET,
+      Key: key,
+      ...(downloadName
+        ? { ResponseContentDisposition: `attachment; filename="${sanitizeFilename(downloadName)}"` }
+        : {}),
+    }),
     { expiresIn: expiresInSec },
   );
 }
+
+/** Имя файла лицензии у всех одинаковое — его ожидает магнитола. */
+export const LICENSE_FILE_NAME = "device-license.bin";
 
 export async function deleteObject(key: string): Promise<void> {
   await s3.send(new DeleteObjectCommand({ Bucket: S3_BUCKET, Key: key }));

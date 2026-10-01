@@ -9,10 +9,13 @@ export function DealersFilters({
   initialQuery,
   initialStatus,
   initialPublication,
+  showStatus = true,
 }: {
   initialQuery: string;
   initialStatus: string;
   initialPublication: string;
+  /** Во вкладке «Заблокированные» статус один — выбирать нечего. */
+  showStatus?: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -40,7 +43,7 @@ export function DealersFilters({
   }, [q, status, pub, router, pathname]);
 
   return (
-    <div className="grid md:grid-cols-[1fr_220px_220px] gap-3">
+    <div className={showStatus ? "grid md:grid-cols-[1fr_220px_220px] gap-3" : "grid md:grid-cols-[1fr_220px] gap-3"}>
       <div className="flex items-center gap-2 rounded-panel border border-hairline px-4 h-12 transition-colors focus-within:border-accent">
         <Search className="h-4 w-4 text-ink-subtle" />
         <input
@@ -50,18 +53,19 @@ export function DealersFilters({
           className="bg-transparent w-full text-sm placeholder:text-ink-subtle"
         />
       </div>
-      <Select
-        value={status}
-        onChange={(v) => setStatus(v)}
-        placeholder="Все статусы"
-        options={[
-          { value: "", label: "Все статусы" },
-          { value: "PENDING", label: "Ожидают одобрения" },
-          { value: "APPROVED", label: "Одобрены" },
-          { value: "REJECTED", label: "Отклонены" },
-          { value: "SUSPENDED", label: "Заблокированы" },
-        ]}
-      />
+      {showStatus ? (
+        <Select
+          value={status}
+          onChange={(v) => setStatus(v)}
+          placeholder="Все статусы"
+          options={[
+            { value: "", label: "Все статусы" },
+            { value: "PENDING", label: "Ожидают одобрения" },
+            { value: "APPROVED", label: "Одобрены" },
+            { value: "REJECTED", label: "Отклонены" },
+          ]}
+        />
+      ) : null}
       <Select
         value={pub}
         onChange={(v) => setPub(v)}

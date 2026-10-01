@@ -1,6 +1,7 @@
 /**
  * Импорт выгрузки старого ЛК DriveMods (scripts/drivemods-lk-export.ts) в
- * таблицу LegacyDealer и полный XLSX со статистикой.
+ * таблицы LegacyDealer (дилеры со статистикой) и LegacyRecord (каждая
+ * лицензия, оплата, пароль, услуга) и полный XLSX.
  *
  * Дилеры старого ЛК бывают двух видов:
  *  - субдилеры со своей учёткой — выписывали лицензии сами;
@@ -9,6 +10,8 @@
  * Группы комментариев сливаются с учёткой, если имя и город совпадают
  * однозначно. Учётки привязываются к представителям портала по email или
  * телефону — такие представители отмечаются как «работал в старом ЛК».
+ * Записи достаются представителю, к которому привязан их дилер; поштучное
+ * распределение администратора повторный импорт не меняет.
  *
  *   npx tsx scripts/drivemods-lk-import.ts [файл.json] [--dry-run] [--out <папка>]
  *
@@ -32,9 +35,12 @@ type LkUser = {
   createdAt: string | null;
 };
 
+type PayItem = { id: string | null; sum: number | null; quantity: number | null };
+
 type LkRecord = {
   id: string;
   createdAt: string;
+  updatedAt?: string | null;
   type: number | null;
   licenseType: number | null;
   product: string | null;
@@ -46,11 +52,16 @@ type LkRecord = {
   priceBase: number | null;
   priceTotal: number | null;
   discount: number | null;
+  discountName?: string | null;
+  couponCode?: string | null;
   paymentStatus: number | null;
   dealerComment: string | null;
+  recoverable?: boolean;
+  eolType?: string | null;
   createdById: string | null;
   createdByName: string | null;
-  payItems: number | null;
+  /** Выгрузки до октября 2026 хранили здесь только число позиций. */
+  payItems: PayItem[] | number | null;
 };
 
 type LkExport = { fetchedAt: string; owner: LkUser; users: LkUser[]; records: LkRecord[] };
@@ -66,6 +77,12 @@ const RECORD_TYPES: Record<number, string> = {
 };
 const LICENSE_TYPES: Record<number, string> = { 1: "Генерация", 2: "Обновление", 3: "Восстановление" };
 const PAYMENT_STATUSES: Record<number, string> = { 1: "Не оплачено", 2: "В процессе", 3: "Оплачено" };
+const PAYMENT_STATUS_KEYS: Record<number, string> = { 1: "UNPAID", 2: "PENDING", 3: "PAID" };
+
+type RecordKind = "LICENSE" | "PAYMENT" | "PASSWORD" | "SERVICE";
+const recordKind = (type: number | null): RecordKind =>
+  type === 2 ? "LICENSE" : type === 4 || type === 5 ? "PAYMENT" : type === 8 ? "PASSWORD" : "SERVICE";
+const payItemsOf = (r: LkRecord): PayItem[] => (Array.isArray(r.payItems) ? r.payItems : []);
 const COUNTRIES: Record<string, string> = {
   RU: "Россия",
   BY: "Беларусь",
@@ -391,11 +408,14 @@ async function main() {
     });
 
     const attributed = new Map<string, string>();
+    /** Запись ЛК → externalKey дилера старого ЛК. */
+    const dealerOf = new Map<string, string>();
     for (const r of licenses) {
       const own = ownAccount(r);
       if (own) {
         addLicense(own, r, "account");
         attributed.set(r.id, own.name);
+        dealerOf.set(r.id, own.externalKey);
         continue;
       }
       const raw = parsed.get(r.id)!;
@@ -405,6 +425,7 @@ async function main() {
         const account = dealers.get(accs[0])!;
         addLicense(account, r, "comment");
         attributed.set(r.id, account.name);
+        dealerOf.set(r.id, account.externalKey);
         continue;
       }
       const key = `cmt:${k}`;
@@ -429,25 +450,57 @@ async function main() {
       }
       addLicense(d, r, "comment");
       attributed.set(r.id, d.city ? `${d.name}, ${d.city}` : d.name);
+      dealerOf.set(r.id, d.externalKey);
     }
 
-    // 3. Пополнения баланса — только у учёток.
+    // 3. Оплаты. Из учётки — её владельцу; внешние (их вносил владелец ЛК) —
+    // дилеру, чьи лицензии они погасили, по большей сумме.
     const payments = data.records.filter((r) => r.type === 4 || r.type === 5);
+    const paidBy = new Map<string, string>();
     for (const r of payments) {
-      const d = r.createdById ? dealers.get(`acc:${r.createdById}`) : undefined;
-      if (!d || r.paymentStatus !== 3) continue;
+      for (const it of payItemsOf(r)) if (it.id && !paidBy.has(it.id)) paidBy.set(it.id, r.id);
+      let key = ownAccount(r)?.externalKey ?? null;
+      if (!key) {
+        const weight = new Map<string, number>();
+        for (const it of payItemsOf(r)) {
+          const k = it.id ? dealerOf.get(it.id) : undefined;
+          if (k) weight.set(k, (weight.get(k) ?? 0) + (it.sum ?? 1));
+        }
+        key = [...weight.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+      }
+      if (!key) continue;
+      dealerOf.set(r.id, key);
+      if (r.paymentStatus !== 3) continue;
+      const d = dealers.get(key)!;
       d.stats.payments++;
       d.stats.paymentsAmount += r.priceTotal ?? 0;
+    }
+
+    // 4. Пароли, услуги, купоны: учётка автора либо уже известный дилер из комментария.
+    for (const r of data.records) {
+      if (r.type === 2 || r.type === 4 || r.type === 5) continue;
+      const own = ownAccount(r);
+      if (own) {
+        dealerOf.set(r.id, own.externalKey);
+        continue;
+      }
+      const raw = parseComment(r.dealerComment);
+      if (raw === "|") continue;
+      const k = canonical.get(raw) ?? raw;
+      const accs = accountIndex.get(k);
+      const key = accs?.length === 1 ? accs[0] : dealers.has(`cmt:${k}`) ? `cmt:${k}` : null;
+      if (key) dealerOf.set(r.id, key);
     }
 
     const list = [...dealers.values()].sort((a, b) => b.stats.licenses - a.stats.licenses);
     const byAccount = list.filter((d) => d.source === "account").length;
     console.log(
       `Дилеров: ${list.length} (учёток ${byAccount}, по комментариям ${list.length - byAccount}); ` +
-        `лицензий ${licenses.length}, пополнений ${payments.length}`,
+        `лицензий ${licenses.length}, оплат ${payments.length}, ` +
+        `записей с дилером ${dealerOf.size} из ${data.records.length}`,
     );
 
-    // 4. Привязка к представителям портала: email, затем телефон.
+    // 5. Привязка к представителям портала: email, затем телефон.
     const portal = await db.user.findMany({
       where: { dealerProfile: { isNot: null } },
       select: { id: true, email: true, dealerProfile: { select: { phone: true } } },
@@ -468,7 +521,7 @@ async function main() {
     }
     console.log(`Совпало с представителями портала: ${links.size}`);
 
-    // 5. База.
+    // 6. База.
     if (!dryRun) {
       const existing = await db.legacyDealer.findMany({ select: { externalKey: true, userId: true } });
       const manual = new Map(existing.filter((e) => e.userId).map((e) => [e.externalKey, e.userId!]));
@@ -522,7 +575,99 @@ async function main() {
       }
       const keys = list.map((d) => d.externalKey);
       const removed = await db.legacyDealer.deleteMany({ where: { externalKey: { notIn: keys }, userId: null } });
-      const linkedUsers = (await db.legacyDealer.findMany({ where: { userId: { not: null } }, select: { userId: true } }))
+
+      // Записи ЛК поштучно. Пропавшие из ЛК не удаляем — это история.
+      const dealerIds = new Map(
+        (await db.legacyDealer.findMany({ select: { id: true, externalKey: true } })).map((x) => [x.externalKey, x.id]),
+      );
+      const decimal = (n: number | null) => (n == null ? null : new Prisma.Decimal(money(n)));
+      const rows = data.records.map((r) => {
+        const kind = recordKind(r.type);
+        return {
+          id: r.id,
+          kind,
+          lkType: r.type ?? 0,
+          createdAt: new Date(r.createdAt),
+          updatedAt: r.updatedAt ? new Date(r.updatedAt) : null,
+          licenseType: r.licenseType ? (LICENSE_TYPES[r.licenseType] ?? String(r.licenseType)) : null,
+          product: r.product,
+          bundle: r.bundle,
+          region: r.region,
+          version: r.version,
+          versionCustom: r.versionCustom,
+          eolType: r.eolType ?? null,
+          recoverable: r.recoverable === true,
+          priceBase: decimal(r.priceBase),
+          priceTotal: decimal(r.priceTotal),
+          discount: decimal(r.discount),
+          discountName: r.discountName ?? null,
+          couponCode: r.couponCode ?? null,
+          paymentStatus: PAYMENT_STATUS_KEYS[r.paymentStatus ?? 1] ?? "UNPAID",
+          dealerComment: r.dealerComment?.trim() || null,
+          authorId: r.createdById,
+          authorName: r.createdByName,
+          paidById: paidBy.get(r.id) ?? null,
+          paidItems: kind === "PAYMENT" ? payItemsOf(r).length : null,
+          legacyDealerId: dealerIds.get(dealerOf.get(r.id) ?? "") ?? null,
+          importedAt,
+        };
+      });
+      type Comparable = Pick<
+        (typeof rows)[number],
+        "updatedAt" | "paymentStatus" | "priceTotal" | "dealerComment" | "legacyDealerId" | "paidById" | "paidItems"
+      >;
+      const signature = (x: Comparable) =>
+        [
+          x.updatedAt?.toISOString() ?? "",
+          x.paymentStatus,
+          x.priceTotal == null ? "" : Number(x.priceTotal).toFixed(2),
+          x.dealerComment ?? "",
+          x.legacyDealerId ?? "",
+          x.paidById ?? "",
+          x.paidItems ?? "",
+        ].join("\u0001");
+      const stored = new Map(
+        (
+          await db.legacyRecord.findMany({
+            select: {
+              id: true,
+              updatedAt: true,
+              paymentStatus: true,
+              priceTotal: true,
+              dealerComment: true,
+              legacyDealerId: true,
+              paidById: true,
+              paidItems: true,
+            },
+          })
+        ).map((x) => [x.id, signature(x)]),
+      );
+      const fresh = rows.filter((r) => !stored.has(r.id));
+      for (let i = 0; i < fresh.length; i += 1000) {
+        await db.legacyRecord.createMany({ data: fresh.slice(i, i + 1000), skipDuplicates: true });
+      }
+      const changed = rows.filter((r) => stored.has(r.id) && stored.get(r.id) !== signature(r));
+      for (const { id, ...row } of changed) await db.legacyRecord.update({ where: { id }, data: row });
+      // Владелец на портале — от привязки дилера старого ЛК, кроме назначенных вручную.
+      const owners = await db.$executeRaw`
+        UPDATE "LegacyRecord" r SET "userId" = d."userId"
+        FROM "LegacyDealer" d
+        WHERE r."legacyDealerId" = d."id" AND NOT r."manualAssign" AND r."userId" IS DISTINCT FROM d."userId"`;
+      const orphaned = await db.$executeRaw`
+        UPDATE "LegacyRecord" SET "userId" = NULL
+        WHERE "legacyDealerId" IS NULL AND NOT "manualAssign" AND "userId" IS NOT NULL`;
+      console.log(
+        `Записи ЛК: новых ${fresh.length}, изменилось ${changed.length}, сменили владельца ${owners + orphaned}`,
+      );
+
+      const linkedUsers = [
+        ...(await db.legacyDealer.findMany({ where: { userId: { not: null } }, select: { userId: true } })),
+        ...(await db.legacyRecord.findMany({
+          where: { manualAssign: true, userId: { not: null } },
+          distinct: ["userId"],
+          select: { userId: true },
+        })),
+      ]
         .map((l) => l.userId!)
         .filter(Boolean);
       const flagged = await db.dealerProfile.updateMany({
@@ -534,7 +679,7 @@ async function main() {
       console.log("--dry-run: база не менялась");
     }
 
-    // 6. XLSX.
+    // 7. XLSX.
     const portalEmail = new Map(portal.map((u) => [u.id, u.email]));
     const stamp = data.fetchedAt.slice(0, 10);
     const xlsxPath = join(outDir, `drivemods-lk-dealers-${stamp}.xlsx`);
@@ -657,20 +802,26 @@ async function main() {
     wsOther.columns = [
       { header: "Дата", key: "date", width: 18, style: { numFmt: dateFmt } },
       { header: "Тип записи", key: "type", width: 16 },
+      { header: "Дилер", key: "dealer", width: 26 },
       { header: "Автор", key: "createdBy", width: 24 },
       { header: "Сумма", key: "amount", width: 14, style: { numFmt: moneyFmt } },
       { header: "Статус", key: "status", width: 14 },
       { header: "Позиций", key: "payItems", width: 10 },
       { header: "Комментарий", key: "comment", width: 34 },
     ];
+    const dealerLabel = (recordId: string) => {
+      const d = dealers.get(dealerOf.get(recordId) ?? "");
+      return d ? (d.city && d.source === "comment" ? `${d.name}, ${d.city}` : d.name) : "";
+    };
     for (const r of data.records.filter((x) => x.type !== 2 && x.type !== 8)) {
       wsOther.addRow({
         date: new Date(r.createdAt),
         type: r.type ? RECORD_TYPES[r.type] ?? r.type : "",
+        dealer: dealerLabel(r.id),
         createdBy: r.createdByName,
         amount: r.priceTotal,
         status: r.paymentStatus ? PAYMENT_STATUSES[r.paymentStatus] ?? r.paymentStatus : "",
-        payItems: r.payItems,
+        payItems: Array.isArray(r.payItems) ? r.payItems.length : r.payItems,
         comment: r.dealerComment,
       });
     }

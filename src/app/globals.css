@@ -569,3 +569,16 @@ body,
 .kb-editor:focus {
   outline: none;
 }
+
+/* Плашки sonner на синем фоне: индикатор загрузки и кнопки — белые. */
+[data-sonner-toast] .sonner-loading-bar {
+  background: rgba(255, 255, 255, 0.9);
+}
+[data-sonner-toast][data-styled="true"] [data-button] {
+  background: #ffffff;
+  color: #0a78d8;
+}
+[data-sonner-toast][data-styled="true"] [data-cancel] {
+  background: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+}

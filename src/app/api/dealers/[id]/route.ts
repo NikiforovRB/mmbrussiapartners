@@ -10,6 +10,8 @@ import { fioFromParts, normalizePhone, plural } from "@/lib/utils";
 import { requireApprovedUser, requirePermission } from "@/lib/session";
 import { queueDealerSiteSync } from "@/lib/site-dealers";
 import { linkLegacyDealer } from "@/lib/legacy-dealers";
+import { clientIp } from "@/lib/rate-limit";
+import { LOCATION_TEXT_MAX, normalizeLocation, recordLocationChange } from "@/lib/dealer-location";
 
 export const runtime = "nodejs";
 
@@ -20,8 +22,8 @@ const profileSchema = z.object({
   phone: z.string().optional(),
   organization: z.string().nullable().optional(),
   inn: z.string().nullable().optional(),
-  city: z.string().nullable().optional(),
-  region: z.string().nullable().optional(),
+  city: z.string().max(LOCATION_TEXT_MAX, `Город — не длиннее ${LOCATION_TEXT_MAX} символов`).nullable().optional(),
+  region: z.string().max(LOCATION_TEXT_MAX, `Регион — не длиннее ${LOCATION_TEXT_MAX} символов`).nullable().optional(),
   country: z.string().max(60, "Страна — не длиннее 60 символов").nullable().optional(),
   address: z.string().nullable().optional(),
   siteComment: z.string().max(200, "Подпись на сайте — не длиннее 200 символов").nullable().optional(),
@@ -33,7 +35,7 @@ const profileSchema = z.object({
 
 const schema = z.object({
   status: z.enum(["PENDING", "APPROVED", "REJECTED", "SUSPENDED"]).optional(),
-  rejectionReason: z.string().nullable().optional(),
+  rejectionReason: z.string().trim().max(500, "Причина — не длиннее 500 символов").nullable().optional(),
   roleId: z.string().optional(),
   profile: profileSchema.optional(),
 });
@@ -53,6 +55,8 @@ const PLAIN_PROFILE_FIELDS = [
   "siteComment",
   "driveModsAccess",
 ] as const;
+
+const LOCATION_FIELDS = ["country", "region", "city"] as const;
 
 /** Поля, которые видны в «Дилерской сети» на сайте. */
 const SITE_PROFILE_FIELDS = ["phone", "city", "country", "siteComment"] as const;
@@ -88,6 +92,10 @@ export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: str
   if (wantsLegacy && !can("pricing.manage") && !can("dealers.edit")) {
     throw forbidden("Нет права менять ценовые условия представителя");
   }
+  // Причину отказа представитель видит в кабинете — без неё отклонять нельзя.
+  if (d.status === "REJECTED" && (d.rejectionReason ?? "").length < 6) {
+    throw badRequest("Укажите причину отклонения — минимум 6 символов");
+  }
   if (wantsStatus) {
     const perm: PermissionKey = d.status === "SUSPENDED" ? "dealers.suspend" : "dealers.approve";
     if (!can(perm) && !can("dealers.approve")) throw forbidden("Нет права менять статус представителя");
@@ -109,6 +117,23 @@ export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: str
     throw forbidden("Роль суперадминистратора менять нельзя");
   }
 
+  const currentLocation = {
+    country: target.dealerProfile?.country ?? null,
+    region: target.dealerProfile?.region ?? null,
+    city: target.dealerProfile?.city ?? null,
+  };
+  const location =
+    wantsPlainEdit && d.profile && LOCATION_FIELDS.some((f) => d.profile?.[f] !== undefined)
+      ? normalizeLocation(
+          {
+            country: d.profile.country !== undefined ? d.profile.country : currentLocation.country,
+            region: d.profile.region !== undefined ? d.profile.region : currentLocation.region,
+            city: d.profile.city !== undefined ? d.profile.city : currentLocation.city,
+          },
+          currentLocation,
+        )
+      : null;
+
   const profileUpdate: Record<string, unknown> = {};
   if (d.profile) {
     if (wantsPlainEdit) {
@@ -118,9 +143,7 @@ export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: str
       if (d.profile.phone !== undefined) profileUpdate.phone = normalizePhone(d.profile.phone);
       if (d.profile.organization !== undefined) profileUpdate.organization = d.profile.organization || null;
       if (d.profile.inn !== undefined) profileUpdate.inn = d.profile.inn || null;
-      if (d.profile.city !== undefined) profileUpdate.city = d.profile.city || null;
-      if (d.profile.region !== undefined) profileUpdate.region = d.profile.region || null;
-      if (d.profile.country !== undefined) profileUpdate.country = d.profile.country?.trim() || null;
+      if (location) Object.assign(profileUpdate, location);
       if (d.profile.address !== undefined) profileUpdate.address = d.profile.address || null;
       if (d.profile.siteComment !== undefined) {
         profileUpdate.siteComment = d.profile.siteComment?.trim() || null;
@@ -137,17 +160,15 @@ export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: str
     profileUpdate.approvedAt = new Date();
     profileUpdate.rejectionReason = null;
   }
-  if (d.status === "REJECTED" && d.rejectionReason !== undefined) {
-    profileUpdate.rejectionReason = d.rejectionReason;
-  }
+  if (d.status === "REJECTED") profileUpdate.rejectionReason = d.rejectionReason;
 
   await db.user.update({
     where: { id },
     data: {
       ...(wantsStatus && { status: d.status }),
       // Иначе после разблокировки снова заработали бы сессии, выданные до неё.
-      ...((d.status === "SUSPENDED" || d.status === "REJECTED") &&
-        d.status !== target.status && { sessionVersion: { increment: 1 } }),
+      // Отклонённого не разлогиниваем: в кабинете он сразу увидит причину.
+      ...(d.status === "SUSPENDED" && d.status !== target.status && { sessionVersion: { increment: 1 } }),
       ...(wantsRole && { roleId: d.roleId }),
       ...(Object.keys(profileUpdate).length > 0 &&
         target.dealerProfile && { dealerProfile: { update: profileUpdate } }),
@@ -160,6 +181,7 @@ export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: str
       roleId: target.roleId,
       licenseLimit: target.dealerProfile?.licenseLimit,
       legacyDealer: target.dealerProfile?.legacyDealer,
+      rejectionReason: target.dealerProfile?.rejectionReason ?? null,
       ...Object.fromEntries(
         PLAIN_PROFILE_FIELDS.map((f) => [f, target.dealerProfile?.[f] ?? null]),
       ),
@@ -170,6 +192,17 @@ export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: str
       ...profileUpdate,
     },
   );
+
+  if (location && target.dealerProfile) {
+    await recordLocationChange({
+      userId: id,
+      actorId: session.user.id,
+      source: "ADMIN",
+      before: currentLocation,
+      after: location,
+      ip: clientIp(req.headers),
+    });
+  }
 
   const statusChanged = wantsStatus && d.status !== target.status;
   if (statusChanged && d.status === "APPROVED") {

@@ -1,6 +1,7 @@
 import "server-only";
 
 import { db } from "./db";
+import { syncLegacyRecordOwners } from "./legacy-records";
 
 /** Телефон для сравнения: последние 10 цифр — так совпадут +7…, 8… и 7… */
 export function phoneKey(raw?: string | null): string | null {
@@ -46,9 +47,10 @@ export async function linkLegacyDealer(userId: string): Promise<boolean> {
   });
   if (candidates.length !== 1) return false;
 
-  await db.$transaction([
-    db.legacyDealer.update({ where: { id: candidates[0].id }, data: { userId } }),
-    db.dealerProfile.update({ where: { userId }, data: { legacyDealer: true } }),
-  ]);
+  await db.$transaction(async (tx) => {
+    await tx.legacyDealer.update({ where: { id: candidates[0].id }, data: { userId } });
+    await tx.dealerProfile.update({ where: { userId }, data: { legacyDealer: true } });
+    await syncLegacyRecordOwners(candidates[0].id, userId, tx);
+  });
   return true;
 }

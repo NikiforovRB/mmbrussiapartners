@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Tags } from "lucide-react";
+import type { DealerProfile, LocationChangeSource } from "@prisma/client";
 import { db } from "@/lib/db";
+import { DEFAULT_COUNTRY } from "@/lib/geo-catalog";
 import { hasAdminScope, hasPermission } from "@/lib/permissions";
 import { getDownloadUrl } from "@/lib/s3";
 import { Topbar } from "@/components/cabinet/topbar";
@@ -29,16 +31,25 @@ export default async function AdminDealerPage({
   const session = await requireAdminPage("dealers.view");
   const { id } = await params;
   const { tab: rawTab } = await searchParams;
-  const tab = rawTab === "ips" ? "ips" : "profile";
-  const [dealer, ipCount, legacy] = await Promise.all([
+  const tab = rawTab === "ips" || rawTab === "location" ? rawTab : "profile";
+  const [dealer, ipCount, locationCount, legacy, lastRejection, legacyKinds] = await Promise.all([
     db.user.findUnique({
       where: { id },
       include: { dealerProfile: true, role: true },
     }),
     db.userIp.count({ where: { userId: id } }),
+    db.dealerLocationChange.count({ where: { userId: id } }),
     db.legacyDealer.findUnique({ where: { userId: id } }),
+    db.adminAuditLog.findFirst({
+      where: { entity: "DEALER", entityId: id, action: "STATUS_REJECTED" },
+      orderBy: { createdAt: "desc" },
+      select: { createdAt: true, actor: { select: { email: true } } },
+    }),
+    db.legacyRecord.groupBy({ by: ["kind"], where: { userId: id }, _count: true }),
   ]);
   if (!dealer) notFound();
+  const legacyCount = (...kinds: string[]) =>
+    legacyKinds.filter((k) => kinds.includes(k.kind)).reduce((s, k) => s + k._count, 0);
 
   const me = await db.user.findUnique({
     where: { id: session.user.id },
@@ -93,6 +104,11 @@ export default async function AdminDealerPage({
         {[
           { id: "profile", label: "Профиль", href: `/admin/dealers/${dealer.id}` },
           { id: "ips", label: `IP-адреса · ${ipCount}`, href: `/admin/dealers/${dealer.id}?tab=ips` },
+          {
+            id: "location",
+            label: `Местоположение · ${locationCount}`,
+            href: `/admin/dealers/${dealer.id}?tab=location`,
+          },
         ].map((t) => (
           <Link
             key={t.id}
@@ -110,9 +126,18 @@ export default async function AdminDealerPage({
         <div className="mt-6">
           <DealerIps userId={dealer.id} signupIp={dealer.dealerProfile?.signupIp ?? null} />
         </div>
+      ) : tab === "location" ? (
+        <div className="mt-6">
+          <DealerLocationHistory userId={dealer.id} profile={p} />
+        </div>
       ) : (
       <div className="mt-6">
         <DealerEditor
+          legacyRecords={{
+            licenses: legacyCount("LICENSE"),
+            payments: legacyCount("PAYMENT"),
+            other: legacyCount("PASSWORD", "SERVICE"),
+          }}
           legacy={
             legacy
               ? {
@@ -154,6 +179,15 @@ export default async function AdminDealerPage({
               : null,
             role: { name: dealer.role.name },
           }}
+          rejection={
+            dealer.status === "REJECTED"
+              ? {
+                  reason: dealer.dealerProfile?.rejectionReason ?? null,
+                  at: lastRejection?.createdAt.toISOString() ?? null,
+                  by: lastRejection?.actor.email ?? null,
+                }
+              : null
+          }
           avatarUrl={avatarUrl}
           deletable={deletable}
           passwordCard={
@@ -188,6 +222,94 @@ export default async function AdminDealerPage({
       </div>
       )}
     </>
+  );
+}
+
+const LOCATION_SOURCE: Record<LocationChangeSource, string> = {
+  SIGNUP_IP: "По IP при регистрации",
+  DEALER: "Представитель",
+  ADMIN: "Администратор",
+};
+
+const place = (...parts: (string | null | undefined)[]) => parts.filter(Boolean).join(", ");
+
+async function DealerLocationHistory({
+  userId,
+  profile,
+}: {
+  userId: string;
+  profile: Pick<DealerProfile, "country" | "region" | "city" | "signupCountry" | "signupRegion" | "signupCity" | "signupIp"> | null;
+}) {
+  const changes = await db.dealerLocationChange.findMany({
+    where: { userId },
+    orderBy: { createdAt: "desc" },
+    take: 200,
+    include: { actor: { select: { email: true } } },
+  });
+  const signup = place(profile?.signupCity, profile?.signupRegion, profile?.signupCountry);
+
+  return (
+    <Card className="p-0 overflow-hidden">
+      <div className="border-b border-hairline px-5 py-4">
+        <div className="font-display text-lg tracking-tight">История местоположения</div>
+        <div className="mt-2 grid gap-1 text-sm sm:grid-cols-2">
+          <div>
+            <span className="text-ink-muted">Сейчас: </span>
+            {place(profile?.city, profile?.region, profile?.country || DEFAULT_COUNTRY)}
+          </div>
+          <div>
+            <span className="text-ink-muted">При регистрации по IP: </span>
+            {signup || "не определено"}
+            {profile?.signupIp ? <span className="font-mono text-xs text-ink-muted"> · {profile.signupIp}</span> : null}
+          </div>
+        </div>
+      </div>
+      {changes.length === 0 ? (
+        <div className="px-5 py-10 text-center text-sm text-ink-muted">
+          Изменений пока нет. Здесь появится каждая смена страны, региона или города — кем и когда.
+        </div>
+      ) : (
+        <ul className="divide-y divide-hairline">
+          {changes.map((c) => {
+            const rows = [
+              { label: "Страна", from: c.countryFrom || DEFAULT_COUNTRY, to: c.countryTo || DEFAULT_COUNTRY },
+              { label: "Регион", from: c.regionFrom, to: c.regionTo },
+              { label: "Город", from: c.cityFrom, to: c.cityTo },
+            ].filter((r) => c.source === "SIGNUP_IP" || (r.from ?? "") !== (r.to ?? ""));
+            return (
+              <li key={c.id} className="grid gap-2 px-5 py-3 text-sm md:grid-cols-[200px_1fr] md:gap-4">
+                <div>
+                  <div>{formatRuDateTime(c.createdAt)}</div>
+                  <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-ink-muted">
+                    <Tag tone={c.source === "ADMIN" ? "accent" : "muted"} className="px-2 py-0.5 text-[11px]">
+                      {LOCATION_SOURCE[c.source]}
+                    </Tag>
+                    {c.source === "ADMIN" && c.actor ? <span>{c.actor.email}</span> : null}
+                  </div>
+                </div>
+                <div className="space-y-0.5">
+                  {rows.map((r) => (
+                    <div key={r.label}>
+                      <span className="text-ink-muted">{r.label}: </span>
+                      {c.source === "SIGNUP_IP" ? (
+                        r.to || "—"
+                      ) : (
+                        <>
+                          <span className="text-ink-muted line-through decoration-ink-subtle">{r.from || "—"}</span>
+                          {" → "}
+                          {r.to || "—"}
+                        </>
+                      )}
+                    </div>
+                  ))}
+                  {c.ip ? <div className="font-mono text-xs text-ink-subtle">IP {c.ip}</div> : null}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </Card>
   );
 }
 

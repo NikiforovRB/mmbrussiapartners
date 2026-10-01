@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getDownloadUrl } from "@/lib/s3";
+import { getDownloadUrl, LICENSE_FILE_NAME } from "@/lib/s3";
 import { hasAdminScope, hasPermission } from "@/lib/permissions";
 import { badRequest, forbidden, notFound, route } from "@/lib/api";
 import { requireApprovedUser } from "@/lib/session";
@@ -24,5 +24,5 @@ export const GET = route(async (_req: Request, ctx: { params: Promise<{ id: stri
   if (!canView) throw forbidden();
   if (!license.licenseKey) throw badRequest("Файл лицензии не сгенерирован");
 
-  return NextResponse.json({ url: await getDownloadUrl(license.licenseKey, 300) });
+  return NextResponse.json({ url: await getDownloadUrl(license.licenseKey, 300, LICENSE_FILE_NAME) });
 });

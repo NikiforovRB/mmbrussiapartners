@@ -12,7 +12,7 @@ export default async function LoginPage() {
   // Заблокированного не уводим в кабинет: оттуда его вернёт сюда же, и
   // получится петля редиректов, пока не обновится JWT.
   const status = session?.user?.status;
-  if (session?.user && (status === "APPROVED" || status === "PENDING")) {
+  if (session?.user && (status === "APPROVED" || status === "PENDING" || status === "REJECTED")) {
     redirect(getCabinetPath(session.user));
   }
   return (

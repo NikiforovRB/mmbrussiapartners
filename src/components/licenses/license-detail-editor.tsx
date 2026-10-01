@@ -27,7 +27,7 @@ import { Select } from "@/components/ui/select";
 import { formatRuDateTime } from "@/lib/dates";
 import { formatRub, parseMoney } from "@/lib/money";
 import { usePermissions } from "@/hooks/use-permissions";
-import { LICENSE_TYPE_OPTIONS } from "@/lib/license-options";
+import { DEALER_COMMENT_MAX, LICENSE_TYPE_OPTIONS } from "@/lib/license-options";
 
 type AuditEntry = {
   id: string;
@@ -289,7 +289,7 @@ export function LicenseDetailEditor({
     if (j.url) {
       const a = document.createElement("a");
       a.href = j.url;
-      a.download = `${data.number}-license.bin`;
+      a.download = "device-license.bin";
       a.click();
     }
   }
@@ -561,9 +561,9 @@ export function LicenseDetailEditor({
                     <Textarea
                       value={commentDraft}
                       onChange={(e) => setCommentDraft(e.target.value)}
-                      rows={3}
-                      maxLength={1000}
-                      className="resize-y"
+                      rows={2}
+                      maxLength={DEALER_COMMENT_MAX}
+                      counter
                       autoFocus
                     />
                     <div className="mt-2 flex justify-end gap-2">

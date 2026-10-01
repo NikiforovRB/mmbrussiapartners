@@ -78,7 +78,16 @@ export const generationSettingsSchema = z.object({
   blackoutMessage: z.string().max(300).optional().nullable(),
   /** Устаревшие версии кастома, для которых генерация запрещена. */
   blockedCustomVersions: z.array(z.string().max(100)).max(500),
+  /** Версии кастома ниже этой генерацию не получают; сама она разрешена. Пусто — без границы. */
+  minCustomVersion: z
+    .string()
+    .max(40)
+    .refine((v) => v.trim() === "" || /\d/.test(v), "Минимальная версия должна содержать цифры, например 5.5.0")
+    .optional()
+    .nullable(),
   customVersionMessage: z.string().max(300).optional().nullable(),
+  /** Повторная генерация по тому же ШГУ платная. По умолчанию — бесплатная. */
+  repeatGenerationPaid: z.boolean().optional(),
 });
 export type GenerationSettings = z.infer<typeof generationSettingsSchema>;
 
@@ -88,7 +97,9 @@ export const DEFAULT_GENERATION_SETTINGS: GenerationSettings = {
   blackoutEnd: null,
   blackoutMessage: "",
   blockedCustomVersions: [],
+  minCustomVersion: null,
   customVersionMessage: "",
+  repeatGenerationPaid: false,
 };
 
 export function mergeGenerationSettings(raw: unknown): GenerationSettings {
@@ -102,8 +113,80 @@ export function mergeGenerationSettings(raw: unknown): GenerationSettings {
     blockedCustomVersions: Array.isArray(d.blockedCustomVersions)
       ? d.blockedCustomVersions.filter((v): v is string => typeof v === "string" && v.trim().length > 0)
       : [],
+    minCustomVersion:
+      typeof d.minCustomVersion === "string" && d.minCustomVersion.trim() ? d.minCustomVersion.trim() : null,
     customVersionMessage: typeof d.customVersionMessage === "string" ? d.customVersionMessage : "",
+    repeatGenerationPaid: d.repeatGenerationPaid === true,
   };
+}
+
+/** «v5.5.3 » → «5.5.3»: так версию пишут и в файле ШГУ, и в настройках. */
+function normalizeVersion(v: string): string {
+  return v.trim().toLowerCase().replace(/^v(?=\d)/, "");
+}
+
+function versionNumbers(v: string): number[] | null {
+  const parts = v.match(/\d+/g);
+  return parts ? parts.map(Number) : null;
+}
+
+/**
+ * Сравнение версий по числам: 5.10.0 новее 5.9.9, а 5.5 и 5.5.0 равны.
+ * null — если в одной из строк нет цифр и сравнивать нечего.
+ */
+export function compareVersions(a: string, b: string): -1 | 0 | 1 | null {
+  const pa = versionNumbers(a);
+  const pb = versionNumbers(b);
+  if (!pa || !pb) return null;
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const d = (pa[i] ?? 0) - (pb[i] ?? 0);
+    if (d !== 0) return d < 0 ? -1 : 1;
+  }
+  return 0;
+}
+
+const DOTTED_VERSION_RE = /^\d+(\.\d+)*$/;
+
+export type CustomVersionVerdict =
+  | { blocked: false }
+  | { blocked: true; rule: "list" | "min"; message: string };
+
+/**
+ * Пускает ли кастом этой версии к генерации. Версию берём из device_id.bin
+ * (ответ DRIVEMODS), а не из браузера. Пустую версию не запрещаем: у ШГУ без
+ * кастома её просто нет.
+ */
+export function checkCustomVersion(settings: GenerationSettings, versionCustom: string): CustomVersionVerdict {
+  const v = normalizeVersion(versionCustom);
+  if (!v) return { blocked: false };
+  const custom = settings.customVersionMessage?.trim();
+
+  const listed = settings.blockedCustomVersions.some((raw) => {
+    const b = normalizeVersion(raw);
+    if (b === v) return true;
+    return DOTTED_VERSION_RE.test(b) && DOTTED_VERSION_RE.test(v) && compareVersions(b, v) === 0;
+  });
+  if (listed) {
+    return {
+      blocked: true,
+      rule: "list",
+      message:
+        custom ||
+        `Версия кастома ${versionCustom.trim()} устарела — генерация для неё запрещена. Обновите кастом до актуальной версии и повторите генерацию.`,
+    };
+  }
+
+  const min = settings.minCustomVersion?.trim();
+  if (min && compareVersions(v, min) === -1) {
+    return {
+      blocked: true,
+      rule: "min",
+      message:
+        custom ||
+        `Версия кастома ${versionCustom.trim()} устарела: генерация доступна для версий ${min} и новее. Обновите кастом и повторите генерацию.`,
+    };
+  }
+  return { blocked: false };
 }
 
 /** Граница запрета: московское «YYYY-MM-DDTHH:mm»; сервер работает в UTC. */
@@ -113,13 +196,11 @@ function parseBlackoutTime(value: string | null | undefined): number {
 }
 
 /**
- * Проверяет ограничения генерации. Возвращает причину отказа или null, если
- * генерация разрешена. Время blackout задаётся по Москве.
+ * Запрет генерации на период. Возвращает причину отказа или null. Время
+ * задаётся по Москве. Действует на представителей: администратор может выдать
+ * лицензию и во время техработ.
  */
-export function generationBlockReason(
-  settings: GenerationSettings,
-  versionCustom: string,
-): string | null {
+export function blackoutBlockReason(settings: GenerationSettings): string | null {
   if (settings.blackoutEnabled) {
     const now = Date.now();
     const start = parseBlackoutTime(settings.blackoutStart);
@@ -134,15 +215,6 @@ export function generationBlockReason(
       );
     }
   }
-
-  const v = versionCustom.trim().toLowerCase();
-  if (v && settings.blockedCustomVersions.some((b) => b.trim().toLowerCase() === v)) {
-    return (
-      settings.customVersionMessage?.trim() ||
-      "Версия кастома устарела. Обновите кастом до актуальной версии и повторите генерацию."
-    );
-  }
-
   return null;
 }
 

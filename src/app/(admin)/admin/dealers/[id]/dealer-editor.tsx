@@ -26,6 +26,7 @@ import { Toggle } from "@/components/ui/toggle";
 import { Avatar } from "@/components/ui/avatar";
 import { Modal } from "@/components/ui/modal";
 import { Textarea } from "@/components/ui/textarea";
+import { LocationFields } from "@/components/cabinet/location-fields";
 import { fioFromParts } from "@/lib/utils";
 import { formatRuDateLong, formatRuDateTime } from "@/lib/dates";
 import { formatRub } from "@/lib/money";
@@ -70,6 +71,15 @@ export type LegacySummary = {
   lastLicenseAt: string | null;
 };
 
+/** Записи старого ЛК, которые сейчас числятся за представителем. */
+export type LegacyRecordCounts = { licenses: number; payments: number; other: number };
+
+/** Отказ в регистрации: причину видит и представитель в своём кабинете. */
+export type RejectionInfo = { reason: string | null; at: string | null; by: string | null };
+
+const REJECT_REASON_MIN = 6;
+const REJECT_REASON_MAX = 500;
+
 export function DealerEditor({
   dealer,
   avatarUrl,
@@ -77,11 +87,15 @@ export function DealerEditor({
   sitePublication,
   passwordCard,
   legacy = null,
+  legacyRecords = null,
+  rejection = null,
 }: {
   dealer: Dealer;
   avatarUrl?: string | null;
   deletable?: boolean;
   legacy?: LegacySummary | null;
+  legacyRecords?: LegacyRecordCounts | null;
+  rejection?: RejectionInfo | null;
   /** Карточка модерации публикации на сайте — рендерится страницей по данным из БД. */
   sitePublication?: React.ReactNode;
   /** Пароль от кабинета: только у администратора с правом dealers.passwords. */
@@ -161,15 +175,17 @@ export function DealerEditor({
     }
   }
   async function reject() {
-    if (rejectReason.trim().length < 6) {
-      toast.error("Минимум 6 символов");
+    const reason = rejectReason.trim();
+    if (reason.length < REJECT_REASON_MIN) {
+      toast.error(`Укажите причину — минимум ${REJECT_REASON_MIN} символов`);
       return;
     }
     if (busy) return;
-    if (await update({ status: "REJECTED", rejectionReason: rejectReason }, "status")) {
+    if (await update({ status: "REJECTED", rejectionReason: reason }, "status")) {
       setData((d) => ({ ...d, status: "REJECTED" }));
       toast.success("Заявка отклонена");
       setRejectOpen(false);
+      setRejectReason("");
       router.refresh();
     }
   }
@@ -310,6 +326,22 @@ export function DealerEditor({
               ) : null}
             </div>
           </div>
+          {data.status === "REJECTED" && rejection ? (
+            <div className="mt-5 rounded-panel border border-danger/25 bg-danger/5 px-4 py-3">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <div className="text-xs uppercase tracking-widest text-danger">Причина отклонения</div>
+                {rejection.at || rejection.by ? (
+                  <div className="text-xs text-ink-muted">
+                    {[rejection.at ? formatRuDateTime(rejection.at) : null, rejection.by].filter(Boolean).join(" · ")}
+                  </div>
+                ) : null}
+              </div>
+              <p className="mt-1 whitespace-pre-line break-words text-sm">
+                {rejection.reason || "Причина не указана"}
+              </p>
+              <p className="mt-1.5 text-xs text-ink-muted">Эту причину представитель видит в личном кабинете.</p>
+            </div>
+          ) : null}
         </Card>
 
         <Card>
@@ -363,29 +395,15 @@ export function DealerEditor({
                 setData({ ...data, dealerProfile: data.dealerProfile && { ...data.dealerProfile, inn: e.target.value } })
               }
             />
-            <Input
-              label="Страна"
-              placeholder="Россия"
+            <LocationFields
               disabled={!canEdit}
-              value={data.dealerProfile?.country ?? ""}
-              onChange={(e) =>
-                setData({ ...data, dealerProfile: data.dealerProfile && { ...data.dealerProfile, country: e.target.value } })
-              }
-            />
-            <Input
-              label="Регион"
-              disabled={!canEdit}
-              value={data.dealerProfile?.region ?? ""}
-              onChange={(e) =>
-                setData({ ...data, dealerProfile: data.dealerProfile && { ...data.dealerProfile, region: e.target.value } })
-              }
-            />
-            <Input
-              label="Город"
-              disabled={!canEdit}
-              value={data.dealerProfile?.city ?? ""}
-              onChange={(e) =>
-                setData({ ...data, dealerProfile: data.dealerProfile && { ...data.dealerProfile, city: e.target.value } })
+              value={{
+                country: data.dealerProfile?.country ?? "",
+                region: data.dealerProfile?.region ?? "",
+                city: data.dealerProfile?.city ?? "",
+              }}
+              onChange={(loc) =>
+                setData({ ...data, dealerProfile: data.dealerProfile && { ...data.dealerProfile, ...loc } })
               }
             />
             <Input
@@ -523,6 +541,30 @@ export function DealerEditor({
                 .
               </div>
             )}
+            {legacyRecords && legacyRecords.licenses + legacyRecords.payments + legacyRecords.other > 0 ? (
+              <div className="mt-3 rounded-panel border border-hairline p-3 text-xs text-ink-muted space-y-1">
+                <div>Видит в кабинете, раздел «Старый ЛК»:</div>
+                <div className="flex flex-wrap gap-x-3 gap-y-1">
+                  {(
+                    [
+                      ["licenses", "лицензий", legacyRecords.licenses],
+                      ["payments", "оплат", legacyRecords.payments],
+                      ["other", "паролей и услуг", legacyRecords.other],
+                    ] as const
+                  )
+                    .filter(([, , n]) => n > 0)
+                    .map(([t, label, n]) => (
+                      <Link
+                        key={t}
+                        href={`/admin/legacy-dealers?tab=${t}&user=${data.id}`}
+                        className="text-accent hover:underline"
+                      >
+                        {label}: {n.toLocaleString("ru-RU")}
+                      </Link>
+                    ))}
+                </div>
+              </div>
+            ) : null}
           </Card>
         ) : null}
 
@@ -545,20 +587,35 @@ export function DealerEditor({
         open={rejectOpen}
         onClose={() => setRejectOpen(false)}
         title="Отклонить заявку"
-        description="Дилер увидит причину при попытке входа."
+        description="Причина сохранится в карточке представителя и будет видна ему в личном кабинете после входа."
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setRejectOpen(false)}>
+              Отмена
+            </Button>
+            <Button
+              variant="danger"
+              disabled={!canApprove || rejectReason.trim().length < REJECT_REASON_MIN}
+              loading={busy === "status"}
+              onClick={reject}
+              icon={<Ban className="h-4 w-4" />}
+            >
+              Отклонить
+            </Button>
+          </>
+        }
       >
         <Textarea
-          label="Причина отклонения (минимум 6 символов)"
+          label="Причина отклонения *"
           value={rejectReason}
           onChange={(e) => setRejectReason(e.target.value)}
           rows={4}
+          maxLength={REJECT_REASON_MAX}
+          counter
+          autoFocus
+          placeholder="Например: не удалось подтвердить данные организации — пришлите ИНН и реквизиты."
+          hint={`Минимум ${REJECT_REASON_MIN} символов.`}
         />
-        <div className="mt-6 flex justify-end gap-2">
-          <Button variant="ghost" onClick={() => setRejectOpen(false)}>Отмена</Button>
-          <Button variant="danger" disabled={!canApprove} loading={busy === "status"} onClick={reject} icon={<Ban className="h-4 w-4" />}>
-            Отклонить
-          </Button>
-        </div>
       </Modal>
     </div>
   );

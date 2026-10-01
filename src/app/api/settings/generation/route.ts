@@ -18,6 +18,8 @@ export const PATCH = route(async (req: Request) => {
     blockedCustomVersions: parsed.data.blockedCustomVersions
       .map((v) => v.trim())
       .filter((v) => v.length > 0),
+    minCustomVersion: parsed.data.minCustomVersion?.trim() || null,
+    repeatGenerationPaid: parsed.data.repeatGenerationPaid === true,
   };
 
   await db.companySettings.upsert({

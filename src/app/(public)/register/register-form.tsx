@@ -9,7 +9,6 @@ import {
   Phone,
   User as   UserIcon,
   Building2,
-  MapPin,
   ArrowRight,
   CheckCircle2,
   AlertCircle,
@@ -109,10 +108,6 @@ export function RegisterForm() {
         placeholder="ИП Иванов / ООО ..."
         icon={<Building2 className="h-4 w-4" />}
       />
-      <div className="grid md:grid-cols-2 gap-3">
-        <Input label="Регион" name="region" placeholder="Москва" icon={<MapPin className="h-4 w-4" />} />
-        <Input label="Город" name="city" placeholder="Москва" />
-      </div>
       <Input
         label="Пароль *"
         name="password"

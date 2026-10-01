@@ -6,6 +6,8 @@ import { fioFromParts, normalizePhone } from "@/lib/utils";
 import { requireApprovedUser } from "@/lib/session";
 import { notifyAdmins } from "@/lib/app-notifications";
 import { queueDealerSiteSync } from "@/lib/site-dealers";
+import { clientIp } from "@/lib/rate-limit";
+import { LOCATION_TEXT_MAX, normalizeLocation, recordLocationChange } from "@/lib/dealer-location";
 
 export const runtime = "nodejs";
 
@@ -16,8 +18,8 @@ const schema = z.object({
   phone: z.string().min(6, "Укажите телефон").optional(),
   organization: z.string().nullable().optional(),
   inn: z.string().nullable().optional(),
-  city: z.string().nullable().optional(),
-  region: z.string().nullable().optional(),
+  city: z.string().max(LOCATION_TEXT_MAX, `Город — не длиннее ${LOCATION_TEXT_MAX} символов`).nullable().optional(),
+  region: z.string().max(LOCATION_TEXT_MAX, `Регион — не длиннее ${LOCATION_TEXT_MAX} символов`).nullable().optional(),
   country: z.string().max(60, "Страна — не длиннее 60 символов").nullable().optional(),
   address: z.string().nullable().optional(),
   siteComment: z.string().max(200, "Подпись на сайте — не длиннее 200 символов").nullable().optional(),
@@ -35,13 +37,29 @@ export const PATCH = route(async (req: Request) => {
 
   const before = await db.dealerProfile.findUnique({
     where: { userId },
-    select: { phone: true, city: true, country: true, siteComment: true, phoneVisibleOnSite: true },
+    select: { phone: true, city: true, region: true, country: true, siteComment: true, phoneVisibleOnSite: true },
   });
+
+  const wantsLocation = d.country !== undefined || d.region !== undefined || d.city !== undefined;
+  const currentLocation = {
+    country: before?.country ?? null,
+    region: before?.region ?? null,
+    city: before?.city ?? null,
+  };
+  const location = wantsLocation
+    ? normalizeLocation(
+        {
+          country: d.country !== undefined ? d.country : currentLocation.country,
+          region: d.region !== undefined ? d.region : currentLocation.region,
+          city: d.city !== undefined ? d.city : currentLocation.city,
+        },
+        currentLocation,
+      )
+    : null;
 
   const next = {
     ...(d.phone !== undefined && { phone: normalizePhone(d.phone) }),
-    ...(d.city !== undefined && { city: d.city || null }),
-    ...(d.country !== undefined && { country: d.country?.trim() || null }),
+    ...(location && { city: location.city, country: location.country }),
     ...(d.siteComment !== undefined && { siteComment: d.siteComment?.trim() || null }),
   };
   const visibilityChanged =
@@ -76,7 +94,7 @@ export const PATCH = route(async (req: Request) => {
           ...(d.middleName !== undefined && { middleName: d.middleName || null }),
           ...(d.organization !== undefined && { organization: d.organization || null }),
           ...(d.inn !== undefined && { inn: d.inn || null }),
-          ...(d.region !== undefined && { region: d.region || null }),
+          ...(location && { region: location.region }),
           ...(d.address !== undefined && { address: d.address || null }),
           ...(d.phoneVisibleOnSite !== undefined && { phoneVisibleOnSite: d.phoneVisibleOnSite }),
           ...next,
@@ -90,6 +108,17 @@ export const PATCH = route(async (req: Request) => {
       },
     },
   });
+
+  if (location && before) {
+    await recordLocationChange({
+      userId,
+      actorId: userId,
+      source: "DEALER",
+      before: currentLocation,
+      after: location,
+      ip: clientIp(req.headers),
+    });
+  }
 
   if (visibilityChanged || siteFieldsChanged) queueDealerSiteSync(userId, "profile");
 

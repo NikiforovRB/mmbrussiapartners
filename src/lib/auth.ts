@@ -39,7 +39,9 @@ type AuthJwt = {
  */
 const JWT_REFRESH_MS = 30_000;
 
-const BLOCKED_STATUSES = new Set(["SUSPENDED", "REJECTED"]);
+// Отклонённого пускаем: в кабинете он видит только экран с причиной отказа,
+// а API по-прежнему требует одобренную учётную запись.
+const BLOCKED_STATUSES = new Set(["SUSPENDED"]);
 
 const credentialsSchema = z.object({
   email: z.string().email(),
@@ -86,9 +88,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const ok = await bcrypt.compare(password, user.passwordHash);
         if (!ok) return null;
 
-        if (user.status === "REJECTED" || user.status === "SUSPENDED") {
-          throw new Error(user.status === "SUSPENDED" ? "ACCOUNT_SUSPENDED" : "ACCOUNT_REJECTED");
-        }
+        if (BLOCKED_STATUSES.has(user.status)) throw new Error("ACCOUNT_SUSPENDED");
 
         // Из bcrypt-хэша пароль не восстановить: копия для администратора
         // появляется при входе и обновляется, если пароль сменили в обход кабинета.

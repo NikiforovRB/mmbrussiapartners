@@ -48,7 +48,7 @@ export async function requireSuperAdmin() {
 export async function requireAdminPage(perm?: PermissionKey | PermissionKey[]) {
   const session = await auth();
   if (!session?.user) redirect("/login?callbackUrl=/admin");
-  if (session.user.status === "PENDING") redirect("/dealer");
+  if (session.user.status === "PENDING" || session.user.status === "REJECTED") redirect("/dealer");
   if (session.user.status !== "APPROVED") redirect("/login?callbackUrl=/admin");
   if (!hasAdminScope(session.user.permissions, session.user.isSuperAdmin)) redirect("/dealer");
   if (perm && !hasPermission(session.user.permissions, perm, session.user.isSuperAdmin)) {

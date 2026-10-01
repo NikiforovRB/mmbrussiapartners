@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 // Единый источник списка прав: копия здесь однажды уже отстала от кода,
@@ -48,23 +49,35 @@ async function main() {
       },
     });
 
-    const passwordHash = await bcrypt.hash("***REMOVED***", 12);
+    // Пароль существующего администратора сид не трогает. Новому — из
+    // SEED_ADMIN_PASSWORD или случайный, который печатается один раз.
+    const adminEmail = "nikiforovrb@yandex.ru";
+    const existingAdmin = await prisma.user.findUnique({ where: { email: adminEmail }, select: { id: true } });
+    let generatedPassword: string | null = null;
+    let passwordHash = "";
+    if (!existingAdmin) {
+      const plain = process.env.SEED_ADMIN_PASSWORD || randomBytes(12).toString("base64url");
+      if (!process.env.SEED_ADMIN_PASSWORD) generatedPassword = plain;
+      passwordHash = await bcrypt.hash(plain, 12);
+    }
     const admin = await prisma.user.upsert({
-      where: { email: "nikiforovrb@yandex.ru" },
+      where: { email: adminEmail },
       update: {
-        passwordHash,
         status: "APPROVED",
         isSuperAdmin: true,
         roleId: adminRole.id,
       },
       create: {
-        email: "nikiforovrb@yandex.ru",
+        email: adminEmail,
         passwordHash,
         status: "APPROVED",
         isSuperAdmin: true,
         roleId: adminRole.id,
       },
     });
+    if (generatedPassword) {
+      console.log(`Первый администратор ${adminEmail}, пароль: ${generatedPassword} — смените после входа.`);
+    }
 
     await prisma.dealerProfile.upsert({
       where: { userId: admin.id },

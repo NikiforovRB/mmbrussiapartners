@@ -8,6 +8,7 @@ import { changeLicensePrice, LicensePriceError } from "@/lib/license-price";
 import { notifyUser } from "@/lib/app-notifications";
 import { formatRub } from "@/lib/money";
 import { requireApprovedUser } from "@/lib/session";
+import { DEALER_COMMENT_MAX } from "@/lib/license-options";
 
 export const runtime = "nodejs";
 
@@ -28,7 +29,7 @@ const patchSchema = z.object({
     .string()
     .trim()
     .min(1, "Комментарий дилера не может быть пустым")
-    .max(1000, "Комментарий слишком длинный")
+    .max(DEALER_COMMENT_MAX, `Комментарий длиннее ${DEALER_COMMENT_MAX} символов`)
     .optional(),
   product: z.string().trim().min(1, "Укажите продукт").max(80).optional(),
   bundle: optionalText(40),

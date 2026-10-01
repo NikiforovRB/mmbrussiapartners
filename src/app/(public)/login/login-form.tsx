@@ -50,11 +50,9 @@ export function LoginForm() {
       const message =
         code === "ACCOUNT_SUSPENDED"
           ? "Аккаунт заблокирован администратором"
-          : code === "ACCOUNT_REJECTED"
-            ? "Заявка отклонена. Свяжитесь с администратором"
-            : code === "TOO_MANY_ATTEMPTS"
-              ? "Слишком много попыток входа. Попробуйте позже"
-              : "Неверный email или пароль";
+          : code === "TOO_MANY_ATTEMPTS"
+            ? "Слишком много попыток входа. Попробуйте позже"
+            : "Неверный email или пароль";
       setFormError(message);
       return;
     }

@@ -76,7 +76,8 @@ export function LegacyLinkButton({
         toast.error(j.error ?? "Не удалось сохранить");
         return;
       }
-      toast.success(userId ? "Привязано: первая генерация — по цене дилера" : "Привязка снята");
+      const records = typeof j.records === "number" && j.records > 0 ? ` · записей: ${j.records}` : "";
+      toast.success(userId ? `Привязано${records}` : `Привязка снята${records}`);
       setOpen(false);
       setConfirmUnlink(false);
       router.refresh();
@@ -111,7 +112,7 @@ export function LegacyLinkButton({
               onClose={() => setConfirmUnlink(false)}
               size="sm"
               title="Отвязать от старого ЛК?"
-              description={`${linked.fio || linked.email} перестанет считаться дилером из старого ЛК («${label}»): первая генерация снова пойдёт по клиентской цене.`}
+              description={`${linked.fio || linked.email} перестанет считаться дилером из старого ЛК («${label}»): лицензии и оплаты этого дилера пропадут из его кабинета (кроме назначенных вручную), первая генерация снова пойдёт по клиентской цене.`}
               footer={
                 <>
                   <Button variant="ghost" onClick={() => setConfirmUnlink(false)}>
@@ -141,7 +142,7 @@ export function LegacyLinkButton({
         open={open}
         onClose={() => setOpen(false)}
         title={`Привязать «${label}»`}
-        description="Выберите представителя портала. Он будет считаться дилером из старого ЛК: первая генерация — по цене дилера, а не по клиентской."
+        description="Выберите представителя портала. Ему перейдут лицензии, оплаты и пароли этого дилера (он увидит их в кабинете), а первая генерация пойдёт по цене дилера, а не по клиентской."
       >
         <div className="space-y-3">
           <Input

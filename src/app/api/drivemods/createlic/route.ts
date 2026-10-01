@@ -3,7 +3,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { hasPermission } from "@/lib/permissions";
 import { ApiError, badRequest, forbidden, parseBody, route, unauthenticated } from "@/lib/api";
-import { uploadObject, getDownloadUrl, deleteObject } from "@/lib/s3";
+import { uploadObject, getDownloadUrl, deleteObject, LICENSE_FILE_NAME } from "@/lib/s3";
 import { createLic, describeDriveModsFailure, isDriveModsConfigured, licInfo } from "@/lib/drivemods";
 import { syncLicenseSlots } from "@/lib/license-slots";
 import { isRepeatGeneration } from "@/lib/repeat-generation";
@@ -14,7 +14,8 @@ import { createPayment } from "@/lib/payments/service";
 import { notifyAdmins } from "@/lib/app-notifications";
 import { formatRub } from "@/lib/money";
 import { formatRuDateTime } from "@/lib/dates";
-import { mergeGenerationSettings, generationBlockReason } from "@/lib/site-settings";
+import { blackoutBlockReason, checkCustomVersion, mergeGenerationSettings } from "@/lib/site-settings";
+import { DEALER_COMMENT_MAX } from "@/lib/license-options";
 import { requireApprovedUser } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -33,7 +34,11 @@ const schema = z.object({
   region: z.string().nullable().optional(),
   versionSoftware: z.string().optional().or(z.literal("")),
   versionCustom: z.string().optional().or(z.literal("")),
-  dealerComment: z.string().max(1000, "Комментарий слишком длинный").optional().or(z.literal("")),
+  dealerComment: z
+    .string()
+    .max(DEALER_COMMENT_MAX, `Комментарий длиннее ${DEALER_COMMENT_MAX} символов`)
+    .optional()
+    .or(z.literal("")),
   issuedWithoutPayment: z.boolean().optional(),
   /** Email получателя чека (тег 1008). По умолчанию — почта представителя. */
   receiptEmail: z.string().email().optional().or(z.literal("")),
@@ -67,14 +72,16 @@ export const POST = route(async (req: Request) => {
     hasPermission(session.user.permissions, "dealers.setLimit", session.user.isSuperAdmin);
   if (!bypassesLimit && !actor.dealerProfile) throw badRequest("Профиль не найден");
 
-  // Ограничения генерации (окно запрета, устаревшие версии кастома) действуют
-  // на представителей; администраторы, выдающие лицензию вручную, их обходят.
+  // Окно запрета (техработы) действует на представителей; администратор,
+  // выдающий лицензию вручную, его обходит. Устаревший кастом проверяем ниже —
+  // по файлу ШГУ и для всех.
+  const settingsRow = await db.companySettings.findUnique({
+    where: { id: "singleton" },
+    select: { generation: true },
+  });
+  const settings = mergeGenerationSettings(settingsRow?.generation);
   if (!bypassesLimit) {
-    const settings = await db.companySettings.findUnique({
-      where: { id: "singleton" },
-      select: { generation: true },
-    });
-    const reason = generationBlockReason(mergeGenerationSettings(settings?.generation), p.versionCustom || "");
+    const reason = blackoutBlockReason(settings);
     if (reason) throw badRequest(reason);
   }
 
@@ -84,8 +91,9 @@ export const POST = route(async (req: Request) => {
     throw badRequest("Файл device_id.bin больше 5 МБ");
   }
 
-  // Повторная генерация бесплатна: без счёта и без места в лимите. Признак
-  // узнаём у DRIVEMODS сами — присланному из браузера флагу верить нельзя.
+  // Повторная генерация бесплатна (если её оплата не включена в настройках):
+  // без счёта и без места в лимите. Признак и версии узнаём у DRIVEMODS
+  // сами — присланному из браузера верить нельзя.
   let device;
   try {
     device = await licInfo(p.deviceBase64);
@@ -94,11 +102,17 @@ export const POST = route(async (req: Request) => {
     const { status, message } = describeDriveModsFailure(err);
     throw new ApiError("UPSTREAM", message, status);
   }
+  const versionCustom = device.version_custom || p.versionCustom || "";
+  const versionSoftware = device.version_software || p.versionSoftware || "";
+  const verdict = checkCustomVersion(settings, versionCustom);
+  if (verdict.blocked) throw badRequest(verdict.message);
+
   const knownRepeat = await isRepeatGeneration(device.device_id, device.recoverable);
+  const freeRepeat = knownRepeat && !settings.repeatGenerationPaid;
 
   // Предоплатный расчёт: у новых/недоверенных представителей не должно быть
   // непогашенных счетов. Доверенным ставят postpaid — их это не касается.
-  if (!bypassesLimit && !knownRepeat && actor.dealerProfile?.prepaid) {
+  if (!bypassesLimit && !freeRepeat && actor.dealerProfile?.prepaid) {
     const outstanding = await db.payment.count({
       where: { dealerId: actor.id, status: "PENDING" },
     });
@@ -119,7 +133,7 @@ export const POST = route(async (req: Request) => {
   // Слот занимаем до похода во внешний API: между проверкой остатка и
   // инкрементом лежат две загрузки в S3 и генерация, и без резервирования
   // два параллельных запроса пробили бы лимит.
-  const limited = Boolean(actor.dealerProfile) && !bypassesLimit && !knownRepeat;
+  const limited = Boolean(actor.dealerProfile) && !bypassesLimit && !freeRepeat;
   if (limited) {
     const reserved = await db.dealerProfile.updateMany({
       where: { userId: actor.id, licensesUsed: { lt: actor.dealerProfile!.licenseLimit } },
@@ -149,7 +163,7 @@ export const POST = route(async (req: Request) => {
         lastName: actor.dealerProfile?.lastName,
         middleName: actor.dealerProfile?.middleName,
       }) || actor.email;
-    const dealerComment = (p.dealerComment || dealerName).trim();
+    const dealerComment = (p.dealerComment || dealerName).trim().slice(0, DEALER_COMMENT_MAX);
 
     const licenseNumber = await uniqueLicenseNumber();
 
@@ -168,8 +182,8 @@ export const POST = route(async (req: Request) => {
         product: p.product,
         bundle: p.bundle || null,
         region: p.region || null,
-        versionSoftware: p.versionSoftware || "",
-        versionCustom: p.versionCustom || "",
+        versionSoftware,
+        versionCustom,
         // В DRIVEMODS комментарий однострочный; многострочный живёт на портале.
         dealerComment: dealerComment.replace(/\s*\n+\s*/g, ", "),
         deviceId: device.device_id || p.deviceId || "",
@@ -192,10 +206,11 @@ export const POST = route(async (req: Request) => {
     // запрос успел выдать лицензию на этот ШГУ раньше.
     const deviceId = generated.device_id || device.device_id || "";
     const repeatGeneration = knownRepeat || (await isRepeatGeneration(deviceId, false));
+    const free = repeatGeneration && !settings.repeatGenerationPaid;
 
     const position = { product: p.product, bundle: p.bundle, region: p.region };
     const resolved = await resolvePrice(actor.id, position);
-    const price = issuedWithoutPayment || repeatGeneration ? 0 : resolved.price;
+    const price = issuedWithoutPayment || free ? 0 : resolved.price;
 
     const license = await db.$transaction(async (tx) => {
       const created = await tx.license.create({
@@ -213,8 +228,8 @@ export const POST = route(async (req: Request) => {
           product: p.product,
           bundle: p.bundle || null,
           productRegion: p.region || null,
-          versionSoftware: p.versionSoftware || null,
-          versionCustom: p.versionCustom || null,
+          versionSoftware: versionSoftware || null,
+          versionCustom: versionCustom || null,
           dealerComment,
           issuedWithoutPayment,
           repeatGeneration,
@@ -235,7 +250,7 @@ export const POST = route(async (req: Request) => {
       return created;
     });
 
-    const downloadUrl = await getDownloadUrl(licenseUpload.key, 300);
+    const downloadUrl = await getDownloadUrl(licenseUpload.key, 300, LICENSE_FILE_NAME);
 
     // Счёт выставляем после генерации: файл уже у дилера, а оплата и чек
     // идут своим циклом. Сбой биллинга не должен терять выданную лицензию.
@@ -310,7 +325,7 @@ export const POST = route(async (req: Request) => {
     return NextResponse.json({
       licenseId: license.id,
       number: license.number,
-      filename: generated.lic_filename,
+      filename: LICENSE_FILE_NAME,
       downloadUrl,
       payment,
       repeatGeneration,

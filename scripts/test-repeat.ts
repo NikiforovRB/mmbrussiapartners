@@ -15,7 +15,9 @@ import { s3, S3_BUCKET } from "../src/lib/s3";
 
 const BASE = (process.env.E2E_BASE_URL ?? "http://localhost:3000").replace(/\/+$/, "");
 const ADMIN_EMAIL = process.env.E2E_ADMIN_EMAIL ?? "nikiforovrb@yandex.ru";
-const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD ?? "***REMOVED***";
+// Пароль администратора — только из окружения: скрипт лежит в публичном репозитории.
+const ADMIN_PASSWORD = process.env.E2E_ADMIN_PASSWORD ?? "";
+if (!ADMIN_PASSWORD) throw new Error("Задайте E2E_ADMIN_PASSWORD (пароль администратора для прогона)");
 
 const prisma = new PrismaClient();
 

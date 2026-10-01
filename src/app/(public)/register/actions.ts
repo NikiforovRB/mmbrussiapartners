@@ -10,6 +10,7 @@ import { notifyAdmins } from "@/lib/app-notifications";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
 import { lookupIpGeo } from "@/lib/geo-ip";
 import { linkLegacyDealer } from "@/lib/legacy-dealers";
+import { recordLocationChange } from "@/lib/dealer-location";
 
 const schema = z.object({
   email: z.string().email(),
@@ -19,8 +20,6 @@ const schema = z.object({
   middleName: z.string().optional().or(z.literal("")),
   phone: z.string().min(6),
   organization: z.string().optional().or(z.literal("")),
-  region: z.string().optional().or(z.literal("")),
-  city: z.string().optional().or(z.literal("")),
 });
 
 export async function registerDealerAction(formData: FormData) {
@@ -49,6 +48,7 @@ export async function registerDealerAction(formData: FormData) {
   }
 
   const passwordHash = await hashPassword(data.password);
+  // Страна, регион и город — по IP, дилер потом поправит их в профиле.
   // Гео-сервис — не повод задерживать регистрацию.
   const geo = await lookupIpGeo(ip, 3_000);
 
@@ -66,16 +66,25 @@ export async function registerDealerAction(formData: FormData) {
           middleName: data.middleName?.trim() || null,
           phone: normalizePhone(data.phone),
           organization: data.organization?.trim() || null,
-          city: data.city?.trim() || null,
-          region: data.region?.trim() || null,
+          country: geo.country,
+          region: geo.region,
+          city: geo.city,
           licenseLimit: 0,
           signupIp: geo.ip,
           signupCountry: geo.country,
+          signupRegion: geo.region,
           signupCity: geo.city,
         },
       },
     },
   });
+  await recordLocationChange({
+    userId: created.id,
+    source: "SIGNUP_IP",
+    before: null,
+    after: { country: geo.country, region: geo.region, city: geo.city },
+    ip: geo.ip,
+  }).catch((err) => console.error("[register] не удалось записать местоположение", err));
   const sealed = sealPassword(created.id, data.password);
   if (sealed) {
     await db.user.update({ where: { id: created.id }, data: { passwordEncrypted: sealed } });

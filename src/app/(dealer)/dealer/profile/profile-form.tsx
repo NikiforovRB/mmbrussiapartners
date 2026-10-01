@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Save, Phone, Building2, MapPin, Lock, Eye, Upload, Trash2, Send } from "lucide-react";
+import { Save, Phone, Building2, Lock, Eye, Upload, Trash2, Send } from "lucide-react";
 import { toast } from "sonner";
 import { signOut } from "next-auth/react";
 import { Card } from "@/components/ui/card";
@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Toggle } from "@/components/ui/toggle";
 import { Tag } from "@/components/ui/tag";
 import { Avatar } from "@/components/ui/avatar";
+import { LocationFields } from "@/components/cabinet/location-fields";
 import { formatRuDate } from "@/lib/dates";
 import type { SitePublication } from "@/lib/site-sync-labels";
 
@@ -173,9 +174,10 @@ export function ProfileForm({
             <Input label="Отчество" value={data.middleName} onChange={(e) => setData({ ...data, middleName: e.target.value })} />
             <Input label="Организация" icon={<Building2 className="h-4 w-4" />} value={data.organization} onChange={(e) => setData({ ...data, organization: e.target.value })} />
             <Input label="ИНН" value={data.inn} onChange={(e) => setData({ ...data, inn: e.target.value })} />
-            <Input label="Страна" placeholder="Россия" value={data.country} onChange={(e) => setData({ ...data, country: e.target.value })} />
-            <Input label="Регион" icon={<MapPin className="h-4 w-4" />} value={data.region} onChange={(e) => setData({ ...data, region: e.target.value })} />
-            <Input label="Город" value={data.city} onChange={(e) => setData({ ...data, city: e.target.value })} />
+            <LocationFields
+              value={{ country: data.country, region: data.region, city: data.city }}
+              onChange={(loc) => setData({ ...data, ...loc })}
+            />
             <div className="sm:col-span-2">
               <Input label="Адрес" value={data.address} onChange={(e) => setData({ ...data, address: e.target.value })} />
             </div>

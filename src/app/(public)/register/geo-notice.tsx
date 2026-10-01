@@ -3,25 +3,25 @@
 import * as React from "react";
 import { MapPin, RefreshCw } from "lucide-react";
 
+type Geo = { city?: string | null; region?: string | null; country?: string | null };
+
 export function GeoNotice() {
-  const [city, setCity] = React.useState<string | null>(null);
-  const [country, setCountry] = React.useState<string | null>(null);
+  const [geo, setGeo] = React.useState<Geo | null>(null);
   const [loaded, setLoaded] = React.useState(false);
 
   React.useEffect(() => {
     fetch("/api/geo")
       .then((r) => (r.ok ? r.json() : null))
-      .then((d: { city?: string | null; country?: string | null } | null) => {
-        setCity(d?.city ?? null);
-        setCountry(d?.country ?? null);
-      })
+      .then((d: Geo | null) => setGeo(d))
       .catch(() => {})
       .finally(() => setLoaded(true));
   }, []);
 
   if (!loaded) return null;
 
-  const place = city || country;
+  // «Москва, Москва» читается как ошибка — повтор города в регионе опускаем.
+  const parts = [geo?.city, geo?.region, geo?.country].filter((p): p is string => Boolean(p));
+  const place = parts.filter((p, i) => parts.indexOf(p) === i).join(", ");
 
   return (
     <div className="mb-5 rounded-panel bg-[#fff6e6] p-4 text-sm">
@@ -31,13 +31,13 @@ export function GeoNotice() {
           <div className="text-ink">
             {place ? (
               <>
-                Ваш город подключения — <b>{place}</b>?
+                Ваше местоположение — <b>{place}</b>?
               </>
             ) : (
-              <>Не удалось определить ваш город подключения.</>
+              <>Не удалось определить ваше местоположение.</>
             )}{" "}
-            Если это не так, <b>отключите VPN</b> и обновите страницу — при первой регистрации мы
-            фиксируем ваш регион.
+            Страну, регион и город мы определяем по IP-адресу при регистрации. Если они неверны,{" "}
+            <b>отключите VPN</b> и обновите страницу. После одобрения их можно поправить в профиле.
           </div>
           <button
             type="button"

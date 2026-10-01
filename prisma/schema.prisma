@@ -149,6 +149,10 @@ model User {
   loginNoticeAcks        LoginNoticeAck[]
   ips                    UserIp[]
   legacyDealer           LegacyDealer?         @relation("LegacyDealerLink")
+  legacyRecords          LegacyRecord[]        @relation("LegacyRecords")
+  assignedLegacyRecords  LegacyRecord[]        @relation("LegacyRecordAssigner")
+  locationChanges        DealerLocationChange[] @relation("LocationChanges")
+  locationChangesMade    DealerLocationChange[] @relation("LocationChangeActor")
 
   @@index([status])
   @@index([roleId])
@@ -228,11 +232,109 @@ model LegacyDealer {
   userId         String?   @unique
   importedAt     DateTime  @default(now())
 
-  user User? @relation("LegacyDealerLink", fields: [userId], references: [id], onDelete: SetNull)
+  user    User?          @relation("LegacyDealerLink", fields: [userId], references: [id], onDelete: SetNull)
+  records LegacyRecord[]
 
   @@index([source])
   @@index([email])
   @@index([phone])
+}
+
+enum LegacyRecordKind {
+  /// Тип 2 в ЛК.
+  LICENSE
+  /// 4 — оплата из учётки субдилера, 5 — внешняя оплата от владельца.
+  PAYMENT
+  /// 8 — пароль HUMAX / приборной панели.
+  PASSWORD
+  /// 3 — услуга, 1 — купон, 7 — комментарий.
+  SERVICE
+}
+
+/// Запись старого ЛК DriveMods: лицензия, оплата, пароль, услуга. Приходит из
+/// выгрузки (scripts/drivemods-lk-import.ts). legacyDealerId — к какому дилеру
+/// старого ЛК её отнёс импорт; userId — чья она на портале: по привязке этого
+/// дилера либо назначена администратором поштучно (manualAssign).
+model LegacyRecord {
+  /// objectId записи в ЛК DriveMods.
+  id             String           @id
+  kind           LegacyRecordKind
+  /// Исходный тип записи в ЛК (1–8).
+  lkType         Int
+  createdAt      DateTime
+  updatedAt      DateTime?
+  /// Генерация, Обновление, Восстановление.
+  licenseType    String?
+  product        String?
+  bundle         String?
+  region         String?
+  version        String?
+  versionCustom  String?
+  /// HU, CERT, ADAS — для EOL-лицензий.
+  eolType        String?
+  recoverable    Boolean          @default(false)
+  priceBase      Decimal?         @db.Decimal(14, 2)
+  priceTotal     Decimal?         @db.Decimal(14, 2)
+  discount       Decimal?         @db.Decimal(14, 2)
+  discountName   String?
+  couponCode     String?
+  /// PAID, UNPAID, PENDING.
+  paymentStatus  String
+  dealerComment  String?
+  /// Учётка ЛК, создавшая запись.
+  authorId       String?
+  authorName     String?
+  /// Для лицензии — запись-оплата, которой она погашена.
+  paidById       String?
+  /// Для оплаты — сколько записей ею погашено.
+  paidItems      Int?
+  legacyDealerId String?
+  userId         String?
+  /// Назначена вручную: привязка дилера старого ЛК и повторный импорт
+  /// владельца не меняют.
+  manualAssign   Boolean          @default(false)
+  assignedAt     DateTime?
+  assignedById   String?
+  importedAt     DateTime         @default(now())
+
+  legacyDealer LegacyDealer? @relation(fields: [legacyDealerId], references: [id], onDelete: SetNull)
+  user         User?         @relation("LegacyRecords", fields: [userId], references: [id], onDelete: SetNull)
+  assignedBy   User?         @relation("LegacyRecordAssigner", fields: [assignedById], references: [id], onDelete: SetNull)
+
+  @@index([kind, createdAt])
+  @@index([legacyDealerId, kind])
+  @@index([userId, kind, createdAt])
+  @@index([paidById])
+}
+
+enum LocationChangeSource {
+  /// Определено по IP при регистрации.
+  SIGNUP_IP
+  /// Сам представитель в профиле.
+  DEALER
+  /// Администратор в карточке представителя.
+  ADMIN
+}
+
+/// История страны, региона и города представителя — видна администратору.
+model DealerLocationChange {
+  id          String               @id @default(cuid())
+  userId      String
+  actorId     String?
+  source      LocationChangeSource
+  countryFrom String?
+  countryTo   String?
+  regionFrom  String?
+  regionTo    String?
+  cityFrom    String?
+  cityTo      String?
+  ip          String?
+  createdAt   DateTime             @default(now())
+
+  user  User  @relation("LocationChanges", fields: [userId], references: [id], onDelete: Cascade)
+  actor User? @relation("LocationChangeActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
 }
 
 model DealerProfile {
@@ -252,6 +354,7 @@ model DealerProfile {
   lng                 Float?
   avatarKey           String?
   signupCountry       String?
+  signupRegion        String?
   signupCity          String?
   signupIp            String?
   licenseLimit        Int      @default(0)

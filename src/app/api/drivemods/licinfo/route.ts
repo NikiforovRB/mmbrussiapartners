@@ -9,7 +9,7 @@ import {
 import { ApiError, badRequest, route } from "@/lib/api";
 import { db } from "@/lib/db";
 import { hasAdminScope, hasPermission } from "@/lib/permissions";
-import { generationBlockReason, mergeGenerationSettings } from "@/lib/site-settings";
+import { blackoutBlockReason, checkCustomVersion, mergeGenerationSettings } from "@/lib/site-settings";
 import { resolvePrices } from "@/lib/pricing";
 import { isRepeatGeneration } from "@/lib/repeat-generation";
 import { requireApprovedUser } from "@/lib/session";
@@ -37,19 +37,23 @@ export const POST = route(async (req: Request) => {
   try {
     const info = await licInfo(buf.toString("base64"));
 
-    // Те же ограничения, что и при генерации (/createlic), — чтобы дилер узнал
-    // о запрете сразу, а не после заполнения всех шагов.
-    const bypassesRules =
+    // Те же ограничения, что и при генерации (/createlic), — чтобы о запрете
+    // узнали сразу, а не после заполнения всех шагов. Устаревший кастом
+    // не пропускаем ни у кого; техработы администратор обходит.
+    const bypassesBlackout =
       session.user.isSuperAdmin ||
       hasPermission(session.user.permissions, "dealers.setLimit", session.user.isSuperAdmin);
-    if (!bypassesRules) {
-      const settings = await db.companySettings.findUnique({
-        where: { id: "singleton" },
-        select: { generation: true },
-      });
-      const reason = generationBlockReason(mergeGenerationSettings(settings?.generation), info.version_custom);
+    const settingsRow = await db.companySettings.findUnique({
+      where: { id: "singleton" },
+      select: { generation: true },
+    });
+    const settings = mergeGenerationSettings(settingsRow?.generation);
+    if (!bypassesBlackout) {
+      const reason = blackoutBlockReason(settings);
       if (reason) throw badRequest(reason);
     }
+    const verdict = checkCustomVersion(settings, info.version_custom);
+    if (verdict.blocked) throw badRequest(verdict.message);
 
     if (info.items.length === 0) {
       throw badRequest(
@@ -59,9 +63,10 @@ export const POST = route(async (req: Request) => {
     }
     // Цены считает сервер по справочнику и правилам этого представителя:
     // ровно та же сумма попадёт в счёт, что бы ни прислал браузер. Повторная
-    // генерация бесплатна.
+    // генерация бесплатна, если в настройках не включена её оплата.
     const repeat = await isRepeatGeneration(info.device_id, info.recoverable);
-    const prices = repeat ? null : await resolvePrices(session.user.id, info.items);
+    const free = repeat && !settings.repeatGenerationPaid;
+    const prices = free ? null : await resolvePrices(session.user.id, info.items);
 
     // Представитель видит только свои прошлые выдачи по этому ШГУ,
     // администратор — любые.
@@ -87,6 +92,8 @@ export const POST = route(async (req: Request) => {
       // лицензия для этого ШГУ у него уже есть.
       recoverable: info.recoverable,
       repeat,
+      /** Повтор без счёта и без места в лимите. */
+      free,
       firstGeneratedAt,
       lastGeneratedAt,
       previous: previous

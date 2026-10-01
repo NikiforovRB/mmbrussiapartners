@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Save, Plus, X, Ban } from "lucide-react";
+import { Save, Plus, X, Ban, Repeat } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -13,7 +13,7 @@ import { Toggle } from "@/components/ui/toggle";
 import { DateTimePicker } from "@/components/ui/date-time-picker";
 import { usePermissions } from "@/hooks/use-permissions";
 import { formatRuDateTime, parseMoscowLocal } from "@/lib/dates";
-import type { GenerationSettings } from "@/lib/site-settings";
+import { checkCustomVersion, compareVersions, type GenerationSettings } from "@/lib/site-settings";
 
 /** Что запрет с такими настройками делает прямо сейчас — та же логика, что у проверки при генерации. */
 function blackoutState(enabled: boolean, start: string, end: string) {
@@ -43,8 +43,25 @@ export function GenerationForm({ initial }: { initial: GenerationSettings }) {
   const [blackoutMessage, setBlackoutMessage] = React.useState(initial.blackoutMessage ?? "");
   const [versions, setVersions] = React.useState<string[]>(initial.blockedCustomVersions ?? []);
   const [versionInput, setVersionInput] = React.useState("");
+  const [minVersion, setMinVersion] = React.useState(initial.minCustomVersion ?? "");
+  const [probeVersion, setProbeVersion] = React.useState("");
   const [customVersionMessage, setCustomVersionMessage] = React.useState(initial.customVersionMessage ?? "");
+  const [repeatPaid, setRepeatPaid] = React.useState(initial.repeatGenerationPaid === true);
   const [saving, setSaving] = React.useState(false);
+
+  const probe = React.useMemo(() => {
+    const v = probeVersion.trim();
+    if (!v) return null;
+    return checkCustomVersion(
+      {
+        ...initial,
+        blockedCustomVersions: versions,
+        minCustomVersion: minVersion.trim() || null,
+        customVersionMessage: "",
+      },
+      v,
+    );
+  }, [probeVersion, versions, minVersion, initial]);
 
   function addVersion() {
     const v = versionInput.trim();
@@ -65,6 +82,10 @@ export function GenerationForm({ initial }: { initial: GenerationSettings }) {
       toast.error("Окончание запрета должно быть позже начала");
       return;
     }
+    if (minVersion.trim() && compareVersions(minVersion, minVersion) === null) {
+      toast.error("Минимальная версия должна содержать цифры, например 5.5.0");
+      return;
+    }
     setSaving(true);
     const res = await fetch("/api/settings/generation", {
       method: "PATCH",
@@ -75,7 +96,9 @@ export function GenerationForm({ initial }: { initial: GenerationSettings }) {
         blackoutEnd: blackoutEnd || null,
         blackoutMessage: blackoutMessage.trim(),
         blockedCustomVersions: versions,
+        minCustomVersion: minVersion.trim() || null,
         customVersionMessage: customVersionMessage.trim(),
+        repeatGenerationPaid: repeatPaid,
       }),
     });
     setSaving(false);
@@ -138,13 +161,25 @@ export function GenerationForm({ initial }: { initial: GenerationSettings }) {
       <Card>
         <div className="font-display text-lg tracking-tight mb-1">Устаревшие версии кастома</div>
         <p className="text-sm text-ink-muted mb-4">
-          Генерация запрещается, если версия кастома из device_id.bin входит в этот список.
-          Добавляйте сюда устаревшие версии по мере выхода обновлений.
+          Версия кастома берётся из device_id.bin. Генерация запрещается, если версия входит в
+          список ниже или младше минимальной. Запрет действует на всех, включая администраторов.
         </p>
-        <div className="flex items-end gap-2">
+        <Input
+          label="Запретить версии ниже"
+          value={minVersion}
+          disabled={!canEdit}
+          onChange={(e) => setMinVersion(e.target.value)}
+          placeholder="Например: 5.5.0"
+          hint={
+            minVersion.trim()
+              ? `Версии младше ${minVersion.trim()} не генерируются; ${minVersion.trim()} и новее — можно.`
+              : "Пусто — нижней границы нет, действует только список."
+          }
+        />
+        <div className="mt-5 text-[12.5px] text-ink-muted">Отдельные запрещённые версии</div>
+        <div className="mt-1.5 flex items-end gap-2">
           <div className="flex-1">
             <Input
-              label="Версия кастома"
               value={versionInput}
               disabled={!canEdit}
               onChange={(e) => setVersionInput(e.target.value)}
@@ -193,8 +228,51 @@ export function GenerationForm({ initial }: { initial: GenerationSettings }) {
             onChange={(e) => setCustomVersionMessage(e.target.value)}
             rows={2}
             placeholder="Например: Версия кастома устарела — обновите кастом и повторите генерацию."
+            hint="Пусто — в сообщении будет указана версия ШГУ и правило запрета."
           />
         </div>
+        <div className="mt-5 rounded-panel border border-hairline p-4">
+          <Input
+            label="Проверить версию"
+            value={probeVersion}
+            onChange={(e) => setProbeVersion(e.target.value)}
+            placeholder="Например: 5.2.5"
+            hint="Проверка по введённым выше значениям, ещё до сохранения."
+          />
+          {probe ? (
+            <div className="mt-2">
+              {probe.blocked ? (
+                <Tag tone="danger">
+                  Генерация запрещена: {probe.rule === "list" ? "версия в списке" : `ниже ${minVersion.trim()}`}
+                </Tag>
+              ) : (
+                <Tag tone="success">Генерация разрешена</Tag>
+              )}
+            </div>
+          ) : null}
+        </div>
+      </Card>
+
+      <Card>
+        <div className="flex items-center gap-2 mb-1">
+          <Repeat className="h-5 w-5 text-accent" />
+          <div className="font-display text-lg tracking-tight">Повторная генерация</div>
+        </div>
+        <p className="text-sm text-ink-muted mb-4">
+          Повторная — генерация для ШГУ, на который лицензия уже выдавалась (по данным DRIVEMODS
+          или портала). По умолчанию она бесплатна: без счёта и без места в лимите.
+        </p>
+        <Toggle
+          checked={repeatPaid}
+          onChange={setRepeatPaid}
+          disabled={!canEdit}
+          label="Повторные генерации платные"
+        />
+        <p className="mt-3 text-xs text-ink-muted">
+          {repeatPaid
+            ? "Повторная генерация оплачивается по цене позиции из справочника и занимает место в лимите, как новая."
+            : "Повторная генерация бесплатна."}
+        </p>
       </Card>
 
       <div className="lg:col-span-2 flex justify-end">

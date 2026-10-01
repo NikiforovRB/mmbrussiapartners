@@ -18,7 +18,6 @@ import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { Modal } from "@/components/ui/modal";
 import { Textarea } from "@/components/ui/textarea";
-import { fileSafeName } from "@/components/licenses/utils";
 import { toast } from "sonner";
 import { usePermissions } from "@/hooks/use-permissions";
 import { LICENSE_KIND_FILTER_OPTIONS } from "@/lib/license-options";
@@ -184,7 +183,7 @@ export function LicenseTable({
     if (j.url) {
       const a = document.createElement("a");
       a.href = j.url;
-      a.download = fileSafeName(`${license.number}-license.bin`);
+      a.download = "device-license.bin";
       a.click();
     }
   }

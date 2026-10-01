@@ -10,6 +10,9 @@ export function isLicenseType(value: unknown): value is LicenseType {
 
 export const LICENSE_TYPE_OPTIONS = LICENSE_TYPES.map((t) => ({ value: t, label: t }));
 
+/** Предел длины комментария дилера (имя субдилера и пр.) к лицензии. */
+export const DEALER_COMMENT_MAX = 250;
+
 // Опция «Все типы лицензий» для фильтров
 export const LICENSE_TYPE_FILTER_OPTIONS = [
   { value: "", label: "Все типы лицензий" },

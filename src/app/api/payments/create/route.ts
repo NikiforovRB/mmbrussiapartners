@@ -46,6 +46,7 @@ export const POST = route(async (req: Request) => {
         bundle: true,
         productRegion: true,
         repeatGeneration: true,
+        price: true,
         issuedWithoutPayment: true,
         payment: { select: { id: true } },
       },
@@ -55,7 +56,10 @@ export const POST = route(async (req: Request) => {
       throw forbidden("Лицензия принадлежит другому представителю");
     }
     if (license.payment) throw badRequest("По этой лицензии счёт уже выставлен");
-    if (license.repeatGeneration) throw badRequest("Повторная генерация бесплатна — счёт не выставляется");
+    // Бесплатный повтор хранится без цены; платный (включён в настройках) — с ценой.
+    if (license.repeatGeneration && !(Number(license.price ?? 0) > 0)) {
+      throw badRequest("Повторная генерация бесплатна — счёт не выставляется");
+    }
     if (license.issuedWithoutPayment) throw badRequest("Лицензия выдана без оплаты");
     licenseId = license.id;
     dealerId = license.dealerId;

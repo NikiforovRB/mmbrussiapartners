@@ -10,6 +10,7 @@ import {
   FileSpreadsheet,
   Cpu,
   BookOpen,
+  History,
 } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
 import { Sidebar, type SidebarItem } from "@/components/cabinet/sidebar";
@@ -41,7 +42,10 @@ export default async function DealerLayout({ children }: { children: React.React
   if (user.status === "PENDING") {
     return <PendingScreen email={user.email} />;
   }
-  if (user.status === "REJECTED" || user.status === "SUSPENDED") {
+  if (user.status === "REJECTED") {
+    return <RejectedScreen email={user.email} reason={user.dealerProfile?.rejectionReason ?? null} />;
+  }
+  if (user.status === "SUSPENDED") {
     redirect("/login?callbackUrl=/dealer");
   }
   if (user.isSuperAdmin) {
@@ -50,12 +54,18 @@ export default async function DealerLayout({ children }: { children: React.React
   const ip = clientIp(await headers());
   after(() => trackUserIp(user.id, ip));
 
+  const hasLegacyRecords = Boolean(
+    await db.legacyRecord.findFirst({ where: { userId: user.id }, select: { id: true } }),
+  );
   const items: SidebarItem[] = [
     { href: "/dealer", label: "Дашборд", icon: <LayoutDashboard className="h-4 w-4" /> },
     { href: "/dealer/licenses", label: "Мои лицензии", icon: <KeyRound className="h-4 w-4" /> },
     { href: "/dealer/licenses/new", label: "Новая лицензия", icon: <Plus className="h-4 w-4" /> },
     { href: "/dealer/humax", label: "Пароли HUMAX", icon: <Cpu className="h-4 w-4" /> },
     { href: "/dealer/payments", label: "Платежи", icon: <CreditCard className="h-4 w-4" /> },
+    ...(hasLegacyRecords
+      ? [{ href: "/dealer/legacy", label: "Старый ЛК", icon: <History className="h-4 w-4" /> }]
+      : []),
     { href: "/dealer/reports", label: "Отчёты", icon: <FileSpreadsheet className="h-4 w-4" /> },
     { href: "/dealer/knowledge", label: "База знаний", icon: <BookOpen className="h-4 w-4" /> },
     { href: "/dealer/profile", label: "Профиль", icon: <UserCircle className="h-4 w-4" /> },
@@ -126,18 +136,43 @@ export default async function DealerLayout({ children }: { children: React.React
 
 function PendingScreen({ email }: { email: string }) {
   return (
+    <StatusScreen title="Заявка на рассмотрении">
+      <p className="mt-2 text-sm text-ink-muted">
+        Аккаунт <span className="text-ink">{email}</span> ожидает одобрения администратора.
+        Вы получите уведомление сразу после одобрения.
+      </p>
+    </StatusScreen>
+  );
+}
+
+function RejectedScreen({ email, reason }: { email: string; reason: string | null }) {
+  return (
+    <StatusScreen title="Заявка отклонена">
+      <p className="mt-2 text-sm text-ink-muted">
+        Администратор отклонил заявку на регистрацию аккаунта <span className="text-ink">{email}</span>.
+      </p>
+      {reason ? (
+        <div className="mt-5 rounded-panel bg-surface-muted px-4 py-3 text-left">
+          <div className="text-xs uppercase tracking-widest text-ink-muted">Причина</div>
+          <p className="mt-1 whitespace-pre-line break-words text-sm text-ink">{reason}</p>
+        </div>
+      ) : null}
+      <p className="mt-4 text-sm text-ink-muted">
+        Если это ошибка или данные можно уточнить — свяжитесь с MMB RUSSIA.
+      </p>
+    </StatusScreen>
+  );
+}
+
+function StatusScreen({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
     <div className="min-h-screen grid place-items-center bg-bg-default px-6">
       <div className="rounded-panel bg-white border border-hairline p-10 max-w-lg w-full text-center">
         <div className="mx-auto flex justify-center">
           <Logo href={undefined} height={40} />
         </div>
-        <h1 className="mt-5 font-display text-2xl  tracking-tight">
-          Заявка на рассмотрении
-        </h1>
-        <p className="mt-2 text-sm text-ink-muted">
-          Аккаунт <span className="text-ink">{email}</span> ожидает одобрения администратора.
-          Вы получите уведомление сразу после одобрения.
-        </p>
+        <h1 className="mt-5 font-display text-2xl  tracking-tight">{title}</h1>
+        {children}
         <div className="mt-6 flex justify-center gap-3">
           <a
             href="mailto:marat@mmbrussia.ru"

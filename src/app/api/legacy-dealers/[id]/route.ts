@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { badRequest, conflict, notFound, parseBody, route } from "@/lib/api";
 import { recordAdminAction } from "@/lib/admin-audit";
 import { requirePermission } from "@/lib/session";
+import { syncLegacyRecordOwners } from "@/lib/legacy-records";
 
 export const runtime = "nodejs";
 
@@ -27,20 +28,21 @@ export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: str
   const label = [legacy.name, legacy.city].filter(Boolean).join(", ");
 
   if (userId === null) {
-    if (!legacy.userId) return NextResponse.json({ ok: true });
+    if (!legacy.userId) return NextResponse.json({ ok: true, records: 0 });
     const previous = legacy.userId;
-    await db.$transaction([
-      db.legacyDealer.update({ where: { id }, data: { userId: null } }),
-      db.dealerProfile.updateMany({ where: { userId: previous }, data: { legacyDealer: false } }),
-    ]);
+    const records = await db.$transaction(async (tx) => {
+      await tx.legacyDealer.update({ where: { id }, data: { userId: null } });
+      await tx.dealerProfile.updateMany({ where: { userId: previous }, data: { legacyDealer: false } });
+      return syncLegacyRecordOwners(id, null, tx);
+    });
     await recordAdminAction({
       actorId: session.user.id,
       entity: "DEALER",
       entityId: previous,
       action: "LEGACY_UNLINKED",
-      summary: `Отвязан от старого ЛК DriveMods: ${label}`,
+      summary: `Отвязан от старого ЛК DriveMods: ${label}${records ? ` · снято записей: ${records}` : ""}`,
     });
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, records });
   }
 
   const user = await db.user.findUnique({
@@ -52,19 +54,20 @@ export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: str
     throw conflict(`${user.email} уже привязан к записи «${user.legacyDealer.name}»`);
   }
 
-  await db.$transaction([
-    ...(legacy.userId && legacy.userId !== userId
-      ? [db.dealerProfile.updateMany({ where: { userId: legacy.userId }, data: { legacyDealer: false } })]
-      : []),
-    db.legacyDealer.update({ where: { id }, data: { userId } }),
-    db.dealerProfile.update({ where: { userId }, data: { legacyDealer: true } }),
-  ]);
+  const records = await db.$transaction(async (tx) => {
+    if (legacy.userId && legacy.userId !== userId) {
+      await tx.dealerProfile.updateMany({ where: { userId: legacy.userId }, data: { legacyDealer: false } });
+    }
+    await tx.legacyDealer.update({ where: { id }, data: { userId } });
+    await tx.dealerProfile.update({ where: { userId }, data: { legacyDealer: true } });
+    return syncLegacyRecordOwners(id, userId, tx);
+  });
   await recordAdminAction({
     actorId: session.user.id,
     entity: "DEALER",
     entityId: userId,
     action: "LEGACY_LINKED",
-    summary: `Привязан к старому ЛК DriveMods: ${label}`,
+    summary: `Привязан к старому ЛК DriveMods: ${label}${records ? ` · передано записей: ${records}` : ""}`,
   });
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, records });
 });
