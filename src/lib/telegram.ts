@@ -35,8 +35,11 @@ async function callProxy<T>(path: string, payload: unknown, timeoutMs?: number):
     timeoutMs,
   });
   const json = (await res.json().catch(() => null)) as TelegramResponse<T> | null;
-  if (!res.ok || !json?.ok) {
-    throw new Error(json?.description ?? `Прокси Telegram ответил ${res.status}`);
+  if (!json) {
+    throw new Error(`Воркер ответил не JSON (${res.status}) — проверьте, что в нём код deploy/telegram-worker.js`);
+  }
+  if (!res.ok || !json.ok) {
+    throw new Error(json.description ?? `Прокси Telegram ответил ${res.status}`);
   }
   return json.result as T;
 }

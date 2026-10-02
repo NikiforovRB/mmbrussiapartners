@@ -32,6 +32,17 @@ function contentSecurityPolicy(nonce: string) {
   ].join("; ");
 }
 
+/**
+ * За nginx Next видит себя как localhost:3000, и req.nextUrl ведёт туда же.
+ * Публичный адрес — из заголовков прокси.
+ */
+function publicOrigin(req: NextRequest): string {
+  const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host");
+  if (!host) return req.nextUrl.origin;
+  const proto = req.headers.get("x-forwarded-proto") ?? req.nextUrl.protocol.replace(/:$/, "");
+  return `${proto}://${host}`;
+}
+
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
@@ -41,8 +52,7 @@ export function middleware(req: NextRequest) {
       req.cookies.get("__Secure-authjs.session-token")?.value;
 
     if (!sessionToken) {
-      const url = req.nextUrl.clone();
-      url.pathname = "/login";
+      const url = new URL("/login", publicOrigin(req));
       url.searchParams.set("callbackUrl", pathname);
       return NextResponse.redirect(url);
     }
