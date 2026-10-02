@@ -221,5 +221,8 @@ const reps = await res.json();
 
 - Внести реквизиты кассы (`ATOL_*`) — клиент API v5 уже готов, фискализация включится сама.
 - Подключить эквайринг: получить `ATOL_PAY_API_TOKEN` и переключить `PAYMENT_PROVIDER` на `atol_pay`.
-- Настроить Telegram-бот: `TELEGRAM_BOT_TOKEN` + `TELEGRAM_ADMIN_CHAT_ID`. Канал готов в `lib/notifications.ts`.
-- Привязать SMTP (любой провайдер) для email-уведомлений.
+- Telegram-бот: развернуть `deploy/telegram-worker.js` в Cloudflare Workers (переменные описаны в шапке файла),
+  на сервере задать `TELEGRAM_PROXY_URL` и `TELEGRAM_PROXY_SECRET`, затем «Настройки → Уведомления →
+  Подключить вебхук бота». Пользователи привязывают Telegram в своём профиле.
+- Привязать SMTP (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`; отправитель `mail@mmbrussia.ru`)
+  для уведомлений на почту. События и каналы — «Настройки → Уведомления».

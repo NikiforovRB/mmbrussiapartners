@@ -2,6 +2,7 @@ import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { notFound } from "next/navigation";
+import { getCabinetSections } from "@/lib/cabinet-sections";
 import { Topbar } from "@/components/cabinet/topbar";
 import { Card } from "@/components/ui/card";
 import { Tag } from "@/components/ui/tag";
@@ -17,6 +18,7 @@ export const dynamic = "force-dynamic";
 export default async function DealerArticlePage({ params }: { params: Promise<{ slug: string }> }) {
   const session = await auth();
   if (!session?.user) return null;
+  if (!(await getCabinetSections()).knowledge) notFound();
   const { slug } = await params;
 
   const [user, article] = await Promise.all([

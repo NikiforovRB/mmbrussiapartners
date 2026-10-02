@@ -4,6 +4,7 @@ import {
   PAYMENT_VAT_OPTIONS,
   type PaymentSettings,
 } from "@/lib/site-settings";
+import { isSmtpConfigured, smtpFrom } from "@/lib/notifications";
 import { isAtolConfigured, atolMissingEnv } from "./atol";
 import { atolPayPaymentMethods, defaultLicensePrice } from "./provider";
 
@@ -131,8 +132,8 @@ export function getPaymentSettingsSummary(payment: PaymentSettings): PaymentSett
       webhookConfigured: Boolean(process.env.ATOL_WEBHOOK_SECRET),
     },
     receiptEmail: {
-      smtpConfigured: Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS),
-      from: process.env.SMTP_FROM ?? "MMB RUSSIA <noreply@mmbrussia.ru>",
+      smtpConfigured: isSmtpConfigured(),
+      from: smtpFrom(),
     },
     pricing: {
       defaultLicensePrice: defaultLicensePrice(),

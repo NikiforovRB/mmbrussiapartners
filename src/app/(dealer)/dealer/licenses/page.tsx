@@ -6,9 +6,9 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { fioFromParts } from "@/lib/utils";
 import { LicenseTable } from "@/components/licenses/license-table";
-import { LICENSE_LIST_SELECT, toLicenseRow } from "@/lib/license-list";
+import { LICENSE_LIST_SELECT, licenseListWhere, toLicenseRow, type LicenseListParams } from "@/lib/license-list";
+import { loadLicenseProducts } from "@/lib/dealer-options";
 import { Pagination, parsePage } from "@/components/cabinet/pagination";
-import { LICENSE_STATUSES } from "@/lib/status-labels";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +17,7 @@ const PAGE_SIZE = 20;
 export default async function DealerLicensesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; status?: string; type?: string; page?: string }>;
+  searchParams: Promise<LicenseListParams>;
 }) {
   const session = await auth();
   if (!session?.user) return null;
@@ -28,10 +28,10 @@ export default async function DealerLicensesPage({
   if (!user) return null;
 
   const sp = await searchParams;
-  const where = buildWhere(sp, user.id);
+  const where = licenseListWhere(sp, user.id);
   const page = parsePage(sp.page);
 
-  const [total, licenses] = await Promise.all([
+  const [total, licenses, products] = await Promise.all([
     db.license.count({ where }),
     db.license.findMany({
       where,
@@ -40,6 +40,7 @@ export default async function DealerLicensesPage({
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
     }),
+    loadLicenseProducts(user.id),
   ]);
 
   const fio = fioFromParts({
@@ -60,9 +61,14 @@ export default async function DealerLicensesPage({
           licenses={licenses.map(toLicenseRow)}
           basePath="/dealer/licenses"
           context="dealer"
-          initialQuery={sp.q ?? ""}
-          initialStatus={sp.status ?? ""}
-          initialType={sp.type ?? ""}
+          initial={{
+            q: sp.q ?? "",
+            status: sp.status ?? "",
+            type: sp.type ?? "",
+            product: sp.product ?? "",
+            dealers: [],
+          }}
+          products={products}
           actions={
             <Link href="/dealer/licenses/new">
               <Button icon={<Plus className="h-4 w-4" />}>Новая лицензия</Button>
@@ -74,34 +80,9 @@ export default async function DealerLicensesPage({
           pageSize={PAGE_SIZE}
           total={total}
           basePath="/dealer/licenses"
-          query={{ q: sp.q, status: sp.status, type: sp.type }}
+          query={{ q: sp.q, status: sp.status, type: sp.type, product: sp.product }}
         />
       </div>
     </>
   );
-}
-
-function buildWhere(
-  sp: { q?: string; status?: string; type?: string },
-  dealerId: string,
-) {
-  const where: Record<string, unknown> = { dealerId, deletedAt: null };
-  if (sp.status && (LICENSE_STATUSES as readonly string[]).includes(sp.status)) {
-    where.status = sp.status;
-  }
-  // Тип фильтра — синтетический: «Повторная генерация» это флаг, а не поле type.
-  if (sp.type === "repeat") where.repeatGeneration = true;
-  else if (sp.type === "gen") where.repeatGeneration = false;
-  if (sp.q && sp.q.trim()) {
-    const q = sp.q.trim();
-    Object.assign(where, {
-      OR: [
-        { number: { contains: q, mode: "insensitive" } },
-        { product: { contains: q, mode: "insensitive" } },
-        { dealerComment: { contains: q, mode: "insensitive" } },
-        { versionSoftware: { contains: q, mode: "insensitive" } },
-      ],
-    });
-  }
-  return where;
 }

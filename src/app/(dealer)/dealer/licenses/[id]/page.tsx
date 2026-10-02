@@ -5,6 +5,7 @@ import { fioFromParts } from "@/lib/utils";
 import { Topbar } from "@/components/cabinet/topbar";
 import { LicenseDetailEditor } from "@/components/licenses/license-detail-editor";
 import { LICENSE_PAYMENT_SELECT } from "@/lib/license-price";
+import { isCustomVersionOutdated } from "@/lib/custom-version";
 
 export const dynamic = "force-dynamic";
 
@@ -34,10 +35,13 @@ export default async function LicenseDetailDealerPage({
   }
   const latestRequest = license.cancellationRequests[0] ?? null;
 
-  const user = await db.user.findUnique({
-    where: { id: session.user.id },
-    include: { dealerProfile: true, role: true },
-  });
+  const [user, customVersionOutdated] = await Promise.all([
+    db.user.findUnique({
+      where: { id: session.user.id },
+      include: { dealerProfile: true, role: true },
+    }),
+    isCustomVersionOutdated(license.versionCustom),
+  ]);
 
   const fio = fioFromParts({
     firstName: user?.dealerProfile?.firstName,
@@ -62,6 +66,7 @@ export default async function LicenseDetailDealerPage({
           // их видят только администраторы.
           license={JSON.parse(JSON.stringify({ ...license, deviceId: null, basePrice: undefined }))}
           context="dealer"
+          customVersionOutdated={customVersionOutdated}
           latestRequest={latestRequest ? JSON.parse(JSON.stringify(latestRequest)) : null}
         />
       </div>

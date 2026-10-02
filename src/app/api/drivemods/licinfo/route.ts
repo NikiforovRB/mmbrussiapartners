@@ -38,8 +38,9 @@ export const POST = route(async (req: Request) => {
     const info = await licInfo(buf.toString("base64"));
 
     // Те же ограничения, что и при генерации (/createlic), — чтобы о запрете
-    // узнали сразу, а не после заполнения всех шагов. Устаревший кастом
-    // не пропускаем ни у кого; техработы администратор обходит.
+    // узнали сразу, а не после заполнения всех шагов. Техработы администратор
+    // обходит. Об устаревшем кастоме сообщаем вместе с данными ШГУ: мастер
+    // показывает версию с пометкой, а саму генерацию /createlic не пропустит.
     const bypassesBlackout =
       session.user.isSuperAdmin ||
       hasPermission(session.user.permissions, "dealers.setLimit", session.user.isSuperAdmin);
@@ -53,9 +54,8 @@ export const POST = route(async (req: Request) => {
       if (reason) throw badRequest(reason);
     }
     const verdict = checkCustomVersion(settings, info.version_custom);
-    if (verdict.blocked) throw badRequest(verdict.message);
 
-    if (info.items.length === 0) {
+    if (info.items.length === 0 && !verdict.blocked) {
       throw badRequest(
         "Не найдено доступных продуктов для этого устройства. " +
           "Проверьте, что загружен device_id.bin от нужного ШГУ.",
@@ -106,6 +106,8 @@ export const POST = route(async (req: Request) => {
         : null,
       versionSoftware: info.version_software,
       versionCustom: info.version_custom,
+      /** Генерация для этой версии кастома запрещена — текст для представителя. */
+      customVersionBlocked: verdict.blocked ? verdict.message : null,
       deviceId: info.device_id,
       items: info.items.map((it, index) => ({
         index,

@@ -280,6 +280,59 @@ export function mergePaymentSettings(raw: unknown): PaymentSettings {
   return { serviceLabel, vatType, paymentMethod };
 }
 
+// ── Разделы кабинета представителя ───────────────────────────────────────────
+/** Выключенный раздел пропадает из меню представителя, а его страницы закрываются. */
+export const cabinetSectionsSchema = z.object({
+  /** История из ЛК DriveMods (раздел «ЛК DriveMods»). */
+  legacyLk: z.boolean(),
+  /** «База знаний». */
+  knowledge: z.boolean(),
+});
+export type CabinetSections = z.infer<typeof cabinetSectionsSchema>;
+
+export const DEFAULT_CABINET_SECTIONS: CabinetSections = { legacyLk: true, knowledge: true };
+
+export function mergeCabinetSections(raw: unknown): CabinetSections {
+  const d = raw && typeof raw === "object" ? (raw as Partial<CabinetSections>) : {};
+  return {
+    legacyLk: typeof d.legacyLk === "boolean" ? d.legacyLk : DEFAULT_CABINET_SECTIONS.legacyLk,
+    knowledge: typeof d.knowledge === "boolean" ? d.knowledge : DEFAULT_CABINET_SECTIONS.knowledge,
+  };
+}
+
+// ── Каналы уведомлений ───────────────────────────────────────────────────────
+/**
+ * Уведомления из колокольчика дублируются на почту и в Telegram. Здесь —
+ * общие выключатели каналов и события, которые в канал не уходят. Храним
+ * именно выключенные: новый тип события по умолчанию отправляется.
+ */
+export const notificationSettingsSchema = z.object({
+  emailEnabled: z.boolean(),
+  telegramEnabled: z.boolean(),
+  emailOff: z.array(z.string().max(60)).max(50),
+  telegramOff: z.array(z.string().max(60)).max(50),
+});
+export type NotificationSettings = z.infer<typeof notificationSettingsSchema>;
+
+export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
+  emailEnabled: true,
+  telegramEnabled: true,
+  emailOff: [],
+  telegramOff: [],
+};
+
+export function mergeNotificationSettings(raw: unknown): NotificationSettings {
+  const d = raw && typeof raw === "object" ? (raw as Partial<NotificationSettings>) : {};
+  const list = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
+  return {
+    emailEnabled: typeof d.emailEnabled === "boolean" ? d.emailEnabled : DEFAULT_NOTIFICATION_SETTINGS.emailEnabled,
+    telegramEnabled:
+      typeof d.telegramEnabled === "boolean" ? d.telegramEnabled : DEFAULT_NOTIFICATION_SETTINGS.telegramEnabled,
+    emailOff: list(d.emailOff),
+    telegramOff: list(d.telegramOff),
+  };
+}
+
 export function mergeSupport(raw: unknown): SupportSettings {
   if (!raw || typeof raw !== "object") return { ...DEFAULT_SUPPORT, channels: [] };
   const d = raw as Partial<SupportSettings>;

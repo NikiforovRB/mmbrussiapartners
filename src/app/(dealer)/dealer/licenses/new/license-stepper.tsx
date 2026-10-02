@@ -57,6 +57,8 @@ type LicInfo = {
   previous: { id: string; number: string; type: string; createdAt: string } | null;
   versionSoftware: string;
   versionCustom: string;
+  /** Версия кастома под запретом генерации: сообщение для представителя. */
+  customVersionBlocked: string | null;
   deviceId: string;
   items: LicItem[];
 };
@@ -164,6 +166,10 @@ export function LicenseStepper({
   }
 
   function toStep3() {
+    if (info?.customVersionBlocked) {
+      toast.error(info.customVersionBlocked);
+      return;
+    }
     if (!selectedItem) {
       toast.error("Выберите комплектацию");
       return;
@@ -317,6 +323,7 @@ export function LicenseStepper({
                     <Info
                       label="Версия кастома"
                       value={info.versionCustom || "—"}
+                      alert={info.customVersionBlocked ? "Версия кастома требует обновления" : undefined}
                     />
                     {/* ID ШГУ — служебное поле: дилеру его не показываем. */}
                     {isAdmin ? (
@@ -326,6 +333,11 @@ export function LicenseStepper({
                       />
                     ) : null}
                   </div>
+                  {info.customVersionBlocked ? (
+                    <div className="mt-3 rounded-panel border border-danger/30 bg-danger/5 px-4 py-3 text-sm text-danger">
+                      {info.customVersionBlocked}
+                    </div>
+                  ) : null}
                   <div className="mt-3 flex flex-wrap items-center gap-2">
                     {info.repeat ? (
                       <Tag tone="warning">Повторная генерация</Tag>
@@ -428,6 +440,8 @@ export function LicenseStepper({
                   </Button>
                   <Button
                     onClick={toStep3}
+                    disabled={Boolean(info.customVersionBlocked)}
+                    title={info.customVersionBlocked ? "Версия кастома требует обновления" : undefined}
                     iconRight={<ArrowRight className="h-4 w-4" />}
                   >
                     Подтверждение
@@ -693,13 +707,14 @@ function BundleButton({
   );
 }
 
-function Info({ label, value }: { label: string; value: string }) {
+function Info({ label, value, alert }: { label: string; value: string; alert?: string }) {
   return (
-    <div className="rounded-panel border border-hairline p-3">
+    <div className={`rounded-panel border p-3 ${alert ? "border-danger/40 bg-danger/5" : "border-hairline"}`}>
       <div className="text-[11px] uppercase tracking-tight text-ink-subtle">
         {label}
       </div>
       <div className="mt-1 text-sm break-all">{value}</div>
+      {alert ? <div className="mt-1 text-xs text-danger">{alert}</div> : null}
     </div>
   );
 }

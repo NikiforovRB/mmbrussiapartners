@@ -10,6 +10,8 @@ import { KB_UNCATEGORIZED } from "@/lib/knowledge";
 import { loadKnowledgeBrowser } from "@/lib/knowledge-browse";
 import { KnowledgeBrowser } from "@/components/knowledge/knowledge-browser";
 import { requireAdminPage } from "@/lib/session";
+import { getCabinetSections } from "@/lib/cabinet-sections";
+import { SectionVisibilityToggle } from "@/components/settings/section-visibility-toggle";
 
 export const dynamic = "force-dynamic";
 
@@ -21,9 +23,10 @@ export default async function AdminKnowledgePage({
   const session = await requireAdminPage("settings.edit");
 
   const sp = await searchParams;
-  const [me, data] = await Promise.all([
+  const [me, data, sections] = await Promise.all([
     db.user.findUnique({ where: { id: session.user.id }, include: { role: true } }),
     loadKnowledgeBrowser({ publishedOnly: false, category: sp.category, q: sp.q }),
+    getCabinetSections(),
   ]);
 
   const newHref =
@@ -38,6 +41,18 @@ export default async function AdminKnowledgePage({
         subtitle="Статьи и инструкции для представителей"
         user={{ name: me?.email ?? "Admin", email: me?.email ?? "", role: me?.role.name ?? "Admin" }}
       />
+      <Card className="mt-6 py-4">
+        <SectionVisibilityToggle
+          section="knowledge"
+          initial={sections.knowledge}
+          label="Показывать базу знаний представителям"
+          description={
+            sections.knowledge
+              ? "Раздел есть в меню кабинета представителя, опубликованные статьи открываются."
+              : "Раздел скрыт: в меню представителей его нет и статьи у них не открываются. Редактировать статьи можно и сейчас."
+          }
+        />
+      </Card>
       <div className="mt-6">
         <KnowledgeBrowser
           basePath="/admin/knowledge"

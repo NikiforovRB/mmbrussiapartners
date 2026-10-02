@@ -70,7 +70,7 @@ export default async function LegacyDealersPage({ searchParams }: { searchParams
   return (
     <>
       <Topbar
-        title="Старый ЛК DriveMods"
+        title="ЛК DriveMods"
         subtitle={
           lastImport
             ? `Дилеры, лицензии и оплаты из store.drivemods.ru · выгрузка от ${formatRuDateTime(lastImport.importedAt)}`
@@ -115,7 +115,7 @@ export default async function LegacyDealersPage({ searchParams }: { searchParams
 
           <LinkTabs
             className="mt-6"
-            label="Разделы старого ЛК"
+            label="Разделы ЛК DriveMods"
             tabs={[
               { href: "/admin/legacy-dealers", label: "Дилеры", active: tab === "dealers", count: summary._count },
               {
@@ -235,8 +235,8 @@ async function DealersTab({ sp, canEdit }: { sp: SearchParams; canEdit: boolean 
       <div className="mt-5 flex gap-3 rounded-panel bg-surface-muted px-4 py-3 text-sm text-ink-muted">
         <History className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
         <div>
-          Привязка дилера старого ЛК к представителю передаёт ему все лицензии, оплаты и пароли этого дилера — он
-          увидит их в своём кабинете в разделе «Старый ЛК» — и отменяет правило «первая генерация — по клиентской
+          Привязка дилера из ЛК DriveMods к представителю передаёт ему все лицензии, оплаты и пароли этого дилера —
+          он увидит их в своём кабинете в разделе «ЛК DriveMods» — и отменяет правило «первая генерация — по клиентской
           цене». Субдилеры со своей учёткой привязываются сами — по email или телефону при регистрации и одобрении.
           Клиентов общего кабинета (имя и город в комментарии) привяжите кнопкой «Привязать». Отдельные лицензии
           можно переназначить на вкладке «Лицензии».

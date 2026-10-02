@@ -5,6 +5,7 @@ import {
   mergeSupport,
   mergeGenerationSettings,
   mergePaymentSettings,
+  mergeCabinetSections,
 } from "@/lib/site-settings";
 import { getPaymentSettingsSummary } from "@/lib/payments/summary";
 import { Topbar } from "@/components/cabinet/topbar";
@@ -13,6 +14,7 @@ import { PaymentSettingsPanel } from "./payment-settings-panel";
 import { PaymentSettingsForm } from "./payment-settings-form";
 import { getSiteSyncOverview } from "@/lib/site-dealers";
 import { SiteSyncPanel } from "./site-sync-panel";
+import { NotificationSettingsPanel } from "./notification-settings-panel";
 import { requireAdminPage } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -43,6 +45,8 @@ export default async function AdminSettingsPage() {
           announcement={mergeAnnouncement(settings?.announcement)}
           support={mergeSupport(settings?.support)}
           generation={mergeGenerationSettings(settings?.generation)}
+          sections={mergeCabinetSections(settings?.sections)}
+          notifications={<NotificationSettingsPanel />}
           payment={
             <div className="space-y-6">
               <PaymentSettingsForm initial={mergePaymentSettings(settings?.payment)} />

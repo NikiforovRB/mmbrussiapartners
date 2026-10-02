@@ -83,6 +83,8 @@ type CancellationRequestInfo = {
 
 const DISCOUNTS = [10, 15, 20, 30, 50];
 
+const CUSTOM_VERSION_OUTDATED = "Версия кастома требует обновления";
+
 function toNumber(v: string | number | null | undefined): number | null {
   if (v === null || v === undefined || v === "") return null;
   const n = Number(v);
@@ -97,10 +99,13 @@ export function LicenseDetailEditor({
   license,
   context,
   latestRequest = null,
+  customVersionOutdated = false,
 }: {
   license: LicenseShape;
   context: "dealer" | "admin";
   latestRequest?: CancellationRequestInfo | null;
+  /** Версия кастома этой лицензии сейчас под запретом генерации. */
+  customVersionOutdated?: boolean;
 }) {
   const router = useRouter();
   const { can } = usePermissions();
@@ -507,6 +512,7 @@ export function LicenseDetailEditor({
                 <Input
                   label="Версия кастома"
                   value={data.versionCustom ?? ""}
+                  error={customVersionOutdated ? CUSTOM_VERSION_OUTDATED : undefined}
                   onChange={(e) => setData({ ...data, versionCustom: e.target.value })}
                 />
                 <div className="sm:col-span-2">
@@ -528,7 +534,11 @@ export function LicenseDetailEditor({
               <ReadonlyField label="Комплектация" value={data.bundle} />
               <ReadonlyField label="Регион продукта" value={data.productRegion} />
               <ReadonlyField label="Версия ПО" value={data.versionSoftware} />
-              <ReadonlyField label="Версия кастома" value={data.versionCustom} />
+              <ReadonlyField
+                label="Версия кастома"
+                value={data.versionCustom}
+                alert={customVersionOutdated ? CUSTOM_VERSION_OUTDATED : undefined}
+              />
             </div>
           )}
           <div className="mt-3 grid sm:grid-cols-2 gap-3">
@@ -766,11 +776,12 @@ function InfoTile({ label, hint, children }: { label: string; hint?: string; chi
   );
 }
 
-function ReadonlyField({ label, value }: { label: string; value: string | null }) {
+function ReadonlyField({ label, value, alert }: { label: string; value: string | null; alert?: string }) {
   return (
-    <div className="rounded-panel border border-hairline p-3">
+    <div className={`rounded-panel border p-3 ${alert ? "border-danger/40 bg-danger/5" : "border-hairline"}`}>
       <div className="text-[11px] uppercase tracking-tight text-ink-subtle">{label}</div>
       <div className="mt-1 text-sm break-all">{value || "—"}</div>
+      {alert ? <div className="mt-1 text-xs text-danger">{alert}</div> : null}
     </div>
   );
 }

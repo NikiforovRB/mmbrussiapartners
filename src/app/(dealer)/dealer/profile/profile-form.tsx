@@ -27,9 +27,6 @@ type ProfileInitial = {
   address: string;
   siteComment: string;
   phoneVisibleOnSite: boolean;
-  notifyByEmail: boolean;
-  notifyByTelegram: boolean;
-  telegramChatId: string;
 };
 
 type PublicationState = {
@@ -46,12 +43,15 @@ export function ProfileForm({
   email,
   avatarUrl: initialAvatarUrl,
   displayName,
+  notifications,
 }: {
   initial: ProfileInitial;
   publication: PublicationState;
   email: string;
   avatarUrl: string | null;
   displayName: string;
+  /** Карточка каналов уведомлений (почта, Telegram) — сохраняется отдельно. */
+  notifications?: React.ReactNode;
 }) {
   const [data, setData] = React.useState(initial);
   const [publication, setPublication] = React.useState(initialPublication);
@@ -283,32 +283,7 @@ export function ProfileForm({
             </Button>
           </div>
         </Card>
-        <Card>
-          <div className="font-display text-lg  tracking-tight mb-4">Уведомления</div>
-          <div className="space-y-4">
-            <Toggle
-              checked={data.notifyByEmail}
-              onChange={(v) => setData({ ...data, notifyByEmail: v })}
-              label="Email-уведомления"
-              description="Об одобрениях, аннулированиях и важных событиях"
-            />
-            <Toggle
-              checked={data.notifyByTelegram}
-              onChange={(v) => setData({ ...data, notifyByTelegram: v })}
-              label="Telegram-уведомления"
-              description="Подключим бот, как только он будет настроен"
-            />
-            {data.notifyByTelegram ? (
-              <Input
-                label="Telegram chat_id"
-                placeholder="например 123456789"
-                value={data.telegramChatId}
-                onChange={(e) => setData({ ...data, telegramChatId: e.target.value })}
-                hint="Получите chat_id у админ-бота, мы добавим инструкцию позже"
-              />
-            ) : null}
-          </div>
-        </Card>
+        {notifications}
       </div>
     </div>
   );

@@ -48,8 +48,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   if (!user) redirect("/login");
   // Права роли действуют только у одобренной учётной записи: заблокированный
   // администратор теряет доступ сразу, не дожидаясь обновления JWT.
-  if (user.status === "PENDING" || user.status === "REJECTED") redirect("/dealer");
-  if (user.status !== "APPROVED") redirect("/login?callbackUrl=/admin");
+  if (user.status !== "APPROVED") redirect("/dealer");
 
   const avatarUrl = await getUserAvatarUrl(user.id);
   const displayName =
@@ -70,7 +69,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   if (user.isSuperAdmin || hasPermission(user.role.permissions, "dealers.view", user.isSuperAdmin))
     items.push({ href: "/admin/dealers", label: "Представители", icon: <Users className="h-4 w-4" /> });
   if (user.isSuperAdmin || hasPermission(user.role.permissions, "dealers.view", user.isSuperAdmin))
-    items.push({ href: "/admin/legacy-dealers", label: "Старый ЛК DriveMods", icon: <Archive className="h-4 w-4" /> });
+    items.push({ href: "/admin/legacy-dealers", label: "ЛК DriveMods", icon: <Archive className="h-4 w-4" /> });
   if (user.isSuperAdmin || hasPermission(user.role.permissions, "licenses.view", user.isSuperAdmin))
     items.push({ href: "/admin/licenses", label: "Лицензии", icon: <KeyRound className="h-4 w-4" /> });
   if (user.isSuperAdmin || hasPermission(user.role.permissions, "licenses.view", user.isSuperAdmin))

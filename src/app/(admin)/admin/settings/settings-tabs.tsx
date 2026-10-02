@@ -7,10 +7,20 @@ import { HomepageEditorForm } from "./homepage-editor-form";
 import { AnnouncementForm } from "./announcement-form";
 import { SupportForm } from "./support-form";
 import { GenerationForm } from "./generation-form";
+import { SectionsForm } from "./sections-form";
 import type { HomepageContent } from "@/lib/homepage-content";
-import type { Announcement, SupportSettings, GenerationSettings } from "@/lib/site-settings";
+import type { Announcement, SupportSettings, GenerationSettings, CabinetSections } from "@/lib/site-settings";
 
-type Tab = "general" | "homepage" | "announcement" | "support" | "generation" | "payment" | "site";
+type Tab =
+  | "general"
+  | "homepage"
+  | "announcement"
+  | "support"
+  | "generation"
+  | "sections"
+  | "notifications"
+  | "payment"
+  | "site";
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "general", label: "Основные данные" },
@@ -18,6 +28,8 @@ const TABS: { key: Tab; label: string }[] = [
   { key: "announcement", label: "Объявление" },
   { key: "support", label: "Техподдержка" },
   { key: "generation", label: "Ограничения генерации" },
+  { key: "sections", label: "Разделы кабинета" },
+  { key: "notifications", label: "Уведомления" },
   { key: "payment", label: "Настройки онлайн-оплаты" },
   { key: "site", label: "Дилерская сеть на сайте" },
 ];
@@ -28,6 +40,8 @@ export function SettingsTabs({
   announcement,
   support,
   generation,
+  sections,
+  notifications,
   payment,
   site,
 }: {
@@ -36,6 +50,8 @@ export function SettingsTabs({
   announcement: Announcement;
   support: SupportSettings;
   generation: GenerationSettings;
+  sections: CabinetSections;
+  notifications: React.ReactNode;
   payment: React.ReactNode;
   site: React.ReactNode;
 }) {
@@ -77,6 +93,10 @@ export function SettingsTabs({
       <TabPanel active={tab === "generation"}>
         <GenerationForm initial={generation} />
       </TabPanel>
+      <TabPanel active={tab === "sections"}>
+        <SectionsForm initial={sections} />
+      </TabPanel>
+      <TabPanel active={tab === "notifications"}>{notifications}</TabPanel>
       <TabPanel active={tab === "payment"}>{payment}</TabPanel>
       <TabPanel active={tab === "site"}>{site}</TabPanel>
     </div>

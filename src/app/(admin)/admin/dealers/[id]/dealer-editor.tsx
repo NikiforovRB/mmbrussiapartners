@@ -74,7 +74,7 @@ export type LegacySummary = {
 /** Записи старого ЛК, которые сейчас числятся за представителем. */
 export type LegacyRecordCounts = { licenses: number; payments: number; other: number };
 
-/** Отказ в регистрации: причину видит и представитель в своём кабинете. */
+/** Отказ в регистрации или блокировка: причину видит и представитель в своём кабинете. */
 export type RejectionInfo = { reason: string | null; at: string | null; by: string | null };
 
 const REJECT_REASON_MIN = 6;
@@ -89,6 +89,7 @@ export function DealerEditor({
   legacy = null,
   legacyRecords = null,
   rejection = null,
+  suspension = null,
 }: {
   dealer: Dealer;
   avatarUrl?: string | null;
@@ -96,6 +97,7 @@ export function DealerEditor({
   legacy?: LegacySummary | null;
   legacyRecords?: LegacyRecordCounts | null;
   rejection?: RejectionInfo | null;
+  suspension?: RejectionInfo | null;
   /** Карточка модерации публикации на сайте — рендерится страницей по данным из БД. */
   sitePublication?: React.ReactNode;
   /** Пароль от кабинета: только у администратора с правом dealers.passwords. */
@@ -116,6 +118,8 @@ export function DealerEditor({
   }, [dealer.status]);
   const [rejectOpen, setRejectOpen] = React.useState(false);
   const [rejectReason, setRejectReason] = React.useState("");
+  const [suspendOpen, setSuspendOpen] = React.useState(false);
+  const [suspendReason, setSuspendReason] = React.useState("");
   const [busy, setBusy] = React.useState<string | null>(null);
   const [photo, setPhoto] = React.useState<string | null>(avatarUrl ?? null);
   const [photoBusy, setPhotoBusy] = React.useState(false);
@@ -190,11 +194,25 @@ export function DealerEditor({
     }
   }
   async function suspend() {
+    const reason = suspendReason.trim();
+    if (reason.length < REJECT_REASON_MIN) {
+      toast.error(`Укажите причину — минимум ${REJECT_REASON_MIN} символов`);
+      return;
+    }
     if (busy) return;
-    const next = data.status === "SUSPENDED" ? "APPROVED" : "SUSPENDED";
-    if (await update({ status: next }, "status")) {
-      setData((d) => ({ ...d, status: next }));
-      toast.success(next === "APPROVED" ? "Разблокирован" : "Заблокирован");
+    if (await update({ status: "SUSPENDED", suspensionReason: reason }, "status")) {
+      setData((d) => ({ ...d, status: "SUSPENDED" }));
+      toast.success("Заблокирован");
+      setSuspendOpen(false);
+      setSuspendReason("");
+      router.refresh();
+    }
+  }
+  async function unsuspend() {
+    if (busy) return;
+    if (await update({ status: "APPROVED" }, "status")) {
+      setData((d) => ({ ...d, status: "APPROVED" }));
+      toast.success("Разблокирован");
       router.refresh();
     }
   }
@@ -306,7 +324,7 @@ export function DealerEditor({
                   disabled={!canManageStatus}
                   title={canManageStatus ? undefined : "Нет права на блокировку дилеров"}
                   icon={<ShieldOff className="h-4 w-4" />}
-                  loading={busy === "status"} onClick={suspend}
+                  onClick={() => setSuspendOpen(true)}
                 >
                   Заблокировать
                 </Button>
@@ -316,7 +334,7 @@ export function DealerEditor({
                   disabled={!canManageStatus}
                   title={canManageStatus ? undefined : "Нет права на разблокировку дилеров"}
                   icon={<ShieldCheck className="h-4 w-4" />}
-                  loading={busy === "status"} onClick={suspend}
+                  loading={busy === "status"} onClick={unsuspend}
                 >
                   Разблокировать
                 </Button>
@@ -327,20 +345,10 @@ export function DealerEditor({
             </div>
           </div>
           {data.status === "REJECTED" && rejection ? (
-            <div className="mt-5 rounded-panel border border-danger/25 bg-danger/5 px-4 py-3">
-              <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <div className="text-xs uppercase tracking-widest text-danger">Причина отклонения</div>
-                {rejection.at || rejection.by ? (
-                  <div className="text-xs text-ink-muted">
-                    {[rejection.at ? formatRuDateTime(rejection.at) : null, rejection.by].filter(Boolean).join(" · ")}
-                  </div>
-                ) : null}
-              </div>
-              <p className="mt-1 whitespace-pre-line break-words text-sm">
-                {rejection.reason || "Причина не указана"}
-              </p>
-              <p className="mt-1.5 text-xs text-ink-muted">Эту причину представитель видит в личном кабинете.</p>
-            </div>
+            <ReasonPanel title="Причина отклонения" info={rejection} />
+          ) : null}
+          {data.status === "SUSPENDED" && suspension ? (
+            <ReasonPanel title="Причина блокировки" info={suspension} />
           ) : null}
         </Card>
 
@@ -488,7 +496,7 @@ export function DealerEditor({
 
         {data.dealerProfile ? (
           <Card>
-            <div className="font-display text-lg tracking-tight mb-4">Старый ЛК DriveMods</div>
+            <div className="font-display text-lg tracking-tight mb-4">История ЛК DriveMods</div>
             <Toggle
               checked={data.dealerProfile.legacyDealer}
               disabled={!canSetLegacy}
@@ -520,7 +528,7 @@ export function DealerEditor({
                   {legacy.city ? ` · ${legacy.city}` : ""}
                 </div>
                 <div>
-                  Лицензий в старом ЛК: <span className="text-ink">{legacy.licenses}</span> на{" "}
+                  Лицензий в ЛК DriveMods: <span className="text-ink">{legacy.licenses}</span> на{" "}
                   <span className="text-ink">{formatRub(legacy.amountTotal)}</span>
                 </div>
                 {legacy.firstLicenseAt && legacy.lastLicenseAt ? (
@@ -529,21 +537,21 @@ export function DealerEditor({
                   </div>
                 ) : null}
                 <Link href={`/admin/legacy-dealers?q=${encodeURIComponent(legacy.name)}`} className="text-accent hover:underline">
-                  Статистика старого ЛК
+                  Статистика ЛК DriveMods
                 </Link>
               </div>
             ) : (
               <div className="mt-3 text-xs text-ink-subtle">
-                В выгрузке старого ЛК совпадений по email и телефону нет. Привязать запись можно в разделе{" "}
+                В выгрузке ЛК DriveMods совпадений по email и телефону нет. Привязать запись можно в разделе{" "}
                 <Link href="/admin/legacy-dealers" className="text-accent hover:underline">
-                  «Старый ЛК DriveMods»
+                  «ЛК DriveMods»
                 </Link>
                 .
               </div>
             )}
             {legacyRecords && legacyRecords.licenses + legacyRecords.payments + legacyRecords.other > 0 ? (
               <div className="mt-3 rounded-panel border border-hairline p-3 text-xs text-ink-muted space-y-1">
-                <div>Видит в кабинете, раздел «Старый ЛК»:</div>
+                <div>Видит в кабинете, раздел «ЛК DriveMods»:</div>
                 <div className="flex flex-wrap gap-x-3 gap-y-1">
                   {(
                     [
@@ -617,6 +625,58 @@ export function DealerEditor({
           hint={`Минимум ${REJECT_REASON_MIN} символов.`}
         />
       </Modal>
+
+      <Modal
+        open={suspendOpen}
+        onClose={() => setSuspendOpen(false)}
+        title="Заблокировать представителя"
+        description="Представитель увидит причину при входе в кабинет: генерация, оплаты и остальные разделы станут недоступны, открытые сеансы завершатся. Телефон снимется с публикации на сайте."
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setSuspendOpen(false)}>
+              Отмена
+            </Button>
+            <Button
+              variant="danger"
+              disabled={!canManageStatus || suspendReason.trim().length < REJECT_REASON_MIN}
+              loading={busy === "status"}
+              onClick={suspend}
+              icon={<ShieldOff className="h-4 w-4" />}
+            >
+              Заблокировать
+            </Button>
+          </>
+        }
+      >
+        <Textarea
+          label="Причина блокировки *"
+          value={suspendReason}
+          onChange={(e) => setSuspendReason(e.target.value)}
+          rows={4}
+          maxLength={REJECT_REASON_MAX}
+          counter
+          autoFocus
+          placeholder="Например: задолженность по счетам за лицензии — оплатите счета, и доступ восстановят."
+          hint={`Минимум ${REJECT_REASON_MIN} символов.`}
+        />
+      </Modal>
+    </div>
+  );
+}
+
+function ReasonPanel({ title, info }: { title: string; info: RejectionInfo }) {
+  return (
+    <div className="mt-5 rounded-panel border border-danger/25 bg-danger/5 px-4 py-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <div className="text-xs uppercase tracking-widest text-danger">{title}</div>
+        {info.at || info.by ? (
+          <div className="text-xs text-ink-muted">
+            {[info.at ? formatRuDateTime(info.at) : null, info.by].filter(Boolean).join(" · ")}
+          </div>
+        ) : null}
+      </div>
+      <p className="mt-1 whitespace-pre-line break-words text-sm">{info.reason || "Причина не указана"}</p>
+      <p className="mt-1.5 text-xs text-ink-muted">Эту причину представитель видит в личном кабинете.</p>
     </div>
   );
 }

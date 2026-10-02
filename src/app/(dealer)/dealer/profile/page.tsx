@@ -7,6 +7,8 @@ import { fioFromParts } from "@/lib/utils";
 import { mergeSupport } from "@/lib/site-settings";
 import { ProfileForm } from "./profile-form";
 import { DriveModsAccessCard } from "./drivemods-access-card";
+import { NotificationPrefsCard } from "@/components/cabinet/notification-prefs-card";
+import { notificationPrefsProps } from "@/lib/notification-prefs";
 
 export const dynamic = "force-dynamic";
 
@@ -63,10 +65,8 @@ export default async function ProfilePage() {
             address: user.dealerProfile.address ?? "",
             siteComment: user.dealerProfile.siteComment ?? "",
             phoneVisibleOnSite: user.dealerProfile.phoneVisibleOnSite,
-            notifyByEmail: user.notifyByEmail,
-            notifyByTelegram: user.notifyByTelegram,
-            telegramChatId: user.telegramChatId ?? "",
           }}
+          notifications={<NotificationPrefsCard {...notificationPrefsProps(user)} />}
           publication={{
             status: user.dealerProfile.sitePublication,
             at: user.dealerProfile.sitePublicationAt?.toISOString() ?? null,

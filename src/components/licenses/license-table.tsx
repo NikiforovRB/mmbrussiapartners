@@ -3,25 +3,24 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
-import {
-  Search,
-  Download,
-  Pencil,
-  XCircle,
-  Trash2,
-  RotateCcw,
-  Filter,
-} from "lucide-react";
+import { Search, Download, Pencil, XCircle, Trash2, RotateCcw } from "lucide-react";
 import { Tag } from "@/components/ui/tag";
 import { StatusTag } from "@/components/ui/status-tag";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { Modal } from "@/components/ui/modal";
 import { Textarea } from "@/components/ui/textarea";
+import { ColumnsMenu } from "@/components/ui/columns-menu";
+import { DealerMultiSelect, type DealerOption } from "@/components/ui/dealer-multi-select";
 import { toast } from "sonner";
 import { usePermissions } from "@/hooks/use-permissions";
+import { useStoredColumns } from "@/hooks/use-stored-columns";
 import { LICENSE_KIND_FILTER_OPTIONS } from "@/lib/license-options";
 import { LICENSE_STATUS_FILTER_OPTIONS } from "@/lib/status-labels";
+import { defaultLicenseColumns, licenseColumnLabel, type LicenseColumnKey } from "@/lib/license-columns";
+import { formatRuDateTime } from "@/lib/dates";
+import { formatRub } from "@/lib/money";
+import { cn } from "@/lib/utils";
 
 type License = {
   id: string;
@@ -29,7 +28,9 @@ type License = {
   type: string;
   status: "ACTIVE" | "CANCELLED";
   product?: string | null;
+  bundle?: string | null;
   versionSoftware?: string | null;
+  versionCustom?: string | null;
   dealerComment?: string | null;
   cancellationReason?: string | null;
   licenseKey?: string | null;
@@ -37,26 +38,40 @@ type License = {
   dealerId: string;
   issuedWithoutPayment?: boolean;
   repeatGeneration?: boolean;
+  price?: number | null;
+  createdAt: string;
+  dealerName?: string;
+  dealerSub?: string;
   /** По лицензии есть заявка на аннулирование «на рассмотрении». */
   pendingCancellation?: boolean;
+};
+
+export type LicenseFilters = {
+  q: string;
+  status: string;
+  type: string;
+  product: string;
+  dealers: string[];
 };
 
 export function LicenseTable({
   licenses,
   basePath,
   context,
-  initialQuery,
-  initialStatus,
-  initialType,
+  initial,
+  products = [],
+  dealers = [],
   actions,
 }: {
   licenses: License[];
   basePath: string;
   context: "dealer" | "admin";
-  initialQuery: string;
-  initialStatus: string;
-  initialType: string;
-  /** Кнопки страницы (например «Новая лицензия») — встают в один ряд с фильтрами. */
+  initial: LicenseFilters;
+  /** Продукты для фильтра «Продукт». */
+  products?: string[];
+  /** Представители для фильтра — только в админке. */
+  dealers?: DealerOption[];
+  /** Кнопки страницы (например «Новая лицензия») — встают в один ряд с поиском. */
   actions?: React.ReactNode;
 }) {
   const router = useRouter();
@@ -67,21 +82,29 @@ export function LicenseTable({
   const canEdit = !isAdmin || can("licenses.edit");
   const canCancel = !isAdmin || can("licenses.cancel");
   const canDelete = isAdmin && can("licenses.delete");
-  const [q, setQ] = React.useState(initialQuery);
-  const [status, setStatus] = React.useState(initialStatus);
-  const [type, setType] = React.useState(initialType);
-  const [showFilters, setShowFilters] = React.useState(false);
+  const [q, setQ] = React.useState(initial.q);
+  const [status, setStatus] = React.useState(initial.status);
+  const [type, setType] = React.useState(initial.type);
+  const [product, setProduct] = React.useState(initial.product);
+  const [dealerIds, setDealerIds] = React.useState<string[]>(initial.dealers);
+
+  const defaultColumns = React.useMemo(() => defaultLicenseColumns(context), [context]);
+  const [columns, setColumns] = useStoredColumns(`mmb-license-columns-${context}`, defaultColumns);
+  const visibleKeys = React.useMemo(() => columns.filter((c) => c.visible).map((c) => c.key), [columns]);
 
   const debouncedPush = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  function pushQuery(next: { q: string; status: string; type: string }) {
+  function pushQuery(next: LicenseFilters) {
     const url = new URL(window.location.href);
-    if (next.q) url.searchParams.set("q", next.q);
-    else url.searchParams.delete("q");
-    if (next.status) url.searchParams.set("status", next.status);
-    else url.searchParams.delete("status");
-    if (next.type) url.searchParams.set("type", next.type);
-    else url.searchParams.delete("type");
+    const set = (key: string, value: string) => {
+      if (value) url.searchParams.set(key, value);
+      else url.searchParams.delete(key);
+    };
+    set("q", next.q);
+    set("status", next.status);
+    set("type", next.type);
+    set("product", next.product);
+    set("dealers", next.dealers.join(","));
     url.searchParams.delete("page");
     router.replace(`${pathname}${url.search}`);
   }
@@ -89,10 +112,15 @@ export function LicenseTable({
   React.useEffect(() => {
     if (debouncedPush.current) clearTimeout(debouncedPush.current);
     debouncedPush.current = setTimeout(() => {
-      pushQuery({ q, status, type });
+      pushQuery({ q, status, type, product, dealers: dealerIds });
     }, 250);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, status, type]);
+  }, [q, status, type, product, dealerIds]);
+
+  const productOptions = React.useMemo(() => {
+    const list = product && !products.includes(product) ? [product, ...products] : products;
+    return [{ value: "", label: "Все продукты" }, ...list.map((p) => ({ value: p, label: p }))];
+  }, [products, product]);
 
   const [cancelTarget, setCancelTarget] = React.useState<License | null>(null);
   const [cancelReason, setCancelReason] = React.useState("");
@@ -188,6 +216,82 @@ export function LicenseTable({
     }
   }
 
+  function renderCell(l: License, key: LicenseColumnKey): React.ReactNode {
+    switch (key) {
+      case "number":
+        return (
+          <>
+            <Link href={`${basePath}/${l.id}`} className="whitespace-nowrap text-ink hover:text-accent">
+              {l.number}
+            </Link>
+            {l.issuedWithoutPayment ? (
+              <div className="mt-1">
+                <Tag tone="warning">Без оплаты</Tag>
+              </div>
+            ) : null}
+          </>
+        );
+      case "createdAt":
+        return <span className="whitespace-nowrap text-ink-muted">{formatRuDateTime(l.createdAt)}</span>;
+      case "type":
+        return l.repeatGeneration ? (
+          <Tag tone="warning">Повторная генерация</Tag>
+        ) : (
+          <Tag tone={l.type === "Генерация" ? "accent" : "neutral"}>{l.type}</Tag>
+        );
+      case "product":
+        return l.product ? (
+          <div>
+            <div>{l.product}</div>
+            {l.bundle ? <div className="text-xs text-ink-muted">{l.bundle}</div> : null}
+          </div>
+        ) : (
+          <span className="text-ink-muted">—</span>
+        );
+      case "dealer":
+        return (
+          <div className="min-w-[160px]">
+            <Link href={`/admin/dealers/${l.dealerId}`} className="hover:text-accent">
+              {l.dealerName || "—"}
+            </Link>
+            {l.dealerSub ? <div className="text-xs text-ink-muted">{l.dealerSub}</div> : null}
+          </div>
+        );
+      case "dealerComment":
+        return l.dealerComment ? (
+          <span
+            className="line-clamp-2 max-w-[260px] whitespace-pre-line break-words text-ink-muted"
+            title={l.dealerComment}
+          >
+            {l.dealerComment}
+          </span>
+        ) : (
+          <span className="text-ink-muted">—</span>
+        );
+      case "status":
+        return (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <StatusTag kind="license" status={l.status} />
+            {l.pendingCancellation ? <Tag tone="warning">Заявка на аннулирование</Tag> : null}
+          </div>
+        );
+      case "versionSoftware":
+        return <span className="text-xs text-ink-muted break-all">{l.versionSoftware || "—"}</span>;
+      case "versionCustom":
+        return <span className="text-ink-muted">{l.versionCustom || "—"}</span>;
+      case "price":
+        return (
+          <span className="whitespace-nowrap">
+            {l.price === null || l.price === undefined
+              ? "—"
+              : l.price === 0
+                ? "Бесплатно"
+                : formatRub(l.price)}
+          </span>
+        );
+    }
+  }
+
   return (
     <>
       <div className="mb-5">
@@ -197,38 +301,50 @@ export function LicenseTable({
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Номер, продукт, комментарий дилера, версия ПО..."
+              placeholder={
+                isAdmin
+                  ? "Номер, продукт, комментарий, версия ПО, представитель..."
+                  : "Номер, продукт, комментарий дилера, версия ПО..."
+              }
               className="bg-transparent w-full text-sm placeholder:text-ink-subtle"
             />
           </div>
-          <Button
-            variant={showFilters ? "primary" : "secondary"}
-            size="md"
-            icon={<Filter className="h-4 w-4" />}
-            onClick={() => setShowFilters((v) => !v)}
-          >
-            Фильтры
-          </Button>
           {actions}
         </div>
-        {showFilters ? (
-          <div className="grid md:grid-cols-3 gap-3 mt-3">
-            <Select
-              label="Статус"
-              value={status}
-              onChange={(v) => setStatus(v)}
-              placeholder="Все статусы"
-              options={LICENSE_STATUS_FILTER_OPTIONS}
-            />
-            <Select
-              label="Тип лицензии"
-              value={type}
-              onChange={(v) => setType(v)}
-              placeholder="Все типы лицензий"
-              options={LICENSE_KIND_FILTER_OPTIONS}
-            />
-          </div>
-        ) : null}
+        <div className={cn("grid gap-3 mt-3", isAdmin ? "md:grid-cols-2 xl:grid-cols-4" : "md:grid-cols-3")}>
+          <Select
+            label="Тип лицензии"
+            value={type}
+            onChange={(v) => setType(v)}
+            placeholder="Все типы лицензий"
+            options={LICENSE_KIND_FILTER_OPTIONS}
+          />
+          <Select
+            label="Статус"
+            value={status}
+            onChange={(v) => setStatus(v)}
+            placeholder="Все статусы"
+            options={LICENSE_STATUS_FILTER_OPTIONS}
+          />
+          <Select
+            label="Продукт"
+            value={product}
+            onChange={(v) => setProduct(v)}
+            placeholder="Все продукты"
+            options={productOptions}
+            searchable={productOptions.length > 8}
+            searchPlaceholder="Поиск продукта"
+          />
+          {isAdmin ? <DealerMultiSelect options={dealers} value={dealerIds} onChange={setDealerIds} /> : null}
+        </div>
+        <div className="mt-3 hidden md:flex justify-end">
+          <ColumnsMenu
+            columns={columns}
+            labelOf={licenseColumnLabel}
+            onChange={setColumns}
+            onReset={() => setColumns(defaultColumns)}
+          />
+        </div>
       </div>
 
       <div className="rounded-panel border border-hairline overflow-hidden">
@@ -261,9 +377,16 @@ export function LicenseTable({
                   {l.pendingCancellation ? <Tag tone="warning">Заявка на аннулирование</Tag> : null}
                 </div>
               </div>
-              {l.product ? <div className="mt-2 text-xs text-ink-muted">{l.product}</div> : null}
+              <div className="mt-2 text-xs text-ink-muted">
+                {[formatRuDateTime(l.createdAt), l.product].filter(Boolean).join(" · ")}
+              </div>
+              {isAdmin && l.dealerName ? (
+                <div className="mt-1 text-xs text-ink-muted">Представитель: {l.dealerName}</div>
+              ) : null}
               {l.dealerComment ? (
-                <div className="mt-1 whitespace-pre-line break-words text-xs text-ink-muted">{l.dealerComment}</div>
+                <div className="mt-1 line-clamp-2 whitespace-pre-line break-words text-xs text-ink-muted">
+                  {l.dealerComment}
+                </div>
               ) : null}
               {l.versionSoftware ? (
                 <div className="mt-1 text-xs text-ink-muted break-all">Версия ПО: {l.versionSoftware}</div>
@@ -328,60 +451,30 @@ export function LicenseTable({
           <table className="w-full min-w-[760px] text-sm">
             <thead>
               <tr className="text-left text-[11.5px] uppercase tracking-tight text-ink-subtle">
-                <th className="px-4 py-3">Номер</th>
-                <th className="px-4 py-3">Тип</th>
-                <th className="px-4 py-3">Комментарий дилера</th>
-                <th className="px-4 py-3">Статус и версия ПО</th>
+                {visibleKeys.map((key) => (
+                  <th key={key} className="px-4 py-3 whitespace-nowrap">
+                    {licenseColumnLabel(key)}
+                  </th>
+                ))}
                 <th className="px-4 py-3 text-right">Действия</th>
               </tr>
             </thead>
             <tbody>
               {licenses.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-12 text-center text-ink-muted">
+                  <td colSpan={visibleKeys.length + 1} className="px-4 py-12 text-center text-ink-muted">
                     Лицензий по фильтру не найдено
                   </td>
                 </tr>
               ) : null}
               {licenses.map((l) => (
                 <tr key={l.id} className="transition-colors hover:bg-surface-muted">
-                  <td className="px-4 py-3">
-                    <Link href={`${basePath}/${l.id}`} className=" text-ink hover:text-accent">
-                      {l.number}
-                    </Link>
-                    {l.issuedWithoutPayment ? (
-                      <div className="mt-1">
-                        <Tag tone="warning">Без оплаты</Tag>
-                      </div>
-                    ) : null}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      {l.repeatGeneration ? (
-                        <Tag tone="warning">Повторная генерация</Tag>
-                      ) : (
-                        <Tag tone={l.type === "Генерация" ? "accent" : "neutral"}>{l.type}</Tag>
-                      )}
-                    </div>
-                    {l.product ? (
-                      <div className="text-xs text-ink-muted mt-1">{l.product}</div>
-                    ) : null}
-                  </td>
-                  <td className="px-4 py-3 text-ink-muted whitespace-pre-line break-words max-w-[260px]">
-                    {l.dealerComment || "—"}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <StatusTag kind="license" status={l.status} />
-                      {l.pendingCancellation ? (
-                        <Tag tone="warning">Заявка на аннулирование</Tag>
-                      ) : null}
-                    </div>
-                    <div className="mt-1 text-xs text-ink-muted break-all">
-                      {l.versionSoftware || "—"}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
+                  {visibleKeys.map((key) => (
+                    <td key={key} className="px-4 py-3 align-top">
+                      {renderCell(l, key)}
+                    </td>
+                  ))}
+                  <td className="px-4 py-3 align-top">
                     {/* Действия идут парами в столбик: так строка не растягивается
                         на четыре кнопки в ряд. */}
                     <div className="flex items-start justify-end gap-1.5">

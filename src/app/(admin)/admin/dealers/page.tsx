@@ -173,6 +173,7 @@ export default async function AdminDealersPage({
                       {u.dealerProfile?.phone ? ` · ${u.dealerProfile.phone}` : ""}
                     </div>
                     {row.place ? <div>{row.place}</div> : null}
+                    {statusReason(u) ? <div className="line-clamp-2 break-words">Причина: {statusReason(u)}</div> : null}
                   </div>
                   <div className="mt-2.5 flex flex-wrap items-center gap-2 text-xs">
                     <span className="text-ink-muted">
@@ -252,12 +253,9 @@ export default async function AdminDealersPage({
                     </td>
                     <td className="px-3 py-3">
                       <StatusTag kind="user" status={u.status} />
-                      {u.status === "REJECTED" && u.dealerProfile?.rejectionReason ? (
-                        <div
-                          className="mt-1 truncate text-xs text-ink-muted"
-                          title={u.dealerProfile.rejectionReason}
-                        >
-                          {u.dealerProfile.rejectionReason}
+                      {statusReason(u) ? (
+                        <div className="mt-1 line-clamp-2 max-w-[220px] break-words text-xs text-ink-muted" title={statusReason(u)!}>
+                          {statusReason(u)}
                         </div>
                       ) : null}
                     </td>
@@ -314,6 +312,13 @@ function dealerRow(u: DealerListUser) {
   const regionLine = [p?.region, p?.country].filter(Boolean).join(" · ") || null;
   const place = [p?.city, p?.region, p?.country].filter(Boolean).join(" · ") || null;
   return { fio, organization: p?.organization ?? null, regionLine, place };
+}
+
+/** Причина отказа или блокировки — её видит и сам представитель. */
+function statusReason(u: DealerListUser): string | null {
+  if (u.status === "REJECTED") return u.dealerProfile?.rejectionReason ?? null;
+  if (u.status === "SUSPENDED") return u.dealerProfile?.suspensionReason ?? null;
+  return null;
 }
 
 function isDeletable(u: DealerListUser, meId: string) {

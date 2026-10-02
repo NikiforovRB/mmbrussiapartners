@@ -41,9 +41,9 @@ export default async function AdminDealerPage({
     db.dealerLocationChange.count({ where: { userId: id } }),
     db.legacyDealer.findUnique({ where: { userId: id } }),
     db.adminAuditLog.findFirst({
-      where: { entity: "DEALER", entityId: id, action: "STATUS_REJECTED" },
+      where: { entity: "DEALER", entityId: id, action: { in: ["STATUS_REJECTED", "STATUS_SUSPENDED"] } },
       orderBy: { createdAt: "desc" },
-      select: { createdAt: true, actor: { select: { email: true } } },
+      select: { action: true, createdAt: true, actor: { select: { email: true } } },
     }),
     db.legacyRecord.groupBy({ by: ["kind"], where: { userId: id }, _count: true }),
   ]);
@@ -183,8 +183,17 @@ export default async function AdminDealerPage({
             dealer.status === "REJECTED"
               ? {
                   reason: dealer.dealerProfile?.rejectionReason ?? null,
-                  at: lastRejection?.createdAt.toISOString() ?? null,
-                  by: lastRejection?.actor.email ?? null,
+                  at: lastRejection?.action === "STATUS_REJECTED" ? lastRejection.createdAt.toISOString() : null,
+                  by: lastRejection?.action === "STATUS_REJECTED" ? lastRejection.actor.email : null,
+                }
+              : null
+          }
+          suspension={
+            dealer.status === "SUSPENDED"
+              ? {
+                  reason: dealer.dealerProfile?.suspensionReason ?? null,
+                  at: lastRejection?.action === "STATUS_SUSPENDED" ? lastRejection.createdAt.toISOString() : null,
+                  by: lastRejection?.action === "STATUS_SUSPENDED" ? lastRejection.actor.email : null,
                 }
               : null
           }

@@ -2,11 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { badRequest, notFound, parseBody, route } from "@/lib/api";
-import {
-  notifyAdminsLicenseCancelled,
-  notifyDealerCancellationReviewed,
-} from "@/lib/notifications";
-import { notifyUser } from "@/lib/app-notifications";
+import { notifyAdmins, notifyUser } from "@/lib/app-notifications";
 import { syncLicenseSlots } from "@/lib/license-slots";
 import { requirePermission } from "@/lib/session";
 
@@ -69,23 +65,20 @@ export const POST = route(async (req: Request, ctx: { params: Promise<{ id: stri
       }
     });
     await syncLicenseSlots(request.license.dealerId);
-    await notifyAdminsLicenseCancelled({
-      licenseNumber: request.license.number,
-      dealerEmail: request.license.dealer.email,
-      reason: request.reason,
-      by: session.user.email,
-    });
+    await notifyAdmins(
+      ["licenses.cancel"],
+      {
+        type: "LICENSE_CANCELLED",
+        title: `Аннулирована лицензия ${request.license.number}`,
+        body: `${request.license.dealer.email} · заявку одобрил ${session.user.email}: ${request.reason}`,
+        link: `/admin/licenses/${request.licenseId}`,
+      },
+      { exceptUserId: session.user.id },
+    );
   } else {
     await db.cancellationRequest.update({ where: { id }, data: review });
   }
 
-  await notifyDealerCancellationReviewed({
-    licenseNumber: request.license.number,
-    dealerEmail: request.license.dealer.email,
-    approved,
-    note: note || null,
-    userId: request.license.dealerId,
-  });
   await notifyUser(request.requestedById, {
     type: "CANCELLATION_REVIEWED",
     title: `Заявка по лицензии ${request.license.number} ${approved ? "одобрена" : "отклонена"}`,

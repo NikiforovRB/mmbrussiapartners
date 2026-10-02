@@ -5,10 +5,16 @@ import { hasPermission } from "@/lib/permissions";
 import { Topbar } from "@/components/cabinet/topbar";
 import { Button } from "@/components/ui/button";
 import { LicenseTable } from "@/components/licenses/license-table";
-import { LICENSE_LIST_SELECT, toLicenseRow } from "@/lib/license-list";
+import {
+  LICENSE_LIST_SELECT,
+  licenseListWhere,
+  parseDealerIds,
+  toLicenseRow,
+  type LicenseListParams,
+} from "@/lib/license-list";
+import { loadDealerOptions, loadLicenseProducts } from "@/lib/dealer-options";
 import { Pagination, parsePage } from "@/components/cabinet/pagination";
 import { requireAdminPage } from "@/lib/session";
-import { LICENSE_STATUSES } from "@/lib/status-labels";
 
 export const dynamic = "force-dynamic";
 
@@ -17,14 +23,14 @@ const PAGE_SIZE = 20;
 export default async function AdminLicensesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; status?: string; type?: string; page?: string }>;
+  searchParams: Promise<LicenseListParams>;
 }) {
   const session = await requireAdminPage("licenses.view");
   const sp = await searchParams;
-  const where = buildWhere(sp);
+  const where = licenseListWhere(sp);
   const page = parsePage(sp.page);
 
-  const [total, licenses, me] = await Promise.all([
+  const [total, licenses, me, products, dealers] = await Promise.all([
     db.license.count({ where }),
     db.license.findMany({
       where,
@@ -37,6 +43,8 @@ export default async function AdminLicensesPage({
       where: { id: session.user.id },
       include: { role: true },
     }),
+    loadLicenseProducts(),
+    loadDealerOptions(),
   ]);
 
   return (
@@ -55,9 +63,15 @@ export default async function AdminLicensesPage({
           licenses={licenses.map(toLicenseRow)}
           basePath="/admin/licenses"
           context="admin"
-          initialQuery={sp.q ?? ""}
-          initialStatus={sp.status ?? ""}
-          initialType={sp.type ?? ""}
+          initial={{
+            q: sp.q ?? "",
+            status: sp.status ?? "",
+            type: sp.type ?? "",
+            product: sp.product ?? "",
+            dealers: parseDealerIds(sp.dealers),
+          }}
+          products={products}
+          dealers={dealers}
           actions={
             hasPermission(session.user.permissions, "licenses.create", session.user.isSuperAdmin) ? (
               <Link href="/admin/licenses/new">
@@ -71,32 +85,9 @@ export default async function AdminLicensesPage({
           pageSize={PAGE_SIZE}
           total={total}
           basePath="/admin/licenses"
-          query={{ q: sp.q, status: sp.status, type: sp.type }}
+          query={{ q: sp.q, status: sp.status, type: sp.type, product: sp.product, dealers: sp.dealers }}
         />
       </div>
     </>
   );
-}
-
-function buildWhere(sp: { q?: string; status?: string; type?: string }) {
-  const where: Record<string, unknown> = { deletedAt: null };
-  if (sp.status && (LICENSE_STATUSES as readonly string[]).includes(sp.status)) {
-    where.status = sp.status;
-  }
-  // Тип фильтра — синтетический: «Повторная генерация» это флаг, а не поле type.
-  if (sp.type === "repeat") where.repeatGeneration = true;
-  else if (sp.type === "gen") where.repeatGeneration = false;
-  if (sp.q && sp.q.trim()) {
-    const q = sp.q.trim();
-    Object.assign(where, {
-      OR: [
-        { number: { contains: q, mode: "insensitive" } },
-        { product: { contains: q, mode: "insensitive" } },
-        { dealerComment: { contains: q, mode: "insensitive" } },
-        { versionSoftware: { contains: q, mode: "insensitive" } },
-        { dealer: { email: { contains: q, mode: "insensitive" } } },
-      ],
-    });
-  }
-  return where;
 }

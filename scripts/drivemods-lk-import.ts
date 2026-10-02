@@ -13,6 +13,11 @@
  * Записи достаются представителю, к которому привязан их дилер; поштучное
  * распределение администратора повторный импорт не меняет.
  *
+ * Суммы — по дилерскому прайсу MMB RUSSIA (PriceListItem.price): в ЛК стоит
+ * цена DriveMods для MMB RUSSIA, она сохраняется в priceLk. Лицензии CCNC,
+ * CCIC и CCIC2 оплачиваются в самом DriveMods — их не импортируем, как и
+ * оплаченные генерации за 0 ₽; оплаты пересчитываются без них.
+ *
  *   npx tsx scripts/drivemods-lk-import.ts [файл.json] [--dry-run] [--out <папка>]
  *
  * Файл по умолчанию — самая свежая выгрузка в ../mmbrussia-exports. XLSX
@@ -62,6 +67,8 @@ type LkRecord = {
   createdByName: string | null;
   /** Выгрузки до октября 2026 хранили здесь только число позиций. */
   payItems: PayItem[] | number | null;
+  /** Сумма как в ЛК, до сопоставления с прайсом (заполняет prepareRecords). */
+  priceLk?: number | null;
 };
 
 type LkExport = { fetchedAt: string; owner: LkUser; users: LkUser[]; records: LkRecord[] };
@@ -83,6 +90,72 @@ type RecordKind = "LICENSE" | "PAYMENT" | "PASSWORD" | "SERVICE";
 const recordKind = (type: number | null): RecordKind =>
   type === 2 ? "LICENSE" : type === 4 || type === 5 ? "PAYMENT" : type === 8 ? "PASSWORD" : "SERVICE";
 const payItemsOf = (r: LkRecord): PayItem[] => (Array.isArray(r.payItems) ? r.payItems : []);
+const isPayment = (r: LkRecord) => r.type === 4 || r.type === 5;
+const isGeneration = (r: LkRecord) => r.type === 2 && r.licenseType === 1;
+
+/** Оплачиваются в самом DriveMods, не у MMB RUSSIA. */
+const EXCLUDED_PRODUCTS = ["CCNC", "CCIC", "CCIC2"];
+
+type PriceItem = { product: string; bundle: string; region: string; price: number };
+
+const upper = (s: string | null | undefined) => (s ?? "").trim().toUpperCase();
+
+/**
+ * Дилерская цена позиции ЛК. В прайсе продукт бывает записан вместе с
+ * комплектацией ЛК: «LG-GEN5 CUSTOM+RUS» — это LG-GEN5 / CUSTOM+RUS в ЛК.
+ */
+function dealerPriceFor(r: LkRecord, prices: PriceItem[]): number | null {
+  const product = upper(r.product);
+  const same = prices.filter((p) => p.product.split(" ")[0] === product);
+  if (same.length <= 1) return same[0]?.price ?? null;
+  const bundle = upper(r.bundle);
+  const byBundle = same.filter((p) => p.bundle === bundle || p.product.slice(product.length).trim() === bundle);
+  if (byBundle.length === 0) return null;
+  const region = upper(r.region) || "RUS";
+  return (byBundle.find((p) => p.region === region) ?? byBundle[0]).price;
+}
+
+/**
+ * Убирает лицензии DriveMods и оплаченные генерации за 0 ₽, ставит дилерские
+ * цены генерациям и пересчитывает оплаты по оставшимся позициям. Оплата, все
+ * позиции которой убраны, убирается тоже.
+ */
+function prepareRecords(records: LkRecord[], prices: PriceItem[]) {
+  const dropped = new Set(
+    records
+      .filter(
+        (r) =>
+          r.type === 2 &&
+          (EXCLUDED_PRODUCTS.includes(upper(r.product)) ||
+            (isGeneration(r) && r.paymentStatus === 3 && (r.priceTotal ?? 0) <= 0)),
+      )
+      .map((r) => r.id),
+  );
+  const priced = new Map<string, number>();
+  for (const r of records) {
+    if (dropped.has(r.id) || !isGeneration(r) || (r.priceTotal ?? 0) <= 0) continue;
+    const price = dealerPriceFor(r, prices);
+    if (price != null) priced.set(r.id, price);
+  }
+  const kept: LkRecord[] = [];
+  for (const r of records) {
+    if (dropped.has(r.id)) continue;
+    const out: LkRecord = { ...r, priceLk: r.priceTotal, priceTotal: priced.get(r.id) ?? r.priceTotal };
+    if (isPayment(r) && payItemsOf(r).length > 0) {
+      const items = payItemsOf(r)
+        .filter((it) => !it.id || !dropped.has(it.id))
+        .map((it) => (it.id && priced.has(it.id) ? { ...it, sum: priced.get(it.id)! } : it));
+      if (items.length === 0) {
+        dropped.add(r.id);
+        continue;
+      }
+      out.payItems = items;
+      out.priceTotal = money(items.reduce((s, it) => s + (it.sum ?? 0), 0));
+    }
+    kept.push(out);
+  }
+  return { records: kept, dropped, priced: priced.size };
+}
 const COUNTRIES: Record<string, string> = {
   RU: "Россия",
   BY: "Беларусь",
@@ -305,6 +378,16 @@ async function main() {
 
   const db = new PrismaClient();
   try {
+    const prices: PriceItem[] = (
+      await db.priceListItem.findMany({ select: { product: true, bundle: true, region: true, price: true } })
+    ).map((p) => ({ product: upper(p.product), bundle: upper(p.bundle), region: upper(p.region), price: Number(p.price) }));
+    const prepared = prepareRecords(data.records, prices);
+    data.records = prepared.records;
+    console.log(
+      `Не импортируются (CCNC/CCIC, оплаченные генерации за 0 ₽ и их оплаты): ${prepared.dropped.size}; ` +
+        `по дилерскому прайсу: ${prepared.priced} генераций`,
+    );
+
     const portalCities = await db.dealerProfile.findMany({ select: { city: true } });
     const names = new Set<string>(NAMES);
     for (const u of data.users) {
@@ -576,6 +659,17 @@ async function main() {
       const keys = list.map((d) => d.externalKey);
       const removed = await db.legacyDealer.deleteMany({ where: { externalKey: { notIn: keys }, userId: null } });
 
+      const purged = await db.legacyRecord.deleteMany({
+        where: {
+          OR: [
+            { id: { in: [...prepared.dropped] } },
+            { kind: "LICENSE", product: { in: EXCLUDED_PRODUCTS } },
+            { kind: "LICENSE", licenseType: LICENSE_TYPES[1], paymentStatus: "PAID", priceTotal: { lte: 0 } },
+          ],
+        },
+      });
+      console.log(`Удалено записей ЛК (CCNC/CCIC, оплаченные за 0 ₽ и их оплаты): ${purged.count}`);
+
       // Записи ЛК поштучно. Пропавшие из ЛК не удаляем — это история.
       const dealerIds = new Map(
         (await db.legacyDealer.findMany({ select: { id: true, externalKey: true } })).map((x) => [x.externalKey, x.id]),
@@ -599,6 +693,7 @@ async function main() {
           recoverable: r.recoverable === true,
           priceBase: decimal(r.priceBase),
           priceTotal: decimal(r.priceTotal),
+          priceLk: decimal(r.priceLk ?? null),
           discount: decimal(r.discount),
           discountName: r.discountName ?? null,
           couponCode: r.couponCode ?? null,
@@ -614,13 +709,22 @@ async function main() {
       });
       type Comparable = Pick<
         (typeof rows)[number],
-        "updatedAt" | "paymentStatus" | "priceTotal" | "dealerComment" | "legacyDealerId" | "paidById" | "paidItems"
+        | "updatedAt"
+        | "paymentStatus"
+        | "priceTotal"
+        | "priceLk"
+        | "dealerComment"
+        | "legacyDealerId"
+        | "paidById"
+        | "paidItems"
       >;
+      const amount = (n: Prisma.Decimal | null) => (n == null ? "" : Number(n).toFixed(2));
       const signature = (x: Comparable) =>
         [
           x.updatedAt?.toISOString() ?? "",
           x.paymentStatus,
-          x.priceTotal == null ? "" : Number(x.priceTotal).toFixed(2),
+          amount(x.priceTotal),
+          amount(x.priceLk),
           x.dealerComment ?? "",
           x.legacyDealerId ?? "",
           x.paidById ?? "",
@@ -634,6 +738,7 @@ async function main() {
               updatedAt: true,
               paymentStatus: true,
               priceTotal: true,
+              priceLk: true,
               dealerComment: true,
               legacyDealerId: true,
               paidById: true,
@@ -771,9 +876,10 @@ async function main() {
       { header: "Регион", key: "region", width: 10 },
       { header: "Версия ПО", key: "version", width: 26 },
       { header: "Версия кастома", key: "versionCustom", width: 14 },
-      { header: "Базовая цена", key: "priceBase", width: 14, style: { numFmt: moneyFmt } },
-      { header: "Скидка", key: "discount", width: 10 },
-      { header: "Итого", key: "priceTotal", width: 14, style: { numFmt: moneyFmt } },
+      { header: "Базовая цена ЛК", key: "priceBase", width: 14, style: { numFmt: moneyFmt } },
+      { header: "Скидка ЛК", key: "discount", width: 10 },
+      { header: "Итого в ЛК", key: "priceLk", width: 14, style: { numFmt: moneyFmt } },
+      { header: "Дилерская цена", key: "priceTotal", width: 14, style: { numFmt: moneyFmt } },
       { header: "Оплата", key: "payment", width: 14 },
       { header: "Комментарий дилера", key: "comment", width: 34 },
     ];
@@ -790,13 +896,14 @@ async function main() {
         versionCustom: r.versionCustom,
         priceBase: r.priceBase,
         discount: r.discount,
+        priceLk: r.priceLk,
         priceTotal: r.priceTotal,
         payment: r.paymentStatus ? PAYMENT_STATUSES[r.paymentStatus] ?? r.paymentStatus : "",
         comment: r.dealerComment,
       });
     }
     wsLicenses.getRow(1).font = { bold: true };
-    wsLicenses.autoFilter = { from: "A1", to: "N1" };
+    wsLicenses.autoFilter = { from: "A1", to: "O1" };
 
     const wsOther = wb.addWorksheet("Оплаты и прочее", { views: [{ state: "frozen", ySplit: 1 }] });
     wsOther.columns = [

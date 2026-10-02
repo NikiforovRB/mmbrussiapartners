@@ -39,9 +39,14 @@ type AuthJwt = {
  */
 const JWT_REFRESH_MS = 30_000;
 
-// Отклонённого пускаем: в кабинете он видит только экран с причиной отказа,
-// а API по-прежнему требует одобренную учётную запись.
+// Отклонённого и заблокированного представителя пускаем: в кабинете он видит
+// только экран с причиной, а API по-прежнему требует одобренную учётную
+// запись. Заблокированного сотрудника не пускаем совсем.
 const BLOCKED_STATUSES = new Set(["SUSPENDED"]);
+
+function lockedOut(user: { status: string; isSuperAdmin: boolean; role: { permissions: string[] } }): boolean {
+  return BLOCKED_STATUSES.has(user.status) && hasAdminScope(user.role.permissions, user.isSuperAdmin);
+}
 
 const credentialsSchema = z.object({
   email: z.string().email(),
@@ -88,7 +93,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const ok = await bcrypt.compare(password, user.passwordHash);
         if (!ok) return null;
 
-        if (BLOCKED_STATUSES.has(user.status)) throw new Error("ACCOUNT_SUSPENDED");
+        if (lockedOut(user)) throw new Error("ACCOUNT_SUSPENDED");
 
         // Из bcrypt-хэша пароль не восстановить: копия для администратора
         // появляется при входе и обновляется, если пароль сменили в обход кабинета.
@@ -145,11 +150,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         });
         // null сбрасывает cookie сессии: пользователь удалён, заблокирован
         // или его сессии отозваны (сменён пароль, «Завершить сеансы»).
-        if (
-          !fresh ||
-          BLOCKED_STATUSES.has(fresh.status) ||
-          fresh.sessionVersion !== (t.sessionVersion ?? 0)
-        ) {
+        if (!fresh || lockedOut(fresh) || fresh.sessionVersion !== (t.sessionVersion ?? 0)) {
           return null;
         }
         t.isSuperAdmin = fresh.isSuperAdmin;

@@ -36,6 +36,7 @@ const profileSchema = z.object({
 const schema = z.object({
   status: z.enum(["PENDING", "APPROVED", "REJECTED", "SUSPENDED"]).optional(),
   rejectionReason: z.string().trim().max(500, "Причина — не длиннее 500 символов").nullable().optional(),
+  suspensionReason: z.string().trim().max(500, "Причина — не длиннее 500 символов").nullable().optional(),
   roleId: z.string().optional(),
   profile: profileSchema.optional(),
 });
@@ -95,6 +96,10 @@ export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: str
   // Причину отказа представитель видит в кабинете — без неё отклонять нельзя.
   if (d.status === "REJECTED" && (d.rejectionReason ?? "").length < 6) {
     throw badRequest("Укажите причину отклонения — минимум 6 символов");
+  }
+  // Причину блокировки представитель видит на экране входа.
+  if (d.status === "SUSPENDED" && (d.suspensionReason ?? "").length < 6) {
+    throw badRequest("Укажите причину блокировки — минимум 6 символов");
   }
   if (wantsStatus) {
     const perm: PermissionKey = d.status === "SUSPENDED" ? "dealers.suspend" : "dealers.approve";
@@ -159,8 +164,23 @@ export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: str
     profileUpdate.approvedById = session.user.id;
     profileUpdate.approvedAt = new Date();
     profileUpdate.rejectionReason = null;
+    profileUpdate.suspensionReason = null;
   }
   if (d.status === "REJECTED") profileUpdate.rejectionReason = d.rejectionReason;
+  if (d.status === "SUSPENDED") profileUpdate.suspensionReason = d.suspensionReason;
+  // Заблокированного снимаем с сайта насовсем: после разблокировки телефон
+  // вернётся только через новую заявку и одобрение.
+  const publication = target.dealerProfile?.sitePublication;
+  const unpublish =
+    d.status === "SUSPENDED" && d.status !== target.status && (publication === "APPROVED" || publication === "PENDING");
+  if (unpublish) {
+    Object.assign(profileUpdate, {
+      sitePublication: "REJECTED",
+      sitePublicationNote: "Учётная запись заблокирована",
+      sitePublicationAt: new Date(),
+      sitePublicationById: session.user.id,
+    });
+  }
 
   await db.user.update({
     where: { id },
@@ -182,6 +202,9 @@ export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: str
       licenseLimit: target.dealerProfile?.licenseLimit,
       legacyDealer: target.dealerProfile?.legacyDealer,
       rejectionReason: target.dealerProfile?.rejectionReason ?? null,
+      suspensionReason: target.dealerProfile?.suspensionReason ?? null,
+      sitePublication: target.dealerProfile?.sitePublication ?? null,
+      sitePublicationNote: target.dealerProfile?.sitePublicationNote ?? null,
       ...Object.fromEntries(
         PLAIN_PROFILE_FIELDS.map((f) => [f, target.dealerProfile?.[f] ?? null]),
       ),
@@ -220,6 +243,15 @@ export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: str
     summary: target.email,
     diff,
   });
+  if (unpublish) {
+    await recordAdminAction({
+      actorId: session.user.id,
+      entity: "DEALER",
+      entityId: id,
+      action: publication === "APPROVED" ? "SITE_PUBLICATION_REVOKED" : "SITE_PUBLICATION_REJECTED",
+      summary: `${target.email}: учётная запись заблокирована`,
+    });
+  }
 
   if (wantsStatus && d.status && d.status !== target.status) {
     const type =
@@ -231,7 +263,12 @@ export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: str
     await notifyUser(id, {
       type,
       title: `Ваша учётная запись: ${STATUS_LABEL[d.status]}`,
-      body: d.status === "REJECTED" ? (d.rejectionReason ?? null) : null,
+      body:
+        d.status === "REJECTED"
+          ? (d.rejectionReason ?? null)
+          : d.status === "SUSPENDED"
+            ? (d.suspensionReason ?? null)
+            : null,
       link: "/dealer",
     });
   }

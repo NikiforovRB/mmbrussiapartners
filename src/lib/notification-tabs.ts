@@ -40,6 +40,26 @@ export const NOTIFICATION_TAB_TYPES: TabDef[] = [
   },
 ];
 
+/** Подписи событий в настройках каналов уведомлений. */
+export const NOTIFICATION_TYPE_LABEL: Record<AppNotificationType, string> = {
+  DEALER_REGISTERED: "Новая заявка на регистрацию",
+  DEALER_APPROVED: "Учётная запись одобрена",
+  DEALER_REJECTED: "Заявка на регистрацию отклонена",
+  DEALER_SUSPENDED: "Учётная запись заблокирована",
+  SITE_PUBLICATION_REQUESTED: "Заявка на публикацию телефона",
+  SITE_PUBLICATION_REVIEWED: "Решение по публикации телефона",
+  LICENSE_ISSUED: "Лицензия выдана без оплаты, повторная генерация",
+  LICENSE_CANCELLED: "Лицензия аннулирована",
+  LICENSE_REVOKED: "Лицензия отозвана",
+  CANCELLATION_REQUESTED: "Заявка на аннулирование",
+  CANCELLATION_REVIEWED: "Решение по заявке на аннулирование",
+  PAYMENT_CREATED: "Новый счёт, изменение стоимости",
+  PAYMENT_PAID: "Оплата получена",
+  PAYMENT_REFUNDED: "Возврат оплаты",
+  RECEIPT_FAILED: "Чек не пробит",
+  PRICE_MISSING: "Нет цены в справочнике",
+};
+
 /** Порядок вкладок: в админке чаще всего приходят заявки представителей. */
 export function notificationTabs(admin: boolean): { id: NotificationTabId; label: string }[] {
   const order: NotificationTabDefId[] = admin ? ["dealers", "licenses", "payments"] : ["licenses", "payments", "dealers"];

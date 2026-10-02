@@ -89,6 +89,7 @@ export async function LegacyRecordsView({
     versionCustom: r.versionCustom,
     eolType: r.eolType,
     priceTotal: r.priceTotal == null ? null : Number(r.priceTotal),
+    priceLk: r.priceLk == null ? null : Number(r.priceLk),
     paymentStatus: r.paymentStatus,
     dealerComment: r.dealerComment,
     authorName: r.authorName,

@@ -9,12 +9,8 @@ export const dynamic = "force-dynamic";
 
 export default async function LoginPage() {
   const session = await auth();
-  // Заблокированного не уводим в кабинет: оттуда его вернёт сюда же, и
-  // получится петля редиректов, пока не обновится JWT.
-  const status = session?.user?.status;
-  if (session?.user && (status === "APPROVED" || status === "PENDING" || status === "REJECTED")) {
-    redirect(getCabinetPath(session.user));
-  }
+  // Кабинет показывает не одобренным экран статуса (ожидание, отказ, блокировка).
+  if (session?.user?.status) redirect(getCabinetPath(session.user));
   return (
     <div className="grid lg:grid-cols-2 gap-10 pt-10 lg:pt-16 items-center">
       <div className="hidden lg:block">

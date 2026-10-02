@@ -28,6 +28,8 @@ export type LegacyRecordRow = {
   versionCustom: string | null;
   eolType: string | null;
   priceTotal: number | null;
+  /** Сумма в самом ЛК DriveMods — цена для MMB RUSSIA. */
+  priceLk: number | null;
   paymentStatus: string;
   dealerComment: string | null;
   authorName: string | null;
@@ -252,6 +254,7 @@ export function RecordsTable({
                           <div className="text-xs text-ink-muted">
                             {[
                               r.licenseType,
+                              r.version ? `ПО ${r.version}` : null,
                               r.versionCustom ? `кастом ${r.versionCustom}` : null,
                               r.eolType ? `EOL ${r.eolType}` : null,
                             ]
@@ -285,6 +288,11 @@ export function RecordsTable({
                   </td>
                   <td className={`${td} whitespace-nowrap text-right`}>
                     {r.priceTotal != null && (r.priceTotal > 0 || tab !== "other") ? <div>{formatRub(r.priceTotal)}</div> : null}
+                    {r.priceLk != null && r.priceLk !== r.priceTotal ? (
+                      <div className="text-[11px] text-ink-subtle" title="Сумма в ЛК DriveMods">
+                        в ЛК {formatRub(r.priceLk)}
+                      </div>
+                    ) : null}
                     {tab !== "other" || (r.priceTotal ?? 0) > 0 ? (
                       <Tag tone={legacyPaymentTone(r.paymentStatus)} className="mt-1 px-2 py-0.5 text-[11px]">
                         {LEGACY_PAYMENT_LABEL[r.paymentStatus] ?? r.paymentStatus}
@@ -322,7 +330,7 @@ export function RecordsTable({
         open={assignOpen}
         onClose={() => setAssignOpen(false)}
         title={`Назначить ${count.toLocaleString("ru-RU")} ${plural(count, noun)}`}
-        description="Выбранные записи появятся в кабинете представителя в разделе «Старый ЛК» и останутся за ним при повторном импорте и перепривязке дилеров."
+        description="Выбранные записи появятся в кабинете представителя в разделе «ЛК DriveMods» и останутся за ним при повторном импорте и перепривязке дилеров."
       >
         <div className="space-y-3">
           {tab === "licenses" ? (

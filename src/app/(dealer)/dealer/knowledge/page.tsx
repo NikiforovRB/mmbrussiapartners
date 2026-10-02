@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { getCabinetSections } from "@/lib/cabinet-sections";
 import { Topbar } from "@/components/cabinet/topbar";
 import { Card } from "@/components/ui/card";
 import { Tag } from "@/components/ui/tag";
@@ -19,6 +21,7 @@ export default async function DealerKnowledgePage({
 }) {
   const session = await auth();
   if (!session?.user) return null;
+  if (!(await getCabinetSections()).knowledge) notFound();
   const sp = await searchParams;
   const [user, data] = await Promise.all([
     db.user.findUnique({ where: { id: session.user.id }, include: { role: true, dealerProfile: true } }),

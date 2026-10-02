@@ -28,6 +28,7 @@ import { getUserAvatarUrl } from "@/lib/user-avatar";
 import { SIDEBAR_COOKIE } from "@/lib/sidebar";
 import { clientIp } from "@/lib/rate-limit";
 import { trackUserIp } from "@/lib/user-ips";
+import { getCabinetSections } from "@/lib/cabinet-sections";
 
 export default async function DealerLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
@@ -46,7 +47,7 @@ export default async function DealerLayout({ children }: { children: React.React
     return <RejectedScreen email={user.email} reason={user.dealerProfile?.rejectionReason ?? null} />;
   }
   if (user.status === "SUSPENDED") {
-    redirect("/login?callbackUrl=/dealer");
+    return <SuspendedScreen email={user.email} reason={user.dealerProfile?.suspensionReason ?? null} />;
   }
   if (user.isSuperAdmin) {
     redirect("/admin");
@@ -54,9 +55,10 @@ export default async function DealerLayout({ children }: { children: React.React
   const ip = clientIp(await headers());
   after(() => trackUserIp(user.id, ip));
 
-  const hasLegacyRecords = Boolean(
-    await db.legacyRecord.findFirst({ where: { userId: user.id }, select: { id: true } }),
-  );
+  const sections = await getCabinetSections();
+  const hasLegacyRecords =
+    sections.legacyLk &&
+    Boolean(await db.legacyRecord.findFirst({ where: { userId: user.id }, select: { id: true } }));
   const items: SidebarItem[] = [
     { href: "/dealer", label: "Дашборд", icon: <LayoutDashboard className="h-4 w-4" /> },
     { href: "/dealer/licenses", label: "Мои лицензии", icon: <KeyRound className="h-4 w-4" /> },
@@ -64,10 +66,12 @@ export default async function DealerLayout({ children }: { children: React.React
     { href: "/dealer/humax", label: "Пароли HUMAX", icon: <Cpu className="h-4 w-4" /> },
     { href: "/dealer/payments", label: "Платежи", icon: <CreditCard className="h-4 w-4" /> },
     ...(hasLegacyRecords
-      ? [{ href: "/dealer/legacy", label: "Старый ЛК", icon: <History className="h-4 w-4" /> }]
+      ? [{ href: "/dealer/legacy", label: "ЛК DriveMods", icon: <History className="h-4 w-4" /> }]
       : []),
     { href: "/dealer/reports", label: "Отчёты", icon: <FileSpreadsheet className="h-4 w-4" /> },
-    { href: "/dealer/knowledge", label: "База знаний", icon: <BookOpen className="h-4 w-4" /> },
+    ...(sections.knowledge
+      ? [{ href: "/dealer/knowledge", label: "База знаний", icon: <BookOpen className="h-4 w-4" /> }]
+      : []),
     { href: "/dealer/profile", label: "Профиль", icon: <UserCircle className="h-4 w-4" /> },
   ];
 
@@ -151,16 +155,34 @@ function RejectedScreen({ email, reason }: { email: string; reason: string | nul
       <p className="mt-2 text-sm text-ink-muted">
         Администратор отклонил заявку на регистрацию аккаунта <span className="text-ink">{email}</span>.
       </p>
-      {reason ? (
-        <div className="mt-5 rounded-panel bg-surface-muted px-4 py-3 text-left">
-          <div className="text-xs uppercase tracking-widest text-ink-muted">Причина</div>
-          <p className="mt-1 whitespace-pre-line break-words text-sm text-ink">{reason}</p>
-        </div>
-      ) : null}
+      <ReasonBox reason={reason} />
       <p className="mt-4 text-sm text-ink-muted">
         Если это ошибка или данные можно уточнить — свяжитесь с MMB RUSSIA.
       </p>
     </StatusScreen>
+  );
+}
+
+function SuspendedScreen({ email, reason }: { email: string; reason: string | null }) {
+  return (
+    <StatusScreen title="Аккаунт заблокирован">
+      <p className="mt-2 text-sm text-ink-muted">
+        Администратор заблокировал аккаунт <span className="text-ink">{email}</span>: генерация лицензий, оплаты и
+        остальные разделы кабинета недоступны.
+      </p>
+      <ReasonBox reason={reason} />
+      <p className="mt-4 text-sm text-ink-muted">Чтобы восстановить доступ, свяжитесь с MMB RUSSIA.</p>
+    </StatusScreen>
+  );
+}
+
+function ReasonBox({ reason }: { reason: string | null }) {
+  if (!reason) return null;
+  return (
+    <div className="mt-5 rounded-panel bg-surface-muted px-4 py-3 text-left">
+      <div className="text-xs uppercase tracking-widest text-ink-muted">Причина</div>
+      <p className="mt-1 whitespace-pre-line break-words text-sm text-ink">{reason}</p>
+    </div>
   );
 }
 

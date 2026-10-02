@@ -4,6 +4,7 @@ import { Topbar } from "@/components/cabinet/topbar";
 import { LicenseDetailEditor } from "@/components/licenses/license-detail-editor";
 import { requireAdminPage } from "@/lib/session";
 import { LICENSE_PAYMENT_SELECT } from "@/lib/license-price";
+import { isCustomVersionOutdated } from "@/lib/custom-version";
 
 export const dynamic = "force-dynamic";
 
@@ -26,10 +27,13 @@ export default async function AdminLicensePage({ params }: { params: Promise<{ i
   if (!license) notFound();
   const latestRequest = license.cancellationRequests[0] ?? null;
 
-  const me = await db.user.findUnique({
-    where: { id: session.user.id },
-    include: { role: true },
-  });
+  const [me, customVersionOutdated] = await Promise.all([
+    db.user.findUnique({
+      where: { id: session.user.id },
+      include: { role: true },
+    }),
+    isCustomVersionOutdated(license.versionCustom),
+  ]);
 
   return (
     <>
@@ -46,6 +50,7 @@ export default async function AdminLicensePage({ params }: { params: Promise<{ i
         <LicenseDetailEditor
           license={JSON.parse(JSON.stringify(license))}
           context="admin"
+          customVersionOutdated={customVersionOutdated}
           latestRequest={latestRequest ? JSON.parse(JSON.stringify(latestRequest)) : null}
         />
       </div>

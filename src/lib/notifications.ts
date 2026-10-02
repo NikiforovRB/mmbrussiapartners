@@ -1,8 +1,8 @@
 import "server-only";
 import nodemailer from "nodemailer";
 import { db } from "./db";
-import { fetchWithTimeout } from "./http";
 import { formatRub } from "./money";
+import { escapeTelegramHtml, isTelegramConfigured, telegramApi } from "./telegram";
 
 type SendEmailParams = {
   to: string;
@@ -12,20 +12,27 @@ type SendEmailParams = {
   userId?: string | null;
 };
 
+export const DEFAULT_SMTP_FROM = "MMB RUSSIA <mail@mmbrussia.ru>";
+
 let cachedTransport: nodemailer.Transporter | null = null;
+
+export function isSmtpConfigured(): boolean {
+  return Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
+}
+
+export function smtpFrom(): string {
+  return process.env.SMTP_FROM?.trim() || DEFAULT_SMTP_FROM;
+}
 
 function getTransport(): nodemailer.Transporter | null {
   if (cachedTransport) return cachedTransport;
-  const host = process.env.SMTP_HOST;
+  if (!isSmtpConfigured()) return null;
   const port = Number(process.env.SMTP_PORT ?? 587);
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
-  if (!host || !user || !pass) return null;
   cachedTransport = nodemailer.createTransport({
-    host,
+    host: process.env.SMTP_HOST,
     port,
     secure: port === 465,
-    auth: { user, pass },
+    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
     connectionTimeout: 10_000,
     greetingTimeout: 10_000,
     socketTimeout: 30_000,
@@ -35,7 +42,6 @@ function getTransport(): nodemailer.Transporter | null {
 
 export async function sendEmail({ to, subject, html, text, userId }: SendEmailParams) {
   const transport = getTransport();
-  const from = process.env.SMTP_FROM ?? "MMB RUSSIA <noreply@mmbrussia.ru>";
 
   const log = await db.notificationLog.create({
     data: {
@@ -52,7 +58,7 @@ export async function sendEmail({ to, subject, html, text, userId }: SendEmailPa
   if (!transport) return { ok: false, reason: "SMTP not configured", logId: log.id };
 
   try {
-    await transport.sendMail({ from, to, subject, html, text });
+    await transport.sendMail({ from: smtpFrom(), to, subject, html, text });
     await db.notificationLog.update({ where: { id: log.id }, data: { status: "SENT" } });
     return { ok: true, logId: log.id };
   } catch (err) {
@@ -65,116 +71,68 @@ export async function sendEmail({ to, subject, html, text, userId }: SendEmailPa
   }
 }
 
-/**
- * Telegram channel — пока заглушка. Когда понадобится — заполнить
- * TELEGRAM_BOT_TOKEN и TELEGRAM_ADMIN_CHAT_ID и реализовать через Bot API.
- */
-export async function sendTelegram(opts: { chatId?: string; text: string; userId?: string | null }) {
-  const token = process.env.TELEGRAM_BOT_TOKEN;
-  const fallbackChat = process.env.TELEGRAM_ADMIN_CHAT_ID;
-  const chatId = opts.chatId ?? fallbackChat;
-
+/** Сообщение в чат с ботом через воркер Cloudflare (lib/telegram.ts). Текст — HTML Telegram. */
+export async function sendTelegram(opts: { chatId: string; text: string; userId?: string | null }) {
+  const configured = isTelegramConfigured();
   const log = await db.notificationLog.create({
     data: {
       channel: "TELEGRAM",
-      recipient: chatId ?? "—",
+      recipient: opts.chatId,
       body: opts.text,
       userId: opts.userId ?? null,
-      status: token && chatId ? "QUEUED" : "FAILED",
-      error: token && chatId ? null : "Telegram not configured",
+      status: configured ? "QUEUED" : "FAILED",
+      error: configured ? null : "Telegram not configured",
     },
   });
-
-  if (!token || !chatId) return { ok: false, reason: "Telegram not configured", logId: log.id };
+  if (!configured) return { ok: false, reason: "Telegram not configured", logId: log.id };
 
   try {
-    const res = await fetchWithTimeout(`https://api.telegram.org/bot${token}/sendMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, text: opts.text, parse_mode: "HTML" }),
+    await telegramApi("sendMessage", {
+      chat_id: opts.chatId,
+      text: opts.text,
+      parse_mode: "HTML",
+      link_preview_options: { is_disabled: true },
     });
-    if (!res.ok) throw new Error(`Telegram API ${res.status}`);
     await db.notificationLog.update({ where: { id: log.id }, data: { status: "SENT" } });
     return { ok: true, logId: log.id };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     await db.notificationLog.update({
       where: { id: log.id },
-      data: { status: "FAILED", error: message },
+      data: { status: "FAILED", error: message.slice(0, 500) },
     });
     return { ok: false, reason: message, logId: log.id };
   }
+}
+
+/** Письмо-уведомление: заголовок, текст и кнопка в кабинет. */
+export function notificationEmailHtml(params: { title: string; body?: string | null; url?: string | null; footer: string }) {
+  return `
+    <div style="font-family: Inter, Arial, sans-serif; max-width: 560px; color: #171717;">
+      <div style="font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: #6b7280;">MMB RUSSIA · Партнёрский кабинет</div>
+      <h2 style="margin: 12px 0; font-size: 20px; line-height: 1.3;">${escapeHtml(params.title)}</h2>
+      ${params.body ? `<p style="margin: 0 0 16px; white-space: pre-line; line-height: 1.5;">${escapeHtml(params.body)}</p>` : ""}
+      ${
+        params.url
+          ? `<p style="margin: 20px 0;"><a href="${escapeHtml(params.url)}" style="display: inline-block; background: #2a9fff; color: #fff; padding: 10px 18px; border-radius: 12px; text-decoration: none;">Открыть в кабинете</a></p>`
+          : ""
+      }
+      <p style="margin-top: 28px; color: #9ca3af; font-size: 12px; line-height: 1.5;">${escapeHtml(params.footer)}</p>
+    </div>`;
+}
+
+export function notificationTelegramText(params: { title: string; body?: string | null; url?: string | null }) {
+  return [
+    `<b>${escapeTelegramHtml(params.title)}</b>`,
+    params.body ? escapeTelegramHtml(params.body) : null,
+    params.url ? `<a href="${escapeTelegramHtml(params.url)}">Открыть в кабинете</a>` : null,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 function stripHtml(html: string) {
   return html.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
-}
-
-export async function notifyAdminsLicenseCancelled(params: {
-  licenseNumber: string;
-  dealerEmail: string;
-  reason: string;
-  by: string;
-}) {
-  const subject = `Аннулирована лицензия ${params.licenseNumber}`;
-  const html = `
-    <div style="font-family: Inter, system-ui, sans-serif; max-width: 560px;">
-      <h2 style="margin:0 0 12px;">Аннулирована лицензия ${escapeHtml(params.licenseNumber)}</h2>
-      <p>Представитель: <strong>${escapeHtml(params.dealerEmail)}</strong></p>
-      <p>Инициатор: <strong>${escapeHtml(params.by)}</strong></p>
-      <p style="background:#e7ecf6;padding:12px;border-radius:12px;">
-        <strong>Причина:</strong><br/>${escapeHtml(params.reason)}
-      </p>
-    </div>`;
-
-  const adminEmail = process.env.ADMIN_NOTIFY_EMAIL;
-  if (adminEmail) {
-    await sendEmail({ to: adminEmail, subject, html });
-  }
-  await sendTelegram({ text: `${subject}\nПредставитель: ${params.dealerEmail}\nПричина: ${params.reason}` });
-}
-
-export async function notifyAdminsCancellationRequest(params: {
-  licenseNumber: string;
-  dealerEmail: string;
-  reason: string;
-}) {
-  const subject = `Заявка на аннулирование лицензии ${params.licenseNumber}`;
-  const html = `
-    <div style="font-family: Inter, system-ui, sans-serif; max-width: 560px;">
-      <h2 style="margin:0 0 12px;">Заявка на аннулирование ${escapeHtml(params.licenseNumber)}</h2>
-      <p>Представитель: <strong>${escapeHtml(params.dealerEmail)}</strong> просит аннулировать лицензию.</p>
-      <p style="background:#e7ecf6;padding:12px;border-radius:12px;">
-        <strong>Причина:</strong><br/>${escapeHtml(params.reason)}
-      </p>
-      <p>Рассмотрите заявку в разделе «Заявки на аннулирование».</p>
-    </div>`;
-
-  const adminEmail = process.env.ADMIN_NOTIFY_EMAIL;
-  if (adminEmail) {
-    await sendEmail({ to: adminEmail, subject, html });
-  }
-  await sendTelegram({
-    text: `${subject}\nПредставитель: ${params.dealerEmail}\nПричина: ${params.reason}`,
-  });
-}
-
-export async function notifyDealerCancellationReviewed(params: {
-  licenseNumber: string;
-  dealerEmail: string;
-  approved: boolean;
-  note?: string | null;
-  userId?: string | null;
-}) {
-  const verdict = params.approved ? "одобрена" : "отклонена";
-  const subject = `Заявка на аннулирование ${params.licenseNumber} ${verdict}`;
-  const html = `
-    <div style="font-family: Inter, system-ui, sans-serif; max-width: 560px;">
-      <h2 style="margin:0 0 12px;">Заявка ${verdict}</h2>
-      <p>Лицензия <strong>${escapeHtml(params.licenseNumber)}</strong>: заявка на аннулирование ${verdict}.</p>
-      ${params.note ? `<p style="background:#e7ecf6;padding:12px;border-radius:12px;"><strong>Комментарий:</strong><br/>${escapeHtml(params.note)}</p>` : ""}
-    </div>`;
-  await sendEmail({ to: params.dealerEmail, subject, html, userId: params.userId ?? null });
 }
 
 /**

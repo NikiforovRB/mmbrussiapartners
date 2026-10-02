@@ -5,6 +5,8 @@ import { getUserAvatarUrl } from "@/lib/user-avatar";
 import { fioFromParts } from "@/lib/utils";
 import { ProfileForm } from "@/app/(dealer)/dealer/profile/profile-form";
 import { requireAdminPage } from "@/lib/session";
+import { NotificationPrefsCard } from "@/components/cabinet/notification-prefs-card";
+import { notificationPrefsProps } from "@/lib/notification-prefs";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +17,22 @@ export default async function AdminProfilePage() {
     where: { id: session.user.id },
     include: { dealerProfile: true, role: true },
   });
-  if (!user || !user.dealerProfile) redirect("/admin");
+  if (!user) redirect("/admin");
+  if (!user.dealerProfile) {
+    return (
+      <>
+        <Topbar
+          title="Профиль"
+          subtitle="Уведомления на почту и в Telegram"
+          profileHref="/admin/profile"
+          user={{ name: user.email, email: user.email, role: user.role.name }}
+        />
+        <div className="mt-6 max-w-xl">
+          <NotificationPrefsCard {...notificationPrefsProps(user)} />
+        </div>
+      </>
+    );
+  }
 
   const fio = fioFromParts({
     firstName: user.dealerProfile.firstName,
@@ -49,10 +66,8 @@ export default async function AdminProfilePage() {
             address: user.dealerProfile.address ?? "",
             siteComment: user.dealerProfile.siteComment ?? "",
             phoneVisibleOnSite: user.dealerProfile.phoneVisibleOnSite,
-            notifyByEmail: user.notifyByEmail,
-            notifyByTelegram: user.notifyByTelegram,
-            telegramChatId: user.telegramChatId ?? "",
           }}
+          notifications={<NotificationPrefsCard {...notificationPrefsProps(user)} />}
           publication={{
             status: user.dealerProfile.sitePublication,
             at: user.dealerProfile.sitePublicationAt?.toISOString() ?? null,

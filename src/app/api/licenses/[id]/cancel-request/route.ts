@@ -3,7 +3,6 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { hasPermission } from "@/lib/permissions";
 import { badRequest, conflict, forbidden, notFound, parseBody, route } from "@/lib/api";
-import { notifyAdminsCancellationRequest } from "@/lib/notifications";
 import { notifyAdmins } from "@/lib/app-notifications";
 import { requireApprovedUser } from "@/lib/session";
 
@@ -40,11 +39,6 @@ export const POST = route(async (req: Request, ctx: { params: Promise<{ id: stri
     data: { licenseId: license.id, requestedById: session.user.id, reason },
   });
 
-  await notifyAdminsCancellationRequest({
-    licenseNumber: license.number,
-    dealerEmail: license.dealer.email,
-    reason,
-  });
   await notifyAdmins(["licenses.cancel"], {
     type: "CANCELLATION_REQUESTED",
     title: `Заявка на аннулирование ${license.number}`,

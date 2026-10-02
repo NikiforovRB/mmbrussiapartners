@@ -61,11 +61,7 @@ function Header({ content, loginHref }: { content: HomepageContent; loginHref: s
         </nav>
         <div className="flex items-center gap-2">
           <LoginLink href={loginHref}>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="border border-[#dddcdb] hover:border-[#2a9fff] hover:bg-transparent"
-            >
+            <Button variant="ghost" size="sm" className="bg-white hover:bg-white">
               {content.header.loginButton}
             </Button>
           </LoginLink>
@@ -111,7 +107,7 @@ function Hero({ content, loginHref }: { content: HomepageContent; loginHref: str
               <Button
                 size="lg"
                 variant="secondary"
-                className="bg-white hover:bg-card-light"
+                className="border-0 bg-white hover:bg-card-light"
                 icon={<ArrowRight className="h-4 w-4" />}
               >
                 {content.hero.registerButton}
@@ -137,14 +133,15 @@ function Hero({ content, loginHref }: { content: HomepageContent; loginHref: str
 function Workflow({ content }: { content: HomepageContent }) {
   return (
     <section id="workflow" className="relative py-24 surface-dark">
-      <div className="mx-auto max-w-7xl px-6 lg:px-10">
+      <div className="mx-auto max-w-7xl px-6 lg:px-10 [container-type:inline-size]">
         <ScrollReveal>
           <span className="inline-flex items-center gap-2 rounded-panel bg-white/10 px-3.5 py-1.5 text-xs text-white/70">
             <CheckCircle2 className="h-3.5 w-3.5" /> {content.workflow.badge}
           </span>
-          <h2 className="mt-4 font-display text-3xl md:text-5xl tracking-tightest text-white">
+          {/* 6cqi от ширины контейнера — заголовок в одну строку по ширине сетки шагов. */}
+          <h2 className="mt-4 font-display text-3xl md:text-[length:6cqi] md:leading-[1.05] tracking-tightest text-white">
             {content.workflow.titleLine1}
-            <br /> <span className="text-bg-accent">{content.workflow.titleHighlight}</span>
+            <br className="md:hidden" /> <span className="text-bg-accent">{content.workflow.titleHighlight}</span>
           </h2>
         </ScrollReveal>
         <div className="mt-14 grid md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -240,7 +237,7 @@ function CtaContact({
 
 function Footer({ content, loginHref }: { content: HomepageContent; loginHref: string }) {
   return (
-    <footer className="py-10">
+    <footer className="border-t border-black/10 py-10">
       <div className="mx-auto max-w-7xl px-6 lg:px-10 flex flex-wrap items-center justify-between gap-3">
         <div className="text-sm text-ink-muted">
           © {new Date().getFullYear()} {content.footer.copyrightPrefix}

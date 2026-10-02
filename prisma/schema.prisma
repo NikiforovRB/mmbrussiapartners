@@ -120,7 +120,15 @@ model User {
   twoFactorEnabled Boolean   @default(false)
   notifyByEmail   Boolean    @default(true)
   notifyByTelegram Boolean   @default(false)
+  /// Чат с ботом. Заполняется только самим ботом, когда пользователь
+  /// открывает одноразовую ссылку привязки (/start <код>).
   telegramChatId  String?
+  /// @username или имя в Telegram — для подписи «подключён как …».
+  telegramName    String?
+  telegramLinkedAt DateTime?
+  /// Одноразовый код привязки из ссылки t.me/<бот>?start=<код>.
+  telegramLinkCode String?   @unique
+  telegramLinkCodeExpiresAt DateTime?
   lastLoginAt     DateTime?
   lastLoginIp     String?
   /// Увеличение отзывает все выданные JWT-сессии (смена пароля, блокировка).
@@ -274,7 +282,11 @@ model LegacyRecord {
   eolType        String?
   recoverable    Boolean          @default(false)
   priceBase      Decimal?         @db.Decimal(14, 2)
+  /// Сумма для представителя: по дилерской цене справочника MMB RUSSIA, если
+  /// позиция в нём есть, иначе как в ЛК.
   priceTotal     Decimal?         @db.Decimal(14, 2)
+  /// Сумма из самого ЛК DriveMods (цена для MMB RUSSIA со скидками DriveMods).
+  priceLk        Decimal?         @db.Decimal(14, 2)
   discount       Decimal?         @db.Decimal(14, 2)
   discountName   String?
   couponCode     String?
@@ -379,6 +391,8 @@ model DealerProfile {
   approvedAt          DateTime?
   approvedById        String?
   rejectionReason     String?
+  /// Причина блокировки — её видят представитель (экран при входе) и администраторы.
+  suspensionReason    String?
   notes               String?
   /// Страна для «Дилерской сети» на mmbrussia.ru (города там сгруппированы
   /// по странам). Пусто — отправляется «Россия».
@@ -838,6 +852,10 @@ model CompanySettings {
   /// { serviceLabel, vatType, paymentMethod }. Секреты (токены, логины кассы)
   /// остаются в .env.
   payment      Json?
+  /// Какие разделы видят представители: { legacyLk, knowledge }.
+  sections     Json?
+  /// Каналы уведомлений: { emailEnabled, telegramEnabled, emailOff[], telegramOff[] }.
+  notifications Json?
   updatedAt    DateTime @updatedAt
 }
 

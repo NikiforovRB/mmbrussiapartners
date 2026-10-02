@@ -1,8 +1,9 @@
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { History, Search } from "lucide-react";
 import type { LegacyRecordKind, Prisma } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { getCabinetSections } from "@/lib/cabinet-sections";
 import { Topbar } from "@/components/cabinet/topbar";
 import { Pagination, parsePage } from "@/components/cabinet/pagination";
 import { Card } from "@/components/ui/card";
@@ -34,11 +35,15 @@ export default async function DealerLegacyPage({
 }) {
   const session = await auth();
   if (!session?.user) redirect("/login");
-  const user = await db.user.findUnique({
-    where: { id: session.user.id },
-    include: { dealerProfile: true, role: true },
-  });
+  const [user, sections] = await Promise.all([
+    db.user.findUnique({
+      where: { id: session.user.id },
+      include: { dealerProfile: true, role: true },
+    }),
+    getCabinetSections(),
+  ]);
   if (!user) redirect("/login");
+  if (!sections.legacyLk) notFound();
 
   const sp = await searchParams;
   const tab: Tab = sp.tab === "payments" || sp.tab === "other" ? sp.tab : "licenses";
@@ -101,14 +106,14 @@ export default async function DealerLegacyPage({
   return (
     <>
       <Topbar
-        title="Старый ЛК DriveMods"
+        title="ЛК DriveMods"
         subtitle="Лицензии и оплаты из store.drivemods.ru — только для просмотра"
         user={{ name: fio || user.email, email: user.email, role: user.role.name }}
       />
 
       {kinds.length === 0 ? (
         <Card className="mt-6 p-8 text-center text-sm text-ink-muted">
-          Записей из старого личного кабинета DriveMods у вас нет. Если вы работали там — напишите MMB RUSSIA, мы
+          Записей из личного кабинета DriveMods у вас нет. Если вы работали там — напишите MMB RUSSIA, мы
           перенесём историю.
         </Card>
       ) : (
@@ -135,14 +140,14 @@ export default async function DealerLegacyPage({
           <div className="mt-4 flex gap-3 rounded-panel bg-surface-muted px-4 py-3 text-sm text-ink-muted">
             <History className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
             <div>
-              История перенесена из прежнего личного кабинета DriveMods и не меняется. Новые лицензии — в разделе
+              История перенесена из личного кабинета DriveMods и не меняется. Новые лицензии — в разделе
               «Мои лицензии».
             </div>
           </div>
 
           <LinkTabs
             className="mt-5"
-            label="Записи старого ЛК"
+            label="Записи ЛК DriveMods"
             tabs={(Object.keys(TABS) as Tab[])
               .filter((t) => t === "licenses" || kindCount(...TABS[t].kinds) > 0)
               .map((t) => ({
@@ -202,7 +207,7 @@ export default async function DealerLegacyPage({
                               <div className="text-xs text-ink-muted">
                                 {[
                                   r.licenseType,
-                                  r.version,
+                                  r.version ? `ПО ${r.version}` : null,
                                   r.versionCustom ? `кастом ${r.versionCustom}` : null,
                                   r.eolType ? `EOL ${r.eolType}` : null,
                                 ]

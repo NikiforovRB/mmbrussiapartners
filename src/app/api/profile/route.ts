@@ -24,9 +24,6 @@ const schema = z.object({
   address: z.string().nullable().optional(),
   siteComment: z.string().max(200, "Подпись на сайте — не длиннее 200 символов").nullable().optional(),
   phoneVisibleOnSite: z.boolean().optional(),
-  notifyByEmail: z.boolean().optional(),
-  notifyByTelegram: z.boolean().optional(),
-  telegramChatId: z.string().nullable().optional(),
 });
 
 export const PATCH = route(async (req: Request) => {
@@ -84,9 +81,6 @@ export const PATCH = route(async (req: Request) => {
   const updated = await db.user.update({
     where: { id: userId },
     data: {
-      ...(d.notifyByEmail !== undefined && { notifyByEmail: d.notifyByEmail }),
-      ...(d.notifyByTelegram !== undefined && { notifyByTelegram: d.notifyByTelegram }),
-      ...(d.telegramChatId !== undefined && { telegramChatId: d.telegramChatId || null }),
       dealerProfile: {
         update: {
           ...(d.firstName !== undefined && { firstName: d.firstName }),

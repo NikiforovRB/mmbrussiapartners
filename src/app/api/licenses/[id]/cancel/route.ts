@@ -3,8 +3,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { hasPermission } from "@/lib/permissions";
 import { badRequest, forbidden, notFound, parseBody, route } from "@/lib/api";
-import { notifyAdminsLicenseCancelled } from "@/lib/notifications";
-import { notifyUser } from "@/lib/app-notifications";
+import { notifyAdmins, notifyUser } from "@/lib/app-notifications";
 import { syncLicenseSlots } from "@/lib/license-slots";
 import { requireApprovedUser } from "@/lib/session";
 
@@ -45,12 +44,16 @@ export const POST = route(async (req: Request, ctx: { params: Promise<{ id: stri
   // Аннулированная лицензия освобождает слот лимита представителя.
   await syncLicenseSlots(license.dealerId);
 
-  await notifyAdminsLicenseCancelled({
-    licenseNumber: license.number,
-    dealerEmail: license.dealer.email,
-    reason,
-    by: session.user.email,
-  });
+  await notifyAdmins(
+    ["licenses.cancel"],
+    {
+      type: "LICENSE_CANCELLED",
+      title: `Аннулирована лицензия ${license.number}`,
+      body: `${license.dealer.email} · аннулировал ${session.user.email}: ${reason}`,
+      link: `/admin/licenses/${license.id}`,
+    },
+    { exceptUserId: session.user.id },
+  );
 
   if (!isOwner) {
     await notifyUser(license.dealerId, {
