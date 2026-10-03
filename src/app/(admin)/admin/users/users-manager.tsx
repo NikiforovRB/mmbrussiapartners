@@ -12,6 +12,10 @@ import {
   RotateCcw,
   LogOut,
   CheckCircle2,
+  Pencil,
+  Camera,
+  Loader2,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
@@ -22,7 +26,9 @@ import { Select } from "@/components/ui/select";
 import { Modal } from "@/components/ui/modal";
 import { StatusTag } from "@/components/ui/status-tag";
 import { Avatar } from "@/components/ui/avatar";
+import { Checkbox } from "@/components/ui/checkbox";
 import { formatRuDateTime } from "@/lib/dates";
+import { fioFromParts } from "@/lib/utils";
 
 const ADMIN_ROLE_NAME = "Администратор";
 
@@ -30,6 +36,8 @@ export type ManagedUser = {
   id: string;
   email: string;
   name: string;
+  avatarUrl: string | null;
+  profile: { lastName: string; firstName: string; middleName: string; phone: string };
   roleId: string;
   roleName: string;
   isSystemRole: boolean;
@@ -55,6 +63,7 @@ export function UsersManager({
   const [addOpen, setAddOpen] = React.useState(false);
   const [passwordFor, setPasswordFor] = React.useState<ManagedUser | null>(null);
   const [roleFor, setRoleFor] = React.useState<ManagedUser | null>(null);
+  const [editFor, setEditFor] = React.useState<ManagedUser | null>(null);
 
   const admins = users.filter((u) => u.isSuperAdmin || u.roleName === ADMIN_ROLE_NAME);
   const staff = users.filter((u) => !(u.isSuperAdmin || u.roleName === ADMIN_ROLE_NAME));
@@ -104,6 +113,7 @@ export function UsersManager({
         users={admins}
         meId={meId}
         meIsSuperAdmin={meIsSuperAdmin}
+        onEdit={setEditFor}
         onPassword={setPasswordFor}
         onRole={setRoleFor}
         onStatus={setStatus}
@@ -117,10 +127,22 @@ export function UsersManager({
         users={staff}
         meId={meId}
         meIsSuperAdmin={meIsSuperAdmin}
+        onEdit={setEditFor}
         onPassword={setPasswordFor}
         onRole={setRoleFor}
         onStatus={setStatus}
         onRevoke={revokeSessions}
+      />
+
+      <EditUserModal
+        user={editFor}
+        canGrantSuperAdmin={meIsSuperAdmin && editFor?.id !== meId}
+        onClose={() => setEditFor(null)}
+        onChanged={() => router.refresh()}
+        onDone={() => {
+          setEditFor(null);
+          router.refresh();
+        }}
       />
 
       <AddUserModal
@@ -157,6 +179,7 @@ function UserSection({
   users,
   meId,
   meIsSuperAdmin,
+  onEdit,
   onPassword,
   onRole,
   onStatus,
@@ -168,6 +191,7 @@ function UserSection({
   users: ManagedUser[];
   meId: string;
   meIsSuperAdmin: boolean;
+  onEdit: (u: ManagedUser) => void;
   onPassword: (u: ManagedUser) => void;
   onRole: (u: ManagedUser) => void;
   onStatus: (u: ManagedUser, status: "APPROVED" | "SUSPENDED") => void;
@@ -196,7 +220,7 @@ function UserSection({
             const locked = u.isSuperAdmin && !meIsSuperAdmin;
             return (
               <li key={u.id} className="flex flex-wrap items-center gap-3 px-5 py-3.5">
-                <Avatar name={u.name} size={38} />
+                <Avatar name={u.name} src={u.avatarUrl} size={38} />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="truncate">{u.name}</span>
@@ -213,6 +237,16 @@ function UserSection({
                 </div>
                 <StatusTag kind="user" status={u.status} />
                 <div className="flex flex-wrap items-center gap-1.5 ml-auto">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    icon={<Pencil className="h-3.5 w-3.5" />}
+                    disabled={locked}
+                    title="ФИО, телефон, email и фото"
+                    onClick={() => onEdit(u)}
+                  >
+                    Изменить
+                  </Button>
                   <Button
                     size="sm"
                     variant="ghost"
@@ -408,6 +442,208 @@ function AddUserModal({
           Создать
         </Button>
       </div>
+    </Modal>
+  );
+}
+
+function EditUserModal({
+  user,
+  canGrantSuperAdmin,
+  onClose,
+  onChanged,
+  onDone,
+}: {
+  user: ManagedUser | null;
+  canGrantSuperAdmin: boolean;
+  onClose: () => void;
+  /** Фото сохраняется сразу — список обновляем, не закрывая окно. */
+  onChanged: () => void;
+  onDone: () => void;
+}) {
+  const [form, setForm] = React.useState({ lastName: "", firstName: "", middleName: "", phone: "", email: "" });
+  const [superAdmin, setSuperAdmin] = React.useState(false);
+  const [photo, setPhoto] = React.useState<string | null>(null);
+  const [photoBusy, setPhotoBusy] = React.useState(false);
+  const [loading, setLoading] = React.useState(false);
+  const [errors, setErrors] = React.useState<{ email?: string; phone?: string }>({});
+
+  React.useEffect(() => {
+    if (user) {
+      setForm({ ...user.profile, email: user.email });
+      setSuperAdmin(user.isSuperAdmin);
+      setPhoto(user.avatarUrl);
+      setErrors({});
+    }
+  }, [user]);
+
+  function set<K extends keyof typeof form>(key: K, value: string) {
+    setForm((f) => ({ ...f, [key]: value }));
+    if (key === "email" || key === "phone") setErrors((e) => ({ ...e, [key]: undefined }));
+  }
+
+  async function uploadPhoto(file: File) {
+    if (!user) return;
+    setPhotoBusy(true);
+    const body = new FormData();
+    body.append("avatar", file);
+    const res = await fetch(`/api/users/${user.id}/avatar`, { method: "POST", body });
+    setPhotoBusy(false);
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      toast.error(j.error ?? "Не удалось загрузить фото");
+      return;
+    }
+    setPhoto((j.url as string) ?? null);
+    toast.success("Фото обновлено");
+    onChanged();
+  }
+
+  async function removePhoto() {
+    if (!user) return;
+    setPhotoBusy(true);
+    const res = await fetch(`/api/users/${user.id}/avatar`, { method: "DELETE" });
+    setPhotoBusy(false);
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      toast.error(j.error ?? "Не удалось удалить фото");
+      return;
+    }
+    setPhoto(null);
+    toast.success("Фото удалено");
+    onChanged();
+  }
+
+  async function save() {
+    if (!user) return;
+    const next: typeof errors = {};
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) next.email = "Некорректный email";
+    const digits = form.phone.replace(/\D/g, "");
+    if (digits && digits.length < 10) next.phone = "Некорректный телефон";
+    setErrors(next);
+    if (Object.keys(next).length > 0) return;
+
+    setLoading(true);
+    const res = await fetch(`/api/users/${user.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: form.email.trim(),
+        profile: {
+          lastName: form.lastName,
+          firstName: form.firstName,
+          middleName: form.middleName,
+          phone: form.phone,
+        },
+        ...(canGrantSuperAdmin && { isSuperAdmin: superAdmin }),
+      }),
+    });
+    setLoading(false);
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      toast.error(j.error ?? "Не удалось сохранить");
+      return;
+    }
+    toast.success("Данные пользователя сохранены");
+    onDone();
+  }
+
+  const displayName =
+    fioFromParts({ lastName: form.lastName, firstName: form.firstName, middleName: form.middleName }) ||
+    form.email ||
+    user?.email;
+
+  return (
+    <Modal
+      open={!!user}
+      onClose={onClose}
+      title="Данные пользователя"
+      description={user ? user.email : undefined}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>
+            Отмена
+          </Button>
+          <Button onClick={save} loading={loading} icon={<CheckCircle2 className="h-4 w-4" />}>
+            Сохранить
+          </Button>
+        </>
+      }
+    >
+      <div className="flex items-center gap-4">
+        <div className="relative shrink-0">
+          <Avatar name={displayName} src={photo} size={64} />
+          <label
+            title="Изменить фото"
+            className="absolute -bottom-1 -right-1 grid h-7 w-7 place-items-center rounded-full border-2 border-white bg-accent text-white cursor-pointer transition-opacity hover:opacity-90"
+          >
+            {photoBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Camera className="h-3.5 w-3.5" />}
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/gif"
+              className="hidden"
+              disabled={photoBusy}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void uploadPhoto(f);
+                e.target.value = "";
+              }}
+            />
+          </label>
+        </div>
+        <div className="min-w-0">
+          <div className="truncate font-display text-lg tracking-tight">{displayName}</div>
+          <div className="text-xs text-ink-muted">JPG, PNG, WebP или GIF до 2 МБ — сохраняется сразу</div>
+          {photo ? (
+            <button
+              type="button"
+              onClick={removePhoto}
+              disabled={photoBusy}
+              className="mt-1.5 inline-flex items-center gap-1 text-xs text-ink-muted transition-colors hover:text-danger disabled:opacity-50"
+            >
+              <Trash2 className="h-3 w-3" /> Удалить фото
+            </button>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-3 sm:grid-cols-2">
+        <Input label="Фамилия" value={form.lastName} onChange={(e) => set("lastName", e.target.value)} />
+        <Input label="Имя" value={form.firstName} onChange={(e) => set("firstName", e.target.value)} />
+        <Input label="Отчество" value={form.middleName} onChange={(e) => set("middleName", e.target.value)} />
+        <Input
+          label="Телефон"
+          type="tel"
+          value={form.phone}
+          error={errors.phone}
+          onChange={(e) => set("phone", e.target.value)}
+          placeholder="+7 900 000-00-00"
+        />
+        <div className="sm:col-span-2">
+          <Input
+            label="Email для входа"
+            type="email"
+            value={form.email}
+            error={errors.email}
+            onChange={(e) => set("email", e.target.value)}
+            hint={
+              user && form.email.trim().toLowerCase() !== user.email
+                ? "Войти можно будет только по новому адресу"
+                : undefined
+            }
+          />
+        </div>
+      </div>
+
+      {canGrantSuperAdmin ? (
+        <div className="mt-4 rounded-btn border border-hairline px-4 py-3">
+          <Checkbox
+            checked={superAdmin}
+            onChange={setSuperAdmin}
+            label="Супер-админ"
+            description="Полный доступ ко всему кабинету, включая управление другими супер-админами"
+          />
+        </div>
+      ) : null}
     </Modal>
   );
 }

@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { Topbar } from "@/components/cabinet/topbar";
+import { getDownloadUrl } from "@/lib/s3";
 import { fioFromParts } from "@/lib/utils";
 import { UsersManager, type ManagedUser, type AssignableRole } from "./users-manager";
 import { requireAdminPage } from "@/lib/session";
@@ -25,7 +26,15 @@ export default async function AdminUsersPage() {
     db.role.findMany({ orderBy: [{ isSystem: "desc" }, { name: "asc" }] }),
   ]);
 
-  const managed: ManagedUser[] = users.map((u) => ({
+  const avatarUrls = await Promise.all(
+    users.map((u) =>
+      u.dealerProfile?.avatarKey
+        ? getDownloadUrl(u.dealerProfile.avatarKey, 3600).catch(() => null)
+        : null,
+    ),
+  );
+
+  const managed: ManagedUser[] = users.map((u, i) => ({
     id: u.id,
     email: u.email,
     name:
@@ -34,6 +43,13 @@ export default async function AdminUsersPage() {
         lastName: u.dealerProfile?.lastName,
         middleName: u.dealerProfile?.middleName,
       }) || u.email,
+    avatarUrl: avatarUrls[i],
+    profile: {
+      lastName: u.dealerProfile?.lastName ?? "",
+      firstName: u.dealerProfile?.firstName ?? "",
+      middleName: u.dealerProfile?.middleName ?? "",
+      phone: u.dealerProfile?.phone ?? "",
+    },
     roleId: u.roleId,
     roleName: u.role.name,
     isSystemRole: u.role.isSystem,
