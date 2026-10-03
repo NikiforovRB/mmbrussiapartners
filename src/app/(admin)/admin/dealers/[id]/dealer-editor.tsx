@@ -244,7 +244,7 @@ export function DealerEditor({
                 {canEdit ? (
                   <label
                     title="Изменить фото"
-                    className="absolute -bottom-1 -right-1 grid h-6 w-6 place-items-center rounded-full border-2 border-white bg-accent text-white cursor-pointer transition-opacity hover:opacity-90"
+                    className="absolute -bottom-1 -right-1 grid h-6 w-6 place-items-center rounded-full border-2 border-surface bg-accent text-white cursor-pointer transition-opacity hover:opacity-90"
                   >
                     {photoBusy ? (
                       <Loader2 className="h-3 w-3 animate-spin" />

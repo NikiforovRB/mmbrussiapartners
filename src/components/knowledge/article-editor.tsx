@@ -282,7 +282,7 @@ export function ArticleEditor({
       <div className="flex flex-wrap items-center justify-end gap-2 sticky bottom-4">
         <span className="mr-auto">
           {dirty || autosavedAt ? (
-            <span className="rounded-btn bg-white/90 px-2 py-1 text-xs text-ink-muted">
+            <span className="rounded-btn bg-surface/90 px-2 py-1 text-xs text-ink-muted">
               {dirty
                 ? "Есть несохранённые изменения — автосохранение раз в 5 минут"
                 : `Автосохранено в ${timeLabel(autosavedAt!)}`}
@@ -453,7 +453,7 @@ function RichTextEditor({ value, onChange }: { value: string; onChange: (html: s
     "grid h-9 w-9 place-items-center rounded-btn text-ink transition-colors hover:bg-surface-muted";
 
   return (
-    <div className="rounded-panel border border-hairline bg-white">
+    <div className="rounded-panel border border-hairline bg-surface">
       <div className="flex flex-wrap items-center gap-0.5 border-b border-hairline p-1.5">
         <button type="button" title="Заголовок" className={btn} onMouseDown={keep} onClick={() => exec("formatBlock", "<h2>")}><Heading2 className="h-4 w-4" /></button>
         <button type="button" title="Жирный" className={btn} onMouseDown={keep} onClick={() => exec("bold")}><Bold className="h-4 w-4" /></button>
@@ -474,7 +474,7 @@ function RichTextEditor({ value, onChange }: { value: string; onChange: (html: s
         <div className="flex flex-col gap-2 border-b border-hairline bg-surface-muted/60 p-3">
           <div className="flex items-center justify-between">
             <span className="text-sm">Вставить ссылку</span>
-            <button type="button" onClick={() => setLinkOpen(false)} className="grid h-7 w-7 place-items-center rounded-btn text-ink-muted hover:bg-white"><X className="h-4 w-4" /></button>
+            <button type="button" onClick={() => setLinkOpen(false)} className="grid h-7 w-7 place-items-center rounded-btn text-ink-muted hover:bg-surface"><X className="h-4 w-4" /></button>
           </div>
           <div className="grid gap-2 sm:grid-cols-2">
             <Input value={linkText} onChange={(e) => setLinkText(e.target.value)} placeholder="Текст ссылки" />

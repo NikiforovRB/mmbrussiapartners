@@ -62,7 +62,7 @@ export function Topbar({
   }
 
   return (
-    <header className="sticky top-0 z-20 -mx-4 lg:-mx-6 border-b border-hairline bg-white/80 backdrop-blur-xl">
+    <header className="sticky top-0 z-20 -mx-4 lg:-mx-6 border-b border-hairline bg-bg/80 backdrop-blur-xl">
       <div className="px-4 lg:px-6 py-3 flex items-center gap-3 sm:gap-4">
         <MobileNavTrigger />
         <div className="min-w-0 flex-1">
@@ -94,7 +94,7 @@ export function Topbar({
           </button>
           <div
             className={cn(
-              "absolute right-0 top-12 w-60 origin-top-right rounded-panel bg-white border border-hairline p-2 transition duration-150 ease-out",
+              "absolute right-0 top-12 w-60 origin-top-right rounded-panel bg-surface border border-hairline p-2 transition duration-150 ease-out",
               open ? "opacity-100 translate-y-0" : "pointer-events-none opacity-0 -translate-y-1.5",
             )}
             style={{ boxShadow: "0 24px 60px -24px rgba(11,16,32,0.18)" }}

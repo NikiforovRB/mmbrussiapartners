@@ -255,7 +255,7 @@ function KpiCard({ icon, label, value }: { icon: React.ReactNode; label: string;
   return (
     <div className="rounded-panel bg-card-light p-5 hover-lift">
       <div className="flex items-center gap-2.5 text-ink-muted">
-        <span className="grid h-9 w-9 place-items-center rounded-panel bg-white text-accent">{icon}</span>
+        <span className="grid h-9 w-9 place-items-center rounded-panel bg-surface text-accent">{icon}</span>
         <div className="text-xs">{label}</div>
       </div>
       <div className="mt-3 whitespace-nowrap font-display text-2xl tracking-tight">{value}</div>

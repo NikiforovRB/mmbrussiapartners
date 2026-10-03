@@ -1,6 +1,10 @@
 import type { Config } from "tailwindcss";
 
+/** Цвет из CSS-переменной с каналами «R G B»: так работают и модификаторы вроде bg-accent/10. */
+const v = (name: string) => `rgb(var(--c-${name}) / <alpha-value>)`;
+
 const config: Config = {
+  darkMode: "class",
   content: [
     "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
@@ -8,35 +12,56 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      // Значения светлой и тёмной темы — в globals.css (:root и .dark).
       colors: {
         bg: {
-          DEFAULT: "#ffffff",
-          dark: "#000000",
+          DEFAULT: v("bg"),
+          dark: v("bg-dark"),
           accent: "#2a9fff",
-          hero: "#e7ebf4",
+          hero: v("bg-hero"),
         },
         card: {
-          light: "#e7ecf6",
-          dark: "#ffffff",
+          light: v("card-light"),
+          dark: v("surface"),
         },
-        line: "#c1cbe1",
-        hairline: "#dddcdb",
+        line: v("line"),
+        hairline: v("hairline"),
         surface: {
-          muted: "#f7f7f6",
+          DEFAULT: v("surface"),
+          muted: v("surface-muted"),
         },
+        /** Фон полей ввода: в тёмной теме чуть темнее панели. */
+        field: v("field"),
         accent: {
           DEFAULT: "#2a9fff",
           dark: "#0a78d8",
           ink: "#000000",
         },
         ink: {
-          DEFAULT: "#0b1020",
-          muted: "#5b6478",
-          subtle: "#8a93a8",
+          DEFAULT: v("ink"),
+          muted: v("ink-muted"),
+          subtle: v("ink-subtle"),
         },
-        success: "#16a34a",
+        success: v("success"),
         warning: "#f59e0b",
-        danger: "#ef4444",
+        danger: v("danger"),
+        /** Мягкая подложка плашек и предупреждений. */
+        soft: {
+          accent: v("soft-accent"),
+          success: v("soft-success"),
+          warning: v("soft-warning"),
+          danger: v("soft-danger"),
+        },
+        /** Текст на мягкой подложке. */
+        strong: {
+          accent: v("strong-accent"),
+          success: v("strong-success"),
+          warning: v("strong-warning"),
+          danger: v("strong-danger"),
+        },
+      },
+      ringOffsetColor: {
+        DEFAULT: "rgb(var(--c-bg))",
       },
       fontFamily: {
         sans: ["Gilroy", "system-ui", "sans-serif"],

@@ -4,6 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Logo } from "@/components/brand/logo";
+import { ThemeToggle } from "@/components/cabinet/theme-toggle";
 import { SIDEBAR_COOKIE } from "@/lib/sidebar";
 import { cn } from "@/lib/utils";
 
@@ -80,7 +81,7 @@ export function Sidebar({
             aria-label={collapsed ? "Развернуть меню" : "Свернуть меню"}
             aria-expanded={!collapsed}
             title={collapsed ? "Развернуть меню" : "Свернуть меню"}
-            className="grid h-8 w-8 shrink-0 place-items-center rounded-btn text-black/20 transition-colors hover:text-black/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-btn text-ink/20 transition-colors hover:text-ink/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
             <PanelIcon className="h-5 w-5" />
           </button>
@@ -99,7 +100,7 @@ export function Sidebar({
                 className={cn(
                   "relative flex items-center rounded-panel py-2.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent",
                   collapsed ? "justify-center px-0" : "gap-3 px-3",
-                  active ? "bg-white text-ink" : "text-ink-muted hover:bg-white/60 hover:text-ink",
+                  active ? "bg-surface text-ink" : "text-ink-muted hover:bg-surface/60 hover:text-ink",
                 )}
               >
                 <span className="relative z-10 inline-flex items-center justify-center w-5">{item.icon}</span>
@@ -117,6 +118,9 @@ export function Sidebar({
         </nav>
 
         {footer && !collapsed ? <div className="mt-4 pt-4">{footer}</div> : null}
+        <div className={footer && !collapsed ? "mt-3" : "mt-4 pt-4"}>
+          <ThemeToggle compact={collapsed} />
+        </div>
       </div>
     </aside>
   );

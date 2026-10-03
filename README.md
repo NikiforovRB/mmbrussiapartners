@@ -224,5 +224,5 @@ const reps = await res.json();
 - Telegram-бот: развернуть `deploy/telegram-worker.js` в Cloudflare Workers (переменные описаны в шапке файла),
   на сервере задать `TELEGRAM_PROXY_URL` и `TELEGRAM_PROXY_SECRET`, затем «Настройки → Уведомления →
   Подключить вебхук бота». Пользователи привязывают Telegram в своём профиле.
-- Привязать SMTP (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`; отправитель `mail@mmbrussia.ru`)
-  для уведомлений на почту. События и каналы — «Настройки → Уведомления».
+- Почта уведомлений — `noreply@mmbrussia.ru` (Timeweb, `smtp.timeweb.ru:465`), пароль только в `.env`
+  на сервере (`SMTP_PASS`). События и каналы — «Настройки → Уведомления».

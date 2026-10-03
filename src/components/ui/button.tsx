@@ -39,8 +39,8 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function 
   const variantMap: Record<Variant, string> = {
     primary: "bg-accent text-white hover:bg-accent-dark active:scale-[0.985]",
     secondary:
-      "bg-white text-ink border border-hairline hover:border-accent hover:text-accent active:scale-[0.985]",
-    dark: "bg-bg-dark text-white hover:bg-[#111] active:scale-[0.985]",
+      "bg-surface text-ink border border-hairline hover:border-accent hover:text-accent active:scale-[0.985]",
+    dark: "bg-bg-dark text-white hover:bg-bg-dark/85 active:scale-[0.985]",
     ghost: "bg-transparent text-ink hover:bg-surface-muted hover:text-accent active:scale-[0.985]",
     // Тот же ghost, но для необратимых действий: удаление, отказ по заявке.
     ghostDanger:
@@ -55,7 +55,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(function 
       disabled={disabled || loading}
       className={cn(
         "relative inline-flex items-center justify-center rounded-btn transition-all duration-200",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-white",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
         "disabled:opacity-50 disabled:cursor-not-allowed",
         sizeMap[size],
         variantMap[variant],

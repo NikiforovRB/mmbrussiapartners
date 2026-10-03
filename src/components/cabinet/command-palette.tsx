@@ -191,7 +191,7 @@ export function CommandPalette() {
         className="absolute inset-0 bg-[#06121f]/55"
         onClick={() => setOpen(false)}
       />
-      <div className="relative w-full max-w-xl rounded-panel bg-white border border-hairline p-3 animate-modal-in">
+      <div className="relative w-full max-w-xl rounded-panel bg-surface border border-hairline p-3 animate-modal-in">
         <div className="flex items-center gap-2 rounded-panel border border-hairline px-4 h-12 transition-colors focus-within:border-accent">
           <Search className="h-4 w-4 text-ink-subtle" />
           <input

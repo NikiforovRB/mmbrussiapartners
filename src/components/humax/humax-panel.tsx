@@ -39,7 +39,7 @@ function CopyButton({ value, label = "Скопировать" }: { value: string
       title={label}
       className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-btn border border-hairline text-ink-muted transition-colors hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
     >
-      {copied ? <Check className="h-4 w-4 text-[#16803d]" /> : <Copy className="h-4 w-4" />}
+      {copied ? <Check className="h-4 w-4 text-strong-success" /> : <Copy className="h-4 w-4" />}
     </button>
   );
 }
@@ -134,8 +134,8 @@ export function HumaxPanel({
         </form>
 
         {latest ? (
-          <div className="mt-5 rounded-panel border border-accent/40 bg-[#f2f9ff] p-4">
-            <div className="flex items-center gap-2 text-[12.5px] text-[#0a78d8]">
+          <div className="mt-5 rounded-panel border border-accent/40 bg-soft-accent/50 p-4">
+            <div className="flex items-center gap-2 text-[12.5px] text-strong-accent">
               <Sparkles className="h-4 w-4" />
               Пароль для {latest.serial}
             </div>

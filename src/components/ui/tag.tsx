@@ -5,10 +5,10 @@ type Tone = "neutral" | "accent" | "success" | "warning" | "danger" | "muted" | 
 
 const toneMap: Record<Tone, string> = {
   neutral: "border border-hairline text-ink",
-  accent: "bg-[#dcefff] text-[#0a78d8]",
-  success: "bg-[#dcfce7] text-[#16803d]",
-  warning: "bg-[#fef3c7] text-[#a16207]",
-  danger: "bg-[#fee2e2] text-[#991b1b]",
+  accent: "bg-soft-accent text-strong-accent",
+  success: "bg-soft-success text-strong-success",
+  warning: "bg-soft-warning text-strong-warning",
+  danger: "bg-soft-danger text-strong-danger",
   muted: "bg-surface-muted text-ink-muted",
   dark: "bg-bg-dark text-white",
 };

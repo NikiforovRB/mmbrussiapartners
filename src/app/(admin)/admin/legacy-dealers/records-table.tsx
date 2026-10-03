@@ -160,7 +160,7 @@ export function RecordsTable({
   return (
     <>
       {canEdit && count > 0 ? (
-        <div className="sticky top-2 z-20 mt-3 flex flex-wrap items-center gap-2 rounded-panel border border-accent/30 bg-white px-4 py-2.5 shadow-[0_12px_32px_-20px_rgba(11,16,32,0.35)]">
+        <div className="sticky top-2 z-20 mt-3 flex flex-wrap items-center gap-2 rounded-panel border border-accent/30 bg-surface px-4 py-2.5 shadow-[0_12px_32px_-20px_rgba(11,16,32,0.35)]">
           <span className="text-sm">
             Выбрано {count.toLocaleString("ru-RU")} {plural(count, noun)}
             {allMatching ? " — все по фильтру" : ""}
@@ -312,7 +312,7 @@ export function RecordsTable({
                     )}
                     {r.manualAssign ? (
                       <div
-                        className="mt-0.5 text-[11px] text-[#a16207]"
+                        className="mt-0.5 text-[11px] text-strong-warning"
                         title={[r.assignedAt ? formatRuDateTime(r.assignedAt) : null, r.assignedBy].filter(Boolean).join(" · ")}
                       >
                         назначено вручную

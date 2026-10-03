@@ -29,7 +29,7 @@ export default async function LoginPage() {
         </div>
       </div>
       <div>
-        <div className="rounded-panel bg-white p-8 md:p-10 max-w-md mx-auto">
+        <div className="rounded-panel bg-surface p-8 md:p-10 max-w-md mx-auto">
           <h2 className="font-display text-2xl  tracking-tight">Вход в кабинет</h2>
           <p className="mt-1.5 text-sm text-ink-muted">
             Введите email и пароль, чтобы продолжить

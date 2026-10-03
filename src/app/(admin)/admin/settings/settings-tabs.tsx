@@ -56,6 +56,11 @@ export function SettingsTabs({
   site: React.ReactNode;
 }) {
   const [tab, setTab] = React.useState<Tab>("general");
+  React.useEffect(() => {
+    const fromUrl = new URLSearchParams(window.location.search).get("tab");
+    const match = TABS.find((t) => t.key === fromUrl);
+    if (match) setTab(match.key);
+  }, []);
 
   return (
     <div>

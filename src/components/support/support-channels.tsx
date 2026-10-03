@@ -56,7 +56,7 @@ export function SupportLinkCard({ channel }: { channel: SupportChannel }) {
       href={channel.url}
       target="_blank"
       rel="noopener noreferrer"
-      className="group flex items-center gap-3 rounded-panel border border-hairline bg-white px-4 py-3.5 transition-colors hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+      className="group flex items-center gap-3 rounded-panel border border-hairline bg-surface px-4 py-3.5 transition-colors hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
     >
       <span className="text-ink-muted transition-colors group-hover:text-accent">
         <SupportChannelIcon channel={channel} />

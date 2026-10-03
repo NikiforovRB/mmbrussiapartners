@@ -25,7 +25,8 @@ import { Sidebar, type SidebarItem } from "@/components/cabinet/sidebar";
 import { MobileNavProvider } from "@/components/cabinet/mobile-nav";
 import { AnnouncementBar } from "@/components/cabinet/announcement-bar";
 import { LoginNoticeGate } from "@/components/cabinet/login-notice-gate";
-import { mergeAnnouncement } from "@/lib/site-settings";
+import { mergeAnnouncement, mergeGenerationSettings } from "@/lib/site-settings";
+import { GenerationBlockedNotice } from "@/components/cabinet/generation-blocked-notice";
 import { CommandPalette } from "@/components/cabinet/command-palette";
 import { CabinetUserProvider } from "@/components/cabinet/cabinet-user";
 import { auth } from "@/lib/auth";
@@ -112,7 +113,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   const [unreadCount, settings, loginNotices, cookieStore] = await Promise.all([
     db.appNotification.count({ where: { userId: user.id, readAt: null } }),
-    db.companySettings.findUnique({ where: { id: "singleton" }, select: { announcement: true } }),
+    db.companySettings.findUnique({
+      where: { id: "singleton" },
+      select: { announcement: true, generation: true },
+    }),
     db.loginNotice.findMany({
       where: { active: true, acknowledgements: { none: { userId: user.id } } },
       orderBy: { createdAt: "asc" },
@@ -137,13 +141,19 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       }}
     >
       <MobileNavProvider items={items}>
-        <div className="cabinet min-h-screen flex flex-col bg-bg-default">
+        <div className="cabinet min-h-screen flex flex-col bg-bg">
           {announcement.enabled ? (
             <AnnouncementBar text={announcement.text} updatedAt={announcement.updatedAt ?? null} />
           ) : null}
           <div className="flex flex-1">
             <Sidebar items={items} defaultCollapsed={sidebarCollapsed} />
-            <div className="flex-1 min-w-0 px-4 lg:px-6 pb-12">{children}</div>
+            <div className="flex-1 min-w-0 px-4 lg:px-6 pb-12">
+              <GenerationBlockedNotice
+                settings={mergeGenerationSettings(settings?.generation)}
+                canEdit={user.isSuperAdmin || hasPermission(user.role.permissions, "settings.edit", user.isSuperAdmin)}
+              />
+              {children}
+            </div>
           </div>
           <LoginNoticeGate notices={loginNotices} />
           <CommandPalette />

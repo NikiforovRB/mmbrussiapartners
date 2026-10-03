@@ -127,7 +127,7 @@ export function DealerPasswordCard({
       <div className="font-display text-lg tracking-tight mb-4">Пароль от кабинета</div>
       <div className="space-y-1.5">
         <span className="block text-[12.5px] text-ink-muted">Пароль представителя</span>
-        <div className="field-control flex h-12 items-center gap-1 rounded-panel border border-hairline bg-white pl-4 pr-2">
+        <div className="field-control flex h-12 items-center gap-1 rounded-panel border border-hairline bg-field pl-4 pr-2">
           <span
             className={cn(
               "min-w-0 flex-1 truncate text-[14.5px]",

@@ -80,7 +80,7 @@ export default async function DealerLayout({ children }: { children: React.React
   const limit = user.dealerProfile?.licenseLimit ?? 0;
 
   const footer = (
-    <div className="rounded-panel bg-white p-3.5">
+    <div className="rounded-panel bg-surface p-3.5">
       <div className="text-xs text-ink-muted">Лимит лицензий</div>
       <div className="mt-1 flex items-end gap-1">
         <div className="font-display text-2xl  tracking-tight">{Math.max(0, remaining)}</div>
@@ -122,7 +122,7 @@ export default async function DealerLayout({ children }: { children: React.React
       }}
     >
       <MobileNavProvider items={items} footer={footer}>
-        <div className="cabinet min-h-screen flex flex-col bg-bg-default">
+        <div className="cabinet min-h-screen flex flex-col bg-bg">
           {announcement.enabled ? (
             <AnnouncementBar text={announcement.text} updatedAt={announcement.updatedAt ?? null} />
           ) : null}
@@ -188,8 +188,8 @@ function ReasonBox({ reason }: { reason: string | null }) {
 
 function StatusScreen({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="min-h-screen grid place-items-center bg-bg-default px-6">
-      <div className="rounded-panel bg-white border border-hairline p-10 max-w-lg w-full text-center">
+    <div className="min-h-screen grid place-items-center bg-bg px-6">
+      <div className="rounded-panel bg-surface border border-hairline p-10 max-w-lg w-full text-center">
         <div className="mx-auto flex justify-center">
           <Logo href={undefined} height={40} />
         </div>

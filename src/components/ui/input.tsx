@@ -31,7 +31,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(function Inp
         className={cn(
           "field-control group relative flex items-center gap-2 rounded-panel px-4 h-12 border transition-colors",
           "focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/20",
-          tone === "light" ? "bg-white border-hairline" : "bg-white/10 border-white/20 text-white",
+          tone === "light" ? "bg-field border-hairline" : "bg-white/10 border-white/20 text-white",
           error && "border-danger",
           props.disabled && "bg-surface-muted text-ink-muted cursor-not-allowed",
           isPassword && "pr-2",

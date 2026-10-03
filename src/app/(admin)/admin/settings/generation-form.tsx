@@ -86,6 +86,15 @@ export function GenerationForm({ initial }: { initial: GenerationSettings }) {
       toast.error("Минимальная версия должна содержать цифры, например 5.5.0");
       return;
     }
+    if (
+      blackoutEnabled &&
+      !end &&
+      !confirm(
+        "Окончание запрета не указано: представители не смогут генерировать лицензии, пока вы не выключите запрет вручную. Сохранить?",
+      )
+    ) {
+      return;
+    }
     setSaving(true);
     const res = await fetch("/api/settings/generation", {
       method: "PATCH",
@@ -133,6 +142,12 @@ export function GenerationForm({ initial }: { initial: GenerationSettings }) {
             label="Запрет генерации включён"
           />
           <Tag tone={state.tone}>{state.text}</Tag>
+          {blackoutEnabled && !parseMoscowLocal(blackoutEnd) ? (
+            <p className="text-xs text-danger">
+              Без даты окончания запрет бессрочный: генерация у представителей не заработает, пока
+              тумблер не выключат.
+            </p>
+          ) : null}
           <div className="grid sm:grid-cols-2 gap-3">
             <DateTimePicker
               label="Начало"

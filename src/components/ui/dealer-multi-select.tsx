@@ -54,7 +54,7 @@ export function DealerMultiSelect({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between gap-2 rounded-panel border border-hairline bg-white px-4 h-12 text-left transition-colors hover:border-accent focus-visible:outline-none focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20"
+        className="flex w-full items-center justify-between gap-2 rounded-panel border border-hairline bg-field px-4 h-12 text-left transition-colors hover:border-accent focus-visible:outline-none focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20"
       >
         <span className="flex items-center gap-2 min-w-0">
           <Users className="h-4 w-4 text-ink-subtle shrink-0" />
@@ -66,7 +66,7 @@ export function DealerMultiSelect({
       </button>
 
       {open ? (
-        <div className="absolute z-30 mt-1.5 w-full min-w-[280px] rounded-panel border border-hairline bg-white shadow-lg">
+        <div className="absolute z-30 mt-1.5 w-full min-w-[280px] rounded-panel border border-hairline bg-surface shadow-lg">
           {/* Первая строка — быстрый поиск */}
           <div className="flex items-center gap-2 border-b border-hairline px-3 h-11">
             <Search className="h-4 w-4 text-ink-subtle shrink-0" />
@@ -110,7 +110,7 @@ export function DealerMultiSelect({
                     <span
                       className={cn(
                         "grid h-5 w-5 shrink-0 place-items-center rounded-btn transition-colors",
-                        checked ? "bg-accent text-white" : "border border-hairline bg-white",
+                        checked ? "bg-accent text-white" : "border border-hairline bg-surface",
                       )}
                     >
                       {checked ? <Check className="h-3.5 w-3.5" /> : null}

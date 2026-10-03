@@ -326,7 +326,7 @@ async function DealersTab({ sp, canEdit }: { sp: SearchParams; canEdit: boolean 
                         canEdit={canEdit}
                       />
                       {!linked && suggestions.length > 0 ? (
-                        <div className="mt-1 truncate text-xs text-[#a16207]">
+                        <div className="mt-1 truncate text-xs text-strong-warning">
                           Похож: {suggestions.map((s) => s.fio || s.email).join(", ")}
                         </div>
                       ) : null}

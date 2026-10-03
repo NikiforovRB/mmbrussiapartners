@@ -574,7 +574,7 @@ function EditUserModal({
           <Avatar name={displayName} src={photo} size={64} />
           <label
             title="Изменить фото"
-            className="absolute -bottom-1 -right-1 grid h-7 w-7 place-items-center rounded-full border-2 border-white bg-accent text-white cursor-pointer transition-opacity hover:opacity-90"
+            className="absolute -bottom-1 -right-1 grid h-7 w-7 place-items-center rounded-full border-2 border-surface bg-accent text-white cursor-pointer transition-opacity hover:opacity-90"
           >
             {photoBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Camera className="h-3.5 w-3.5" />}
             <input

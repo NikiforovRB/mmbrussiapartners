@@ -229,7 +229,7 @@ function LogDetails({ entry, compact = false }: { entry: SiteSyncLogEntry; compa
 function Warnings({ items }: { items: string[] }) {
   if (items.length === 0) return null;
   return (
-    <ul className="text-xs text-[#a16207] space-y-0.5">
+    <ul className="text-xs text-strong-warning space-y-0.5">
       {items.map((w, i) => (
         <li key={i}>{w}</li>
       ))}

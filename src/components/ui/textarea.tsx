@@ -29,7 +29,7 @@ export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(fun
       ) : null}
       <div
         className={cn(
-          "field-control rounded-panel bg-white border border-hairline px-4 py-3 transition-colors",
+          "field-control rounded-panel bg-field border border-hairline px-4 py-3 transition-colors",
           "focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/20",
           error && "border-danger",
         )}

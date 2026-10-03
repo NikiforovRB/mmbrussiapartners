@@ -52,7 +52,7 @@ export function KnowledgeSearch({
         onChange={(e) => setValue(e.target.value)}
         placeholder="Поиск по статьям"
         aria-label="Поиск по базе знаний"
-        className="field-control h-11 w-full rounded-panel border border-hairline bg-white pl-10 pr-10 text-sm placeholder:text-ink-subtle focus:border-accent focus:outline-none [&::-webkit-search-cancel-button]:hidden"
+        className="field-control h-11 w-full rounded-panel border border-hairline bg-field pl-10 pr-10 text-sm placeholder:text-ink-subtle focus:border-accent focus:outline-none [&::-webkit-search-cancel-button]:hidden"
       />
       {pending ? (
         <Loader2 className="absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-ink-subtle" />

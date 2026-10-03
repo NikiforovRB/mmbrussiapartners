@@ -40,7 +40,7 @@ export function Checkbox({
         className={cn(
           "relative rounded-btn transition-colors duration-200 grid place-items-center shrink-0 mt-0.5",
           dim,
-          checked ? "bg-accent" : "bg-white border border-hairline",
+          checked ? "bg-accent" : "bg-surface border border-hairline",
         )}
       >
         <svg

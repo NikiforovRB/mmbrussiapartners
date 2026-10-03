@@ -167,7 +167,7 @@ export function LegacyLinkButton({
                     {[c.email, c.city, c.phone].filter(Boolean).join(" · ")}
                   </div>
                   {c.linkedTo ? (
-                    <div className="text-xs text-[#a16207]">Уже привязан к «{c.linkedTo.name}»</div>
+                    <div className="text-xs text-strong-warning">Уже привязан к «{c.linkedTo.name}»</div>
                   ) : null}
                 </div>
                 <Button

@@ -10,23 +10,96 @@
   font-display: swap;
 }
 
+/*
+ * Палитра — каналы «R G B», чтобы Tailwind мог добавлять прозрачность
+ * (bg-surface/80). Тёмная тема переопределяет те же переменные в .dark:
+ * класс на <html> ставит переключатель в меню кабинета.
+ */
 :root {
-  --bg-default: #ffffff;
-  --bg-dark: #000000;
+  --c-bg: 255 255 255;
+  --c-bg-dark: 0 0 0;
+  --c-bg-hero: 231 235 244;
+  --c-card-light: 231 236 246;
+  --c-surface: 255 255 255;
+  --c-surface-muted: 247 247 246;
+  --c-field: 255 255 255;
+  --c-line: 193 203 225;
+  --c-hairline: 221 220 219;
+  --c-ink: 11 16 32;
+  --c-ink-muted: 91 100 120;
+  --c-ink-subtle: 138 147 168;
+  --c-success: 22 163 74;
+  --c-danger: 239 68 68;
+  --c-soft-accent: 220 239 255;
+  --c-soft-success: 220 252 231;
+  --c-soft-warning: 254 243 199;
+  --c-soft-danger: 254 226 226;
+  --c-strong-accent: 10 120 216;
+  --c-strong-success: 22 128 61;
+  --c-strong-warning: 161 98 7;
+  --c-strong-danger: 153 27 27;
+
+  --bg-default: rgb(var(--c-bg));
+  --bg-dark: rgb(var(--c-bg-dark));
   --bg-accent: #2a9fff;
-  --bg-hero: #e7ebf4;
-  --card-on-light: #e7ecf6;
-  --card-on-dark: #ffffff;
-  --line: #c1cbe1;
+  --bg-hero: rgb(var(--c-bg-hero));
+  --card-on-light: rgb(var(--c-card-light));
+  --card-on-dark: rgb(var(--c-surface));
+  --line: rgb(var(--c-line));
   /* Волосяная рамка кабинета: заменяет сплошные заливки на белом фоне */
-  --hairline: #dddcdb;
-  --surface-muted: #f7f7f6;
-  --ink: #0b1020;
-  --ink-muted: #5b6478;
-  --ink-subtle: #8a93a8;
+  --hairline: rgb(var(--c-hairline));
+  --surface-muted: rgb(var(--c-surface-muted));
+  --ink: rgb(var(--c-ink));
+  --ink-muted: rgb(var(--c-ink-muted));
+  --ink-subtle: rgb(var(--c-ink-subtle));
   --radius-button: 10px;
   --radius-panel: 12px;
   --font-gilroy: "Gilroy", system-ui, sans-serif;
+}
+
+.dark {
+  color-scheme: dark;
+  --c-bg: 10 15 26;
+  --c-bg-dark: 12 33 64;
+  --c-bg-hero: 15 23 41;
+  --c-card-light: 16 24 39;
+  --c-surface: 22 32 51;
+  --c-surface-muted: 29 41 63;
+  --c-field: 15 22 38;
+  --c-line: 51 66 94;
+  --c-hairline: 38 51 74;
+  --c-ink: 231 236 245;
+  --c-ink-muted: 155 167 191;
+  --c-ink-subtle: 110 123 150;
+  --c-success: 34 197 94;
+  --c-danger: 242 92 92;
+  --c-soft-accent: 26 57 92;
+  --c-soft-success: 22 58 56;
+  --c-soft-warning: 67 57 43;
+  --c-soft-danger: 65 39 54;
+  --c-strong-accent: 110 190 255;
+  --c-strong-success: 74 222 128;
+  --c-strong-warning: 251 191 36;
+  --c-strong-danger: 252 129 129;
+}
+
+/* Плавная смена темы, если браузер не умеет View Transitions. */
+.theme-switching,
+.theme-switching *,
+.theme-switching *::before,
+.theme-switching *::after {
+  transition:
+    background-color 0.35s ease,
+    border-color 0.35s ease,
+    color 0.35s ease,
+    fill 0.35s ease !important;
+}
+
+/* Смена темы через View Transitions: новая тема раскрывается кругом от переключателя. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
 }
 
 @layer base {
@@ -64,6 +137,10 @@
   ::selection {
     background: rgba(42, 159, 255, 0.25);
     color: #06151f;
+  }
+  .dark ::selection {
+    background: rgba(42, 159, 255, 0.4);
+    color: #ffffff;
   }
   a {
     color: inherit;
@@ -105,7 +182,7 @@
     color: #fff;
   }
   .surface-glass {
-    background: color-mix(in srgb, white 70%, transparent);
+    background: color-mix(in srgb, rgb(var(--c-surface)) 70%, transparent);
     backdrop-filter: blur(18px) saturate(140%);
     -webkit-backdrop-filter: blur(18px) saturate(140%);
   }
@@ -120,7 +197,7 @@
     background: var(--hairline);
   }
   .panel {
-    background: #ffffff;
+    background: rgb(var(--c-surface));
     border: 1px solid var(--hairline);
   }
   .divider-vertical {
@@ -237,6 +314,9 @@
     );
     transform: translateX(-100%);
     animation: shimmer 1.6s infinite;
+  }
+  .dark .skeleton::after {
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.06), transparent);
   }
 }
 

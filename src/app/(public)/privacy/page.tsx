@@ -15,7 +15,7 @@ export default async function PrivacyPolicyPage() {
 
   return (
     <div className="pt-10 lg:pt-16">
-      <div className="rounded-panel bg-white p-8 md:p-12">
+      <div className="rounded-panel bg-surface p-8 md:p-12">
         <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
           <div>
             <div className="text-xs tracking-widest uppercase text-ink-muted">MMB RUSSIA</div>

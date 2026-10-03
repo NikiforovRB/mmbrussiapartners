@@ -81,7 +81,7 @@ export default async function AdminAuditPage({
                   href={`/admin/audit?tab=${t.id}`}
                   className={cn(
                     "rounded-btn px-3.5 py-1.5 text-sm transition-colors",
-                    tab === t.id ? "bg-white text-ink" : "text-ink-muted hover:text-ink",
+                    tab === t.id ? "bg-surface text-ink" : "text-ink-muted hover:text-ink",
                   )}
                 >
                   {t.label}

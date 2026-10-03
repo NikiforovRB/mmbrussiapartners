@@ -17,7 +17,7 @@ export default async function NotFound() {
 
   return (
     <main className="min-h-screen grid-mesh grid place-items-center px-6">
-      <div className="rounded-panel bg-white p-10 max-w-md w-full text-center">
+      <div className="rounded-panel bg-surface p-10 max-w-md w-full text-center">
         <div className="font-display text-7xl  tracking-tightest gradient-text">404</div>
         <div className="mt-3 text-ink-muted">Страница не найдена</div>
         <div className="mt-6 flex flex-wrap justify-center gap-3">

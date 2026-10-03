@@ -155,7 +155,7 @@ export async function LegacyRecordsView({
             <Link
               key={c.label}
               href={c.clear}
-              className="inline-flex items-center gap-1.5 rounded-full border border-hairline bg-white px-3 py-1 text-xs transition-colors hover:border-accent hover:text-accent"
+              className="inline-flex items-center gap-1.5 rounded-full border border-hairline bg-surface px-3 py-1 text-xs transition-colors hover:border-accent hover:text-accent"
             >
               {c.label}
               <X className="h-3 w-3" />

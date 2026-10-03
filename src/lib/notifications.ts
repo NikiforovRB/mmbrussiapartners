@@ -12,7 +12,7 @@ type SendEmailParams = {
   userId?: string | null;
 };
 
-export const DEFAULT_SMTP_FROM = "MMB RUSSIA <mail@mmbrussia.ru>";
+export const DEFAULT_SMTP_FROM = "MMB RUSSIA <noreply@mmbrussia.ru>";
 
 let cachedTransport: nodemailer.Transporter | null = null;
 

@@ -227,7 +227,7 @@ export function NotificationPanel({ initialUnread }: { initialUnread: number }) 
                 role="dialog"
                 aria-modal="true"
                 aria-label="Уведомления"
-                className="absolute inset-y-0 right-0 flex w-full max-w-[800px] flex-col border-l border-hairline bg-white animate-panel-in"
+                className="absolute inset-y-0 right-0 flex w-full max-w-[800px] flex-col border-l border-hairline bg-surface animate-panel-in"
                 style={{ boxShadow: "-24px 0 60px -24px rgba(11,16,32,0.28)" }}
               >
                 <header className="flex items-center justify-between gap-3 px-5 pt-4 pb-3">
@@ -316,7 +316,7 @@ export function NotificationPanel({ initialUnread }: { initialUnread: number }) 
                                 "mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-panel",
                                 n.readAt
                                   ? "bg-surface-muted text-ink-subtle"
-                                  : "bg-white text-accent",
+                                  : "bg-surface text-accent",
                               )}
                             >
                               {ICONS[n.type] ?? <Bell className="h-4 w-4" />}

@@ -192,7 +192,7 @@ function Catalog({ items, missing }: { items: PriceItem[]; missing: MissingPosit
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Поиск по продукту, комплектации, региону"
-              className="field-control h-10 w-full rounded-panel border border-[#dddcdb] bg-white pl-9 pr-3 text-sm placeholder:text-ink-subtle focus:outline-none focus:border-accent"
+              className="field-control h-10 w-full rounded-panel border border-hairline bg-field pl-9 pr-3 text-sm placeholder:text-ink-subtle focus:outline-none focus:border-accent"
             />
           </div>
           <Button
@@ -206,10 +206,10 @@ function Catalog({ items, missing }: { items: PriceItem[]; missing: MissingPosit
       </div>
 
       {missing.length > 0 ? (
-        <div className="mb-5 rounded-panel border border-hairline bg-[#fffbeb] p-4">
+        <div className="mb-5 rounded-panel border border-hairline bg-soft-warning/60 p-4">
           <div className="flex items-center gap-2 text-sm">
-            <AlertTriangle className="h-4 w-4 text-[#a16207]" />
-            <span className="font-display tracking-tight text-[#a16207]">Позиции без цены</span>
+            <AlertTriangle className="h-4 w-4 text-strong-warning" />
+            <span className="font-display tracking-tight text-strong-warning">Позиции без цены</span>
           </div>
           <p className="mt-1.5 text-xs text-ink-muted">
             По этим сочетаниям лицензии уже выдавались, а цены в справочнике нет — счёт уходил по
@@ -221,7 +221,7 @@ function Catalog({ items, missing }: { items: PriceItem[]; missing: MissingPosit
                 key={`${m.product}|${m.bundle}|${m.region}`}
                 type="button"
                 onClick={() => setEditing(m)}
-                className="inline-flex items-center gap-2 rounded-btn border border-hairline bg-white px-3 h-9 text-sm transition-colors hover:border-accent hover:text-accent"
+                className="inline-flex items-center gap-2 rounded-btn border border-hairline bg-surface px-3 h-9 text-sm transition-colors hover:border-accent hover:text-accent"
               >
                 <Plus className="h-3.5 w-3.5" />
                 {[m.product, m.bundle, m.region].filter(Boolean).join(" ")}
@@ -277,7 +277,7 @@ function Catalog({ items, missing }: { items: PriceItem[]; missing: MissingPosit
                     type="button"
                     title={`Добавить позицию в ${product}`}
                     onClick={() => setEditing({ product, bundle: "", region: "" })}
-                    className="inline-flex h-7 w-7 items-center justify-center rounded-btn border border-hairline bg-white text-ink-muted transition-colors hover:border-accent hover:text-accent"
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-btn border border-hairline bg-surface text-ink-muted transition-colors hover:border-accent hover:text-accent"
                   >
                     <Plus className="h-4 w-4" />
                   </button>

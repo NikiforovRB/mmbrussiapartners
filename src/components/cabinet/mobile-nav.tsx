@@ -7,6 +7,7 @@ import { Menu, X } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
 import { cn } from "@/lib/utils";
 import { activeNavHref, type SidebarItem } from "./sidebar";
+import { ThemeToggle } from "./theme-toggle";
 
 type MobileNavContextValue = {
   open: boolean;
@@ -76,7 +77,7 @@ export function MobileNavProvider({
                 <button
                   onClick={() => setOpen(false)}
                   aria-label="Закрыть меню"
-                  className="grid h-9 w-9 place-items-center rounded-btn bg-white text-ink-muted hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+                  className="grid h-9 w-9 place-items-center rounded-btn bg-surface text-ink-muted hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -93,8 +94,8 @@ export function MobileNavProvider({
                       className={cn(
                         "flex items-center gap-3 rounded-panel px-3 py-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2",
                         active
-                          ? "bg-white text-ink"
-                          : "text-ink-muted hover:bg-white/60 hover:text-ink",
+                          ? "bg-surface text-ink"
+                          : "text-ink-muted hover:bg-surface/60 hover:text-ink",
                       )}
                     >
                       <span className="inline-flex w-5 items-center justify-center">
@@ -108,6 +109,9 @@ export function MobileNavProvider({
               </nav>
 
               {footer ? <div className="mt-4 pt-4">{footer}</div> : null}
+              <div className={footer ? "mt-3" : "mt-4 pt-4"}>
+                <ThemeToggle />
+              </div>
             </div>
           </aside>
         </div>

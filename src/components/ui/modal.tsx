@@ -82,7 +82,7 @@ export function Modal({
         aria-modal="true"
         className={cn(
           "relative w-full max-h-[calc(100vh-2rem)] overflow-y-auto scrollbar-clean",
-          "bg-white border border-hairline rounded-panel p-6 animate-modal-in",
+          "bg-surface border border-hairline rounded-panel p-6 animate-modal-in",
           sizeMap[size],
           className,
         )}

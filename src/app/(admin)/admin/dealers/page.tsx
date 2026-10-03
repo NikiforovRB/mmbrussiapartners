@@ -120,7 +120,7 @@ export default async function AdminDealersPage({
         {pendingPublications > 0 && sp.pub !== "PENDING" ? (
           <Link
             href="/admin/dealers?pub=PENDING"
-            className="mb-4 flex items-center justify-between gap-3 rounded-panel bg-[#fef3c7] px-4 py-3 text-sm text-[#a16207] transition-opacity hover:opacity-90"
+            className="mb-4 flex items-center justify-between gap-3 rounded-panel bg-soft-warning px-4 py-3 text-sm text-strong-warning transition-opacity hover:opacity-90"
           >
             <span>
               {pendingPublications}{" "}

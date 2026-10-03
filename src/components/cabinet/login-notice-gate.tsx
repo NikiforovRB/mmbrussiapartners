@@ -50,7 +50,7 @@ export function LoginNoticeGate({ notices }: { notices: LoginNoticeItem[] }) {
       <div
         role="alertdialog"
         aria-modal="true"
-        className="relative w-full max-w-lg max-h-[calc(100vh-2rem)] overflow-y-auto scrollbar-clean bg-white border border-hairline rounded-panel p-6 animate-modal-in"
+        className="relative w-full max-w-lg max-h-[calc(100vh-2rem)] overflow-y-auto scrollbar-clean bg-surface border border-hairline rounded-panel p-6 animate-modal-in"
         style={{ boxShadow: "0 32px 80px -24px rgba(11,16,32,0.35)" }}
       >
         <div className="flex items-center gap-2.5 mb-3">

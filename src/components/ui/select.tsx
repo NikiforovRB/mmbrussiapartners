@@ -138,7 +138,7 @@ export function Select<T extends string = string>({
           disabled={disabled}
           onClick={() => !disabled && setOpen((v) => !v)}
           className={cn(
-            "field-control w-full h-12 rounded-panel bg-white border border-hairline px-4 flex items-center justify-between gap-3 text-left text-[14.5px] transition-colors",
+            "field-control w-full h-12 rounded-panel bg-field border border-hairline px-4 flex items-center justify-between gap-3 text-left text-[14.5px] transition-colors",
             "focus-visible:outline-none focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20",
             open && "border-accent",
             !current && "text-ink-subtle",
@@ -156,7 +156,7 @@ export function Select<T extends string = string>({
         {open && position ? createPortal(
           <div
             ref={listRef}
-            className="fixed z-[70] rounded-panel bg-white border border-hairline p-2 overflow-auto scrollbar-clean animate-dropdown-in"
+            className="fixed z-[70] rounded-panel bg-surface border border-hairline p-2 overflow-auto scrollbar-clean animate-dropdown-in"
             style={{
               left: position.left,
               width: position.width,
@@ -167,7 +167,7 @@ export function Select<T extends string = string>({
             }}
           >
             {searchable ? (
-              <div className="sticky -top-2 z-10 -mx-2 -mt-2 mb-2 bg-white px-2 pt-2 pb-2 border-b border-hairline">
+              <div className="sticky -top-2 z-10 -mx-2 -mt-2 mb-2 bg-surface px-2 pt-2 pb-2 border-b border-hairline">
                 <div className="flex items-center gap-2 rounded-panel border border-hairline px-3 h-10 focus-within:border-accent">
                   <Search className="h-4 w-4 text-ink-subtle shrink-0" />
                   <input

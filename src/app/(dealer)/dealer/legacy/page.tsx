@@ -160,7 +160,7 @@ export default async function DealerLegacyPage({
 
           <form className="mt-4" action="/dealer/legacy">
             {tab !== "licenses" ? <input type="hidden" name="tab" value={tab} /> : null}
-            <label className="flex h-12 items-center gap-2 rounded-panel border border-hairline bg-white px-4 transition-colors focus-within:border-accent">
+            <label className="flex h-12 items-center gap-2 rounded-panel border border-hairline bg-field px-4 transition-colors focus-within:border-accent">
               <Search className="h-4 w-4 text-ink-subtle" />
               <input
                 name="q"
@@ -171,7 +171,7 @@ export default async function DealerLegacyPage({
             </label>
           </form>
 
-          <div className="mt-3 overflow-x-auto rounded-panel border border-hairline bg-white">
+          <div className="mt-3 overflow-x-auto rounded-panel border border-hairline bg-surface">
             {rows.length === 0 ? (
               <div className="px-4 py-12 text-center text-sm text-ink-muted">Ничего не найдено</div>
             ) : (

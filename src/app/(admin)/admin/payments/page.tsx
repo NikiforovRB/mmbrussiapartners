@@ -116,7 +116,7 @@ export default async function AdminPaymentsPage({
               </div>
               {!atolReady ? (
                 <div className="mt-1 flex items-start gap-1.5 text-xs text-ink-muted">
-                  <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-[#a16207] mt-0.5" />
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-strong-warning mt-0.5" />
                   <span>Не заданы переменные: {missing.join(", ")}</span>
                 </div>
               ) : null}

@@ -369,7 +369,7 @@ async function DealerIps({ userId, signupIp }: { userId: string; signupIp: strin
                     {[i.country, i.city].filter(Boolean).join(", ") || "Страна не определена"}
                   </div>
                   {others.length > 0 ? (
-                    <div className="mt-0.5 text-xs text-[#a16207]">
+                    <div className="mt-0.5 text-xs text-strong-warning">
                       Этот адрес есть и у:{" "}
                       {others.map((o, idx) => (
                         <span key={o.id}>

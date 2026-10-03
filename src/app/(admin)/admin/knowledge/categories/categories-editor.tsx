@@ -13,7 +13,7 @@ import { cn, plural } from "@/lib/utils";
 type Category = { id: string; name: string; parentId: string | null; count: number };
 
 const inputClass =
-  "field-control h-9 min-w-0 flex-1 rounded-btn border border-hairline bg-white px-3 text-sm placeholder:text-ink-subtle focus:border-accent focus:outline-none";
+  "field-control h-9 min-w-0 flex-1 rounded-btn border border-hairline bg-field px-3 text-sm placeholder:text-ink-subtle focus:border-accent focus:outline-none";
 
 async function send(url: string, method: string, body?: unknown): Promise<boolean> {
   const res = await fetch(url, {

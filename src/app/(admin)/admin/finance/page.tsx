@@ -155,7 +155,7 @@ export default async function AdminFinancePage() {
                   <span>Платежей: {r.paidCount}</span>
                   <span>Лицензий: {r.licenses}</span>
                   {r.pendingAmount > 0 ? (
-                    <span className="text-[#a16207]">
+                    <span className="text-strong-warning">
                       Долг: <Money value={r.pendingAmount} /> ({r.pendingCount})
                     </span>
                   ) : null}
@@ -200,7 +200,7 @@ export default async function AdminFinancePage() {
                     <td className="px-5 py-3 text-right text-ink-muted">{r.paidCount}</td>
                     <td className="px-5 py-3 text-right">
                       {r.pendingAmount > 0 ? (
-                        <span className="text-[#a16207]">
+                        <span className="text-strong-warning">
                           <Money value={r.pendingAmount} />
                           <span className="text-ink-subtle"> ({r.pendingCount})</span>
                         </span>

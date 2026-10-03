@@ -55,7 +55,7 @@ export function ColumnsMenu<K extends string>({
         Колонки · {visibleCount}
       </button>
       {open ? (
-        <div className="absolute right-0 z-30 mt-1.5 w-72 rounded-panel border border-hairline bg-white shadow-lg">
+        <div className="absolute right-0 z-30 mt-1.5 w-72 rounded-panel border border-hairline bg-surface shadow-lg">
           <div className="flex items-center justify-between gap-2 border-b border-hairline px-3 py-2.5">
             <span className="text-xs text-ink-muted">Перетащите, чтобы изменить порядок</span>
             <button
@@ -98,7 +98,7 @@ export function ColumnsMenu<K extends string>({
                   <span
                     className={cn(
                       "grid h-4 w-4 shrink-0 place-items-center rounded-[4px] transition-colors",
-                      c.visible ? "bg-accent text-white" : "border border-hairline bg-white",
+                      c.visible ? "bg-accent text-white" : "border border-hairline bg-surface",
                     )}
                   >
                     {c.visible ? <Check className="h-3 w-3" /> : null}

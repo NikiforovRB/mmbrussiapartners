@@ -49,7 +49,7 @@ export function PickerTrigger({
         aria-haspopup="dialog"
         aria-expanded={open}
         className={cn(
-          "field-control flex h-12 w-full items-center gap-2 rounded-panel border border-hairline bg-white pl-4 text-left text-[14.5px] transition-colors",
+          "field-control flex h-12 w-full items-center gap-2 rounded-panel border border-hairline bg-field pl-4 text-left text-[14.5px] transition-colors",
           clearable ? "pr-24" : "pr-4",
           "focus-visible:outline-none focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/20",
           open && "border-accent",

@@ -53,7 +53,7 @@ function IconField({
     <div className="space-y-1.5">
       <span className="block text-[12.5px] text-ink-muted">{label}</span>
       <div className="flex items-center gap-2">
-        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-panel border border-hairline bg-white overflow-hidden">
+        <span className="grid h-11 w-11 shrink-0 place-items-center rounded-panel border border-hairline bg-surface overflow-hidden">
           {value ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={value} alt="" className="h-7 w-7 object-contain" />
