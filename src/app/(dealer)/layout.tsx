@@ -1,17 +1,16 @@
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
+import { Plus, UserCircle } from "lucide-react";
 import {
-  LayoutDashboard,
-  KeyRound,
-  Plus,
-  CreditCard,
-  UserCircle,
-  FileSpreadsheet,
-  Cpu,
-  BookOpen,
-  History,
-} from "lucide-react";
+  IconBookOpen,
+  IconClipboardCheck,
+  IconCodeSquare,
+  IconCreditCardCheck,
+  IconGrid,
+  IconKey,
+  IconPasscodeLock,
+} from "@/components/icons";
 import { Logo } from "@/components/brand/logo";
 import { Sidebar, type SidebarItem } from "@/components/cabinet/sidebar";
 import { MobileNavProvider } from "@/components/cabinet/mobile-nav";
@@ -60,17 +59,17 @@ export default async function DealerLayout({ children }: { children: React.React
     sections.legacyLk &&
     Boolean(await db.legacyRecord.findFirst({ where: { userId: user.id }, select: { id: true } }));
   const items: SidebarItem[] = [
-    { href: "/dealer", label: "Дашборд", icon: <LayoutDashboard className="h-4 w-4" /> },
-    { href: "/dealer/licenses", label: "Мои лицензии", icon: <KeyRound className="h-4 w-4" /> },
+    { href: "/dealer", label: "Дашборд", icon: <IconGrid className="h-4 w-4" /> },
+    { href: "/dealer/licenses", label: "Мои лицензии", icon: <IconKey className="h-4 w-4" /> },
     { href: "/dealer/licenses/new", label: "Новая лицензия", icon: <Plus className="h-4 w-4" /> },
-    { href: "/dealer/humax", label: "Пароли HUMAX", icon: <Cpu className="h-4 w-4" /> },
-    { href: "/dealer/payments", label: "Платежи", icon: <CreditCard className="h-4 w-4" /> },
+    { href: "/dealer/humax", label: "Пароли HUMAX", icon: <IconPasscodeLock className="h-4 w-4" /> },
+    { href: "/dealer/payments", label: "Платежи", icon: <IconCreditCardCheck className="h-4 w-4" /> },
     ...(hasLegacyRecords
-      ? [{ href: "/dealer/legacy", label: "ЛК DriveMods", icon: <History className="h-4 w-4" /> }]
+      ? [{ href: "/dealer/legacy", label: "ЛК DriveMods", icon: <IconCodeSquare className="h-4 w-4" /> }]
       : []),
-    { href: "/dealer/reports", label: "Отчёты", icon: <FileSpreadsheet className="h-4 w-4" /> },
+    { href: "/dealer/reports", label: "Отчёты", icon: <IconClipboardCheck className="h-4 w-4" /> },
     ...(sections.knowledge
-      ? [{ href: "/dealer/knowledge", label: "База знаний", icon: <BookOpen className="h-4 w-4" /> }]
+      ? [{ href: "/dealer/knowledge", label: "База знаний", icon: <IconBookOpen className="h-4 w-4" /> }]
       : []),
     { href: "/dealer/profile", label: "Профиль", icon: <UserCircle className="h-4 w-4" /> },
   ];

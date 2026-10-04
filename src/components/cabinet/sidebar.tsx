@@ -98,12 +98,19 @@ export function Sidebar({
                 aria-label={collapsed ? item.label : undefined}
                 title={collapsed ? item.label : undefined}
                 className={cn(
-                  "relative flex items-center rounded-panel py-2.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent",
+                  "group relative flex items-center rounded-panel py-2.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent",
                   collapsed ? "justify-center px-0" : "gap-3 px-3",
                   active ? "bg-surface text-ink" : "text-ink-muted hover:bg-surface/60 hover:text-ink",
                 )}
               >
-                <span className="relative z-10 inline-flex items-center justify-center w-5">{item.icon}</span>
+                <span
+                  className={cn(
+                    "relative z-10 inline-flex items-center justify-center w-5 transition-colors",
+                    active ? "text-accent" : "text-ink-subtle group-hover:text-ink-muted",
+                  )}
+                >
+                  {item.icon}
+                </span>
                 {collapsed ? null : <span className="relative z-10 flex-1 whitespace-nowrap">{item.label}</span>}
                 {item.badge ? (
                   collapsed ? (

@@ -1,7 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { Megaphone, X } from "lucide-react";
+import { X } from "lucide-react";
+import { IconAnnouncement } from "@/components/icons";
 
 /**
  * Оранжевая полоса-объявление на всю ширину окна над кабинетом: новости,
@@ -60,7 +61,7 @@ export function AnnouncementBar({
   return (
     <div ref={ref} className="bg-[#fc4c02] text-white">
       <div className="px-4 lg:px-6 py-2.5 flex items-center gap-3">
-        <Megaphone className="h-4 w-4 shrink-0" />
+        <IconAnnouncement className="h-4 w-4 shrink-0" />
         <p className="flex-1 text-[13px] leading-snug">{text}</p>
         <button
           type="button"

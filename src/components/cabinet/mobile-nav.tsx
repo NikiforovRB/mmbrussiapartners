@@ -92,13 +92,18 @@ export function MobileNavProvider({
                       href={item.href}
                       aria-current={active ? "page" : undefined}
                       className={cn(
-                        "flex items-center gap-3 rounded-panel px-3 py-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2",
+                        "group flex items-center gap-3 rounded-panel px-3 py-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2",
                         active
                           ? "bg-surface text-ink"
                           : "text-ink-muted hover:bg-surface/60 hover:text-ink",
                       )}
                     >
-                      <span className="inline-flex w-5 items-center justify-center">
+                      <span
+                        className={cn(
+                          "inline-flex w-5 items-center justify-center transition-colors",
+                          active ? "text-accent" : "text-ink-subtle group-hover:text-ink-muted",
+                        )}
+                      >
                         {item.icon}
                       </span>
                       <span className="flex-1">{item.label}</span>

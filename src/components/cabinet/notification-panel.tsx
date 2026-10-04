@@ -4,7 +4,6 @@ import * as React from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import {
-  Bell,
   BadgeCheck,
   CheckCheck,
   ClipboardList,
@@ -16,6 +15,7 @@ import {
   UserPlus,
   X,
 } from "lucide-react";
+import { IconBell } from "@/components/icons";
 import { cn } from "@/lib/utils";
 import { formatRuDateTime } from "@/lib/dates";
 import { notificationTabs, tabForType, type NotificationTabId } from "@/lib/notification-tabs";
@@ -207,7 +207,7 @@ export function NotificationPanel({ initialUnread }: { initialUnread: number }) 
         aria-label={unread > 0 ? `Уведомления, непрочитанных: ${unread}` : "Уведомления"}
         className="relative grid h-10 w-10 place-items-center rounded-btn text-ink-muted transition-colors hover:bg-surface-muted hover:text-ink"
       >
-        <Bell className="h-4 w-4" />
+        <IconBell className="h-4 w-4" />
         {unread > 0 ? (
           <span className="absolute top-1.5 right-1.5 min-w-[17px] h-[17px] px-1 grid place-items-center rounded-full bg-danger text-[10px] font-medium leading-none text-white">
             {unread > 99 ? "99+" : unread}
@@ -319,7 +319,7 @@ export function NotificationPanel({ initialUnread }: { initialUnread: number }) 
                                   : "bg-surface text-accent",
                               )}
                             >
-                              {ICONS[n.type] ?? <Bell className="h-4 w-4" />}
+                              {ICONS[n.type] ?? <IconBell className="h-4 w-4" />}
                             </span>
                             <span className="min-w-0 flex-1">
                               <span className="block text-sm leading-snug">{n.title}</span>
@@ -354,7 +354,7 @@ export function NotificationPanel({ initialUnread }: { initialUnread: number }) 
                   ) : (
                     <div className="px-5 py-16 text-center">
                       <div className="mx-auto grid h-12 w-12 place-items-center rounded-panel bg-surface-muted text-ink-subtle">
-                        <Bell className="h-5 w-5" />
+                        <IconBell className="h-5 w-5" />
                       </div>
                       <div className="mt-3 text-sm text-ink-muted">
                         {tab === "all" ? "Пока нет уведомлений" : "В этом разделе пока пусто"}

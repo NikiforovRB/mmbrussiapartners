@@ -1,11 +1,5 @@
-import {
-  Users,
-  KeyRound,
-  TrendingUp,
-  CalendarClock,
-  ShieldCheck,
-  ArrowUpRight,
-} from "lucide-react";
+import { KeyRound, CalendarClock, ShieldCheck, ArrowUpRight } from "lucide-react";
+import { IconCreditCardCheck, IconUserPlus } from "@/components/icons";
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { Topbar } from "@/components/cabinet/topbar";
@@ -63,11 +57,11 @@ export default async function AdminDashboard() {
         user={{ name: fio || user.email, email: user.email, role: user.role.name }}
       />
       <div className="mt-6 grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        <Kpi icon={<Users className="h-4 w-4" />} label="Заявок на одобрение" value={String(pendingDealers)} />
+        <Kpi icon={<IconUserPlus className="h-4 w-4" />} label="Заявок на одобрение" value={String(pendingDealers)} />
         <Kpi icon={<ShieldCheck className="h-4 w-4" />} label="Активных лицензий" value={String(activeLicenses)} />
         <Kpi icon={<KeyRound className="h-4 w-4" />} label="Лицензий всего" value={String(recentLicenses)} />
         <Kpi
-          icon={<TrendingUp className="h-4 w-4" />}
+          icon={<IconCreditCardCheck className="h-4 w-4" />}
           label="Оплачено"
           value={formatRub(Number(revenue._sum.amount ?? 0))}
         />

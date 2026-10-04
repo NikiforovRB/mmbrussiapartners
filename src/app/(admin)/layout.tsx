@@ -2,25 +2,26 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
 import {
-  LayoutDashboard,
-  Users,
-  KeyRound,
-  Cpu,
-  Shield,
-  FileSpreadsheet,
-  MapPinned,
-  CreditCard,
-  History,
-  Settings,
-  Trash2,
-  ClipboardList,
-  Tags,
-  LifeBuoy,
-  BarChart3,
-  BellRing,
-  BookOpen,
-  Archive,
-} from "lucide-react";
+  IconBarChart,
+  IconBell,
+  IconBookOpen,
+  IconBracketsCheck,
+  IconClipboardCheck,
+  IconCodeSquare,
+  IconCreditCardCheck,
+  IconFolderClosed,
+  IconGlobe,
+  IconGrid,
+  IconKey,
+  IconLifeBuoy,
+  IconPasscodeLock,
+  IconSettings,
+  IconShieldTick,
+  IconTrash,
+  IconUserCheck,
+  IconUsers,
+  IconWallet,
+} from "@/components/icons";
 import { Sidebar, type SidebarItem } from "@/components/cabinet/sidebar";
 import { MobileNavProvider } from "@/components/cabinet/mobile-nav";
 import { AnnouncementBar } from "@/components/cabinet/announcement-bar";
@@ -66,50 +67,50 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   after(() => trackUserIp(user.id, ip));
 
   const items: SidebarItem[] = [];
-  items.push({ href: "/admin", label: "Дашборд", icon: <LayoutDashboard className="h-4 w-4" /> });
+  items.push({ href: "/admin", label: "Дашборд", icon: <IconGrid className="h-4 w-4" /> });
   if (user.isSuperAdmin || hasPermission(user.role.permissions, "dealers.view", user.isSuperAdmin))
-    items.push({ href: "/admin/dealers", label: "Представители", icon: <Users className="h-4 w-4" /> });
+    items.push({ href: "/admin/dealers", label: "Представители", icon: <IconUsers className="h-4 w-4" /> });
   if (user.isSuperAdmin || hasPermission(user.role.permissions, "dealers.view", user.isSuperAdmin))
-    items.push({ href: "/admin/legacy-dealers", label: "ЛК DriveMods", icon: <Archive className="h-4 w-4" /> });
+    items.push({ href: "/admin/legacy-dealers", label: "ЛК DriveMods", icon: <IconCodeSquare className="h-4 w-4" /> });
   if (user.isSuperAdmin || hasPermission(user.role.permissions, "licenses.view", user.isSuperAdmin))
-    items.push({ href: "/admin/licenses", label: "Лицензии", icon: <KeyRound className="h-4 w-4" /> });
+    items.push({ href: "/admin/licenses", label: "Лицензии", icon: <IconKey className="h-4 w-4" /> });
   if (user.isSuperAdmin || hasPermission(user.role.permissions, "licenses.view", user.isSuperAdmin))
-    items.push({ href: "/admin/humax", label: "Пароли HUMAX", icon: <Cpu className="h-4 w-4" /> });
+    items.push({ href: "/admin/humax", label: "Пароли HUMAX", icon: <IconPasscodeLock className="h-4 w-4" /> });
   if (user.isSuperAdmin || hasPermission(user.role.permissions, "licenses.cancel", user.isSuperAdmin))
     items.push({
       href: "/admin/cancellation-requests",
       label: "Заявки на аннулирование",
-      icon: <ClipboardList className="h-4 w-4" />,
+      icon: <IconFolderClosed className="h-4 w-4" />,
     });
   if (user.isSuperAdmin || hasPermission(user.role.permissions, "users.manage", user.isSuperAdmin))
-    items.push({ href: "/admin/users", label: "Пользователи", icon: <Users className="h-4 w-4" /> });
+    items.push({ href: "/admin/users", label: "Пользователи", icon: <IconUserCheck className="h-4 w-4" /> });
   if (user.isSuperAdmin || hasPermission(user.role.permissions, "roles.manage", user.isSuperAdmin))
-    items.push({ href: "/admin/roles", label: "Роли", icon: <Shield className="h-4 w-4" /> });
+    items.push({ href: "/admin/roles", label: "Роли", icon: <IconShieldTick className="h-4 w-4" /> });
   if (user.isSuperAdmin || hasPermission(user.role.permissions, "reports.view", user.isSuperAdmin))
-    items.push({ href: "/admin/reports", label: "Отчёты", icon: <FileSpreadsheet className="h-4 w-4" /> });
+    items.push({ href: "/admin/reports", label: "Отчёты", icon: <IconClipboardCheck className="h-4 w-4" /> });
   if (
     user.isSuperAdmin ||
     hasPermission(user.role.permissions, "stats.view", user.isSuperAdmin) ||
     hasPermission(user.role.permissions, "geo.view", user.isSuperAdmin)
   )
-    items.push({ href: "/admin/geo", label: "Гео-аналитика", icon: <MapPinned className="h-4 w-4" /> });
+    items.push({ href: "/admin/geo", label: "Гео-аналитика", icon: <IconGlobe className="h-4 w-4" /> });
   if (user.isSuperAdmin || hasPermission(user.role.permissions, "payments.view", user.isSuperAdmin))
-    items.push({ href: "/admin/payments", label: "Платежи", icon: <CreditCard className="h-4 w-4" /> });
+    items.push({ href: "/admin/payments", label: "Платежи", icon: <IconCreditCardCheck className="h-4 w-4" /> });
   if (user.isSuperAdmin || hasPermission(user.role.permissions, "payments.view", user.isSuperAdmin))
-    items.push({ href: "/admin/finance", label: "Финансы по дилерам", icon: <BarChart3 className="h-4 w-4" /> });
+    items.push({ href: "/admin/finance", label: "Финансы по дилерам", icon: <IconBarChart className="h-4 w-4" /> });
   if (user.isSuperAdmin || hasPermission(user.role.permissions, "pricing.manage", user.isSuperAdmin))
-    items.push({ href: "/admin/pricing", label: "Справочник цен", icon: <Tags className="h-4 w-4" /> });
+    items.push({ href: "/admin/pricing", label: "Справочник цен", icon: <IconWallet className="h-4 w-4" /> });
   if (user.isSuperAdmin || hasPermission(user.role.permissions, "auditLog.view", user.isSuperAdmin))
-    items.push({ href: "/admin/audit", label: "Логи", icon: <History className="h-4 w-4" /> });
+    items.push({ href: "/admin/audit", label: "Логи", icon: <IconBracketsCheck className="h-4 w-4" /> });
   if (user.isSuperAdmin || hasPermission(user.role.permissions, "licenses.restore", user.isSuperAdmin))
-    items.push({ href: "/admin/trash", label: "Корзина", icon: <Trash2 className="h-4 w-4" /> });
+    items.push({ href: "/admin/trash", label: "Корзина", icon: <IconTrash className="h-4 w-4" /> });
   if (user.isSuperAdmin || hasPermission(user.role.permissions, "settings.edit", user.isSuperAdmin))
-    items.push({ href: "/admin/knowledge", label: "База знаний", icon: <BookOpen className="h-4 w-4" /> });
-  items.push({ href: "/admin/support", label: "Техподдержка", icon: <LifeBuoy className="h-4 w-4" /> });
+    items.push({ href: "/admin/knowledge", label: "База знаний", icon: <IconBookOpen className="h-4 w-4" /> });
+  items.push({ href: "/admin/support", label: "Техподдержка", icon: <IconLifeBuoy className="h-4 w-4" /> });
   if (user.isSuperAdmin || hasPermission(user.role.permissions, "settings.edit", user.isSuperAdmin))
-    items.push({ href: "/admin/notices", label: "Уведомления входа", icon: <BellRing className="h-4 w-4" /> });
+    items.push({ href: "/admin/notices", label: "Уведомления входа", icon: <IconBell className="h-4 w-4" /> });
   if (user.isSuperAdmin || hasPermission(user.role.permissions, "settings.edit", user.isSuperAdmin))
-    items.push({ href: "/admin/settings", label: "Настройки", icon: <Settings className="h-4 w-4" /> });
+    items.push({ href: "/admin/settings", label: "Настройки", icon: <IconSettings className="h-4 w-4" /> });
 
   const [unreadCount, settings, loginNotices, cookieStore] = await Promise.all([
     db.appNotification.count({ where: { userId: user.id, readAt: null } }),

@@ -7,6 +7,7 @@ import {
   Sparkles,
   TrendingUp,
 } from "lucide-react";
+import { IconCreditCardCheck } from "@/components/icons";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { Topbar } from "@/components/cabinet/topbar";
@@ -146,7 +147,7 @@ export default async function DealerDashboard() {
               value={String(totalActive)}
             />
             <KpiCard
-              icon={<TrendingUp className="h-4 w-4" />}
+              icon={<IconCreditCardCheck className="h-4 w-4" />}
               label="Оплачено"
               value={formatRub(Number(totalRevenue._sum.amount ?? 0))}
             />

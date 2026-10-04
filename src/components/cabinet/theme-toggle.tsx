@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Moon, Sun } from "lucide-react";
+import { IconMoon, IconSun } from "@/components/icons";
 import { useTheme } from "@/hooks/use-theme";
 import { cn } from "@/lib/utils";
 
@@ -38,8 +38,8 @@ export function ThemeToggle({ compact = false, className }: { compact?: boolean;
           className,
         )}
       >
-        <Sun className="absolute h-5 w-5 text-warning transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] dark:rotate-90 dark:scale-0 dark:opacity-0" />
-        <Moon className="absolute h-5 w-5 rotate-90 scale-0 text-strong-accent opacity-0 transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] dark:rotate-0 dark:scale-100 dark:opacity-100" />
+        <IconSun className="absolute h-5 w-5 text-warning transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] dark:rotate-90 dark:scale-0 dark:opacity-0" />
+        <IconMoon className="absolute h-5 w-5 rotate-90 scale-0 text-strong-accent opacity-0 transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] dark:rotate-0 dark:scale-100 dark:opacity-100" />
       </button>
     );
   }
@@ -61,11 +61,11 @@ export function ThemeToggle({ compact = false, className }: { compact?: boolean;
         className="absolute inset-y-1 left-1 w-[calc(50%-4px)] rounded-[9px] bg-surface shadow-[0_8px_18px_-10px_rgba(11,16,32,0.45)] transition-[transform,background-color] duration-500 ease-[cubic-bezier(0.34,1.4,0.64,1)] dark:translate-x-full dark:bg-bg-dark"
       />
       <span className="relative z-10 flex items-center justify-center gap-1.5 text-ink transition-colors duration-300 dark:text-ink-subtle dark:group-hover:text-ink-muted">
-        <Sun className="h-4 w-4 text-warning transition-transform duration-700 ease-[cubic-bezier(0.34,1.56,0.64,1)] dark:-rotate-90 dark:scale-75 dark:text-current" />
+        <IconSun className="h-4 w-4 text-warning transition-transform duration-700 ease-[cubic-bezier(0.34,1.56,0.64,1)] dark:-rotate-90 dark:scale-75 dark:text-current" />
         Светлая
       </span>
       <span className="relative z-10 flex items-center justify-center gap-1.5 transition-colors duration-300 group-hover:text-ink dark:text-ink">
-        <Moon className="h-4 w-4 -rotate-45 scale-75 transition-transform duration-700 ease-[cubic-bezier(0.34,1.56,0.64,1)] dark:rotate-0 dark:scale-100 dark:text-strong-accent" />
+        <IconMoon className="h-4 w-4 -rotate-45 scale-75 transition-transform duration-700 ease-[cubic-bezier(0.34,1.56,0.64,1)] dark:rotate-0 dark:scale-100 dark:text-strong-accent" />
         Тёмная
       </span>
     </button>
