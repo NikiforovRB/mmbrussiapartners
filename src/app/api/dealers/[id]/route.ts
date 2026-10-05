@@ -62,11 +62,11 @@ const LOCATION_FIELDS = ["country", "region", "city"] as const;
 /** Поля, которые видны в «Дилерской сети» на сайте. */
 const SITE_PROFILE_FIELDS = ["phone", "city", "country", "siteComment"] as const;
 
-const STATUS_LABEL: Record<string, string> = {
-  PENDING: "на рассмотрении",
-  APPROVED: "одобрен",
-  REJECTED: "отклонён",
-  SUSPENDED: "заблокирован",
+const STATUS_TITLE: Record<string, string> = {
+  PENDING: "Ваша учётная запись возвращена на рассмотрение",
+  APPROVED: "Ваша учётная запись одобрена",
+  REJECTED: "Ваша учётная запись отклонена",
+  SUSPENDED: "Ваша учётная запись заблокирована",
 };
 
 export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: string }> }) => {
@@ -262,7 +262,7 @@ export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: str
           : "DEALER_SUSPENDED";
     await notifyUser(id, {
       type,
-      title: `Ваша учётная запись: ${STATUS_LABEL[d.status]}`,
+      title: STATUS_TITLE[d.status],
       body:
         d.status === "REJECTED"
           ? (d.rejectionReason ?? null)

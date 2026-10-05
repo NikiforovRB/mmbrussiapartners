@@ -19,7 +19,10 @@ export function PaymentActions({
   amountLabel,
   refundStatus,
   refundReceiptStatus,
+  part,
 }: {
+  /** Только действия с платежом или только удаление — в таблице это разные колонки. */
+  part?: "manage" | "delete";
   id: string;
   status: string;
   receiptStatus: string | null;
@@ -30,9 +33,9 @@ export function PaymentActions({
 }) {
   const router = useRouter();
   const { can } = usePermissions();
-  const canManage = can("payments.manage");
+  const canManage = can("payments.manage") && part !== "delete";
   const canRefund = can("payments.refund");
-  const canDelete = can("payments.delete");
+  const canDelete = can("payments.delete") && part !== "manage";
   const [busy, setBusy] = React.useState<Action | null>(null);
   const [deleteOpen, setDeleteOpen] = React.useState(false);
   const [deleting, setDeleting] = React.useState(false);

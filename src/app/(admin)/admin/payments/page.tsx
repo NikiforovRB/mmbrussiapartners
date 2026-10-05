@@ -193,6 +193,7 @@ export default async function AdminPaymentsPage({
                     <th className="px-4 py-3">Статус</th>
                     <th className="px-4 py-3">Чек</th>
                     <th className="px-4 py-3" />
+                    <th className="w-px px-4 py-3" />
                   </tr>
                 </thead>
                 <tbody>
@@ -239,6 +240,19 @@ export default async function AdminPaymentsPage({
                       </td>
                       <td className="px-4 py-3">
                         <PaymentActions
+                          part="manage"
+                          id={p.id}
+                          status={p.status}
+                          receiptStatus={p.receiptStatus}
+                          provider={p.provider}
+                          amountLabel={formatRub(p.amount)}
+                          refundStatus={p.refundStatus}
+                          refundReceiptStatus={p.refundReceiptStatus}
+                        />
+                      </td>
+                      <td className="w-px px-4 py-3">
+                        <PaymentActions
+                          part="delete"
                           id={p.id}
                           status={p.status}
                           receiptStatus={p.receiptStatus}

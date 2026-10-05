@@ -141,7 +141,7 @@ export default async function DealerLayout({ children }: { children: React.React
 
 function PendingScreen({ email }: { email: string }) {
   return (
-    <StatusScreen title="Заявка на рассмотрении">
+    <StatusScreen title="Заявка на рассмотрении" contactLabel="Связаться с администратором">
       <p className="mt-2 text-sm text-ink-muted">
         Аккаунт <span className="text-ink">{email}</span> ожидает одобрения администратора.
         Вы получите уведомление сразу после одобрения.
@@ -187,7 +187,15 @@ function ReasonBox({ reason }: { reason: string | null }) {
   );
 }
 
-function StatusScreen({ title, children }: { title: string; children: React.ReactNode }) {
+function StatusScreen({
+  title,
+  contactLabel = "Связаться с MMB",
+  children,
+}: {
+  title: string;
+  contactLabel?: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="min-h-screen grid place-items-center bg-bg px-6">
       <div className="rounded-panel bg-surface border border-hairline p-10 max-w-lg w-full text-center">
@@ -201,7 +209,7 @@ function StatusScreen({ title, children }: { title: string; children: React.Reac
             href="mailto:marat@mmbrussia.ru"
             className="rounded-btn border border-hairline px-5 h-11 inline-flex items-center text-sm transition-colors hover:border-accent hover:text-accent"
           >
-            Связаться с MMB
+            {contactLabel}
           </a>
           <SignOutButton className="rounded-btn bg-bg-dark text-white px-5 h-11 inline-flex items-center text-sm disabled:opacity-50" />
         </div>
