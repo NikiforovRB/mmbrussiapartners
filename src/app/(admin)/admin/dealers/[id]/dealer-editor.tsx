@@ -505,7 +505,7 @@ export function DealerEditor({
                 const prev = data.dealerProfile?.legacyDealer ?? false;
                 setData((d) => ({ ...d, dealerProfile: d.dealerProfile && { ...d.dealerProfile, legacyDealer: v } }));
                 if (await update({ profile: { legacyDealer: v } }, "legacy")) {
-                  toast.success(v ? "Отмечен как дилер из старого ЛК" : "Отметка снята");
+                  toast.success(v ? "Отмечен как дилер из ЛК DriveMods" : "Отметка снята");
                   router.refresh();
                 } else {
                   setData((d) => ({
@@ -516,10 +516,10 @@ export function DealerEditor({
               }}
               label={
                 <span className="flex items-center gap-2">
-                  <History className="h-4 w-4" /> Работал в старом ЛК
+                  <History className="h-4 w-4" /> Работал в ЛК DriveMods
                 </span>
               }
-              description="Первая генерация каждой позиции идёт по дилерской цене, а не по клиентской, как у новичков."
+              description="Отметка для администраторов: представитель уже работал с нами в ЛК DriveMods."
             />
             {legacy ? (
               <div className="mt-3 rounded-panel border border-hairline p-3 text-xs text-ink-muted space-y-1">

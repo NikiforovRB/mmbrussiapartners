@@ -40,8 +40,6 @@ type LicItem = {
   price: number;
   /** Цена нашлась в справочнике, а не взята из запасной настройки. */
   priced: boolean;
-  /** Первая генерация этой позиции идёт по клиентской цене. */
-  firstAtClientPrice?: boolean;
 };
 
 type LicInfo = {
@@ -475,14 +473,9 @@ export function LicenseStepper({
                     label="Комплектация"
                     value={
                       selectedItem ? (
-                        <span className="flex flex-wrap items-center gap-1.5">
-                          <span>
-                            {bundleLabel(selectedItem)} ·{" "}
-                            {info.free ? "бесплатно" : <Money value={selectedItem.price} />}
-                          </span>
-                          {selectedItem.firstAtClientPrice && !info.free ? (
-                            <Tag tone="accent">Первая — по клиентской цене</Tag>
-                          ) : null}
+                        <span>
+                          {bundleLabel(selectedItem)} ·{" "}
+                          {info.free ? "бесплатно" : <Money value={selectedItem.price} />}
                         </span>
                       ) : (
                         "—"

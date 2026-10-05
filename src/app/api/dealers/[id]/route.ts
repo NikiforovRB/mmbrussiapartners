@@ -29,7 +29,7 @@ const profileSchema = z.object({
   siteComment: z.string().max(200, "Подпись на сайте — не длиннее 200 символов").nullable().optional(),
   licenseLimit: z.number().int().min(0).optional(),
   driveModsAccess: z.boolean().optional(),
-  /** Работал в старом ЛК DriveMods — первая генерация не по клиентской цене. */
+  /** Работал в ЛК DriveMods. */
   legacyDealer: z.boolean().optional(),
 });
 

@@ -15,6 +15,7 @@ import {
   History,
   LayoutDashboard,
   ClipboardList,
+  LifeBuoy,
 } from "lucide-react";
 
 type Item = {
@@ -63,6 +64,14 @@ const ITEMS: Item[] = [
     href: "/dealer/reports",
     icon: <FileSpreadsheet className="h-4 w-4" />,
     scope: "dealer",
+  },
+  {
+    id: "d-support",
+    label: "Техподдержка",
+    href: "/dealer/support",
+    icon: <LifeBuoy className="h-4 w-4" />,
+    scope: "dealer",
+    keywords: ["помощь", "support", "связь"],
   },
 
   {

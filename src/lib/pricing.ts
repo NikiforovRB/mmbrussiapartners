@@ -18,7 +18,7 @@ export type PriceQuery = {
   region?: string | null;
 };
 
-export type PriceBasis = "personal" | "client_first" | "client_tier" | "dealer" | "fallback";
+export type PriceBasis = "personal" | "client_tier" | "dealer" | "fallback";
 
 export type ResolvedPrice = {
   price: number;
@@ -87,26 +87,18 @@ export async function resolvePrices(
 
   // В справочнике продукт хранится нормализованным, поэтому и ищем по такому же.
   const products = [...new Set(queries.map((q) => normalizeKey(q.product)).filter(Boolean))];
-  const [items, profile, personal, priorLicenses] = await Promise.all([
+  const [items, profile, personal] = await Promise.all([
     products.length > 0
       ? db.priceListItem.findMany({ where: { product: { in: products } } })
       : Promise.resolve([]),
     dealerId
       ? db.dealerProfile.findUnique({
           where: { userId: dealerId },
-          select: { priceAdjustKind: true, priceAdjustValue: true, priceTier: true, legacyDealer: true },
+          select: { priceAdjustKind: true, priceAdjustValue: true, priceTier: true },
         })
       : Promise.resolve(null),
     dealerId
       ? db.dealerPrice.findMany({ where: { dealerId }, select: { itemId: true, price: true } })
-      : Promise.resolve([]),
-    // Позиции, по которым у представителя уже была выдача: нужны, чтобы
-    // отличить первую генерацию каждой позиции (идёт по клиентской цене).
-    dealerId && products.length > 0
-      ? db.license.findMany({
-          where: { dealerId, deletedAt: null, product: { in: products } },
-          select: { product: true, bundle: true, productRegion: true },
-        })
       : Promise.resolve([]),
   ]);
 
@@ -114,15 +106,6 @@ export async function resolvePrices(
   const kind: PriceAdjustKind = profile?.priceAdjustKind ?? "NONE";
   const adjust = profile?.priceAdjustValue == null ? null : toNumber(profile.priceAdjustValue);
   const tier = profile?.priceTier === "CLIENT" ? "CLIENT" : "DEALER";
-  const seenPositions = new Set(
-    priorLicenses.map((l) =>
-      priceKey({ product: l.product ?? "", bundle: l.bundle, region: l.productRegion }),
-    ),
-  );
-
-  // Представитель, работавший в старом ЛК DriveMods, позиции уже покупал —
-  // просто не на этом портале, поэтому «первая генерация» к нему не относится.
-  const legacy = profile?.legacyDealer === true;
 
   return queries.map((q) => {
     const item = matchItem(items, q);
@@ -152,11 +135,7 @@ export async function resolvePrices(
       return { ...base, price: clientPrice, personal: false, basis: "client_tier" as const };
     }
 
-    // Первая генерация этой позиции — по клиентской цене (если она задана).
-    if (clientPrice !== null && !legacy && !seenPositions.has(priceKey(q))) {
-      return { ...base, price: clientPrice, personal: false, basis: "client_first" as const };
-    }
-
+    // Все остальные, включая только что зарегистрированных, — по дилерской цене.
     return { ...base, price: dealerPrice, personal: false, basis: "dealer" as const };
   });
 }

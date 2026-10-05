@@ -176,3 +176,75 @@ export const POST = route(async (req: Request, ctx: { params: Promise<{ id: stri
     throw badRequest((e as Error).message);
   }
 });
+
+/**
+ * Удаление записи о платеже. Неоплаченный счёт АТОЛ Pay перед удалением
+ * сверяется с эквайрингом: если деньги уже пришли, запись нужна для чека и
+ * возврата, и удалять её нельзя.
+ */
+export const DELETE = route(async (_req: Request, ctx: { params: Promise<{ id: string }> }) => {
+  const session = await requirePermission("payments.delete");
+  const { id } = await ctx.params;
+
+  const payment = await db.payment.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      dealerId: true,
+      status: true,
+      provider: true,
+      externalId: true,
+      amount: true,
+      description: true,
+      receiptStatus: true,
+      refundStatus: true,
+      refundReceiptStatus: true,
+      license: { select: { number: true } },
+      dealer: { select: { email: true } },
+    },
+  });
+  if (!payment) throw notFound("Платёж не найден");
+  if (payment.refundStatus === "processing") {
+    throw badRequest("По платежу идёт возврат средств — дождитесь, пока он завершится");
+  }
+  if (payment.receiptStatus === "wait" || payment.refundReceiptStatus === "wait") {
+    throw badRequest("Касса ещё пробивает чек по этому платежу — обновите статус чека и повторите");
+  }
+
+  if (payment.provider === "atol_pay" && payment.status !== "PAID" && payment.status !== "REFUNDED") {
+    let synced;
+    try {
+      synced = await syncAtolPayPayment(id);
+    } catch (e) {
+      throw badRequest(`Не удалось сверить оплату с АТОЛ Pay: ${(e as Error).message}. Повторите позже.`);
+    }
+    if (synced?.paid || synced?.amountMismatch) {
+      throw badRequest("По счёту уже поступила оплата в АТОЛ Pay — удалять его нельзя");
+    }
+  }
+
+  await db.payment.delete({ where: { id } });
+  await syncLicenseSlots(payment.dealerId);
+
+  const statusLabel: Record<string, string> = {
+    PENDING: "ожидал оплаты",
+    PAID: "оплачен",
+    FAILED: "ошибка оплаты",
+    CANCELLED: "отменён",
+    REFUNDED: "возвращён",
+  };
+  await recordAdminAction({
+    actorId: session.user.id,
+    entity: "PAYMENT",
+    entityId: id,
+    action: "PAYMENT_DELETED",
+    summary: [
+      payment.license?.number ? `Лицензия ${payment.license.number}` : (payment.description ?? "Счёт"),
+      formatRub(payment.amount),
+      statusLabel[payment.status] ?? payment.status,
+      payment.dealer.email,
+      ...(payment.provider === "atol_pay" ? [`заказ АТОЛ Pay ${payment.externalId ?? id}`] : []),
+    ].join(" · "),
+  });
+  return NextResponse.json({ ok: true });
+});

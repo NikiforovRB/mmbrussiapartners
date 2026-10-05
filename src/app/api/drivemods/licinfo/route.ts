@@ -118,8 +118,6 @@ export const POST = route(async (req: Request) => {
         price: prices ? prices[index].price : 0,
         /** Цена взята из справочника, а не из запасной настройки. */
         priced: prices ? prices[index].itemId !== null : true,
-        /** Первая генерация позиции идёт по клиентской цене. */
-        firstAtClientPrice: prices ? prices[index].basis === "client_first" : false,
       })),
     });
   } catch (err) {

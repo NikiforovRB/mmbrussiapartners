@@ -385,8 +385,7 @@ model DealerProfile {
   /// Предоплатный расчёт: до генерации нужно погасить неоплаченные счета.
   /// Доверенным представителям оставляют postpaid (false) — генерируют сразу.
   prepaid             Boolean  @default(false)
-  /// Работал с нами в старом ЛК DriveMods: первая генерация позиции идёт по
-  /// дилерской цене, а не по клиентской, как у новичков.
+  /// Работал с нами в ЛК DriveMods — отметка для администраторов.
   legacyDealer        Boolean  @default(false)
   approvedAt          DateTime?
   approvedById        String?
@@ -790,7 +789,7 @@ model PriceListItem {
   price     Decimal  @db.Decimal(12, 2)
   /// Базовая цена (себестоимость) — видна только администраторам, для маржи.
   myPrice     Decimal? @db.Decimal(12, 2)
-  /// Клиентская (розничная) цена. По ней идёт первая генерация позиции.
+  /// Клиентская (розничная) цена — для представителей с тарифом CLIENT.
   clientPrice Decimal? @db.Decimal(12, 2)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -12,8 +12,8 @@ const schema = z.object({ userId: z.string().min(1).nullable() });
 
 /**
  * Привязка записи старого ЛК к представителю портала. Привязанный
- * представитель считается «старым»: первая генерация у него не по клиентской
- * цене. Отвязка снимает эту отметку — обычно это исправление ошибочной связи.
+ * представитель отмечается как работавший в ЛК DriveMods. Отвязка снимает
+ * эту отметку — обычно это исправление ошибочной связи.
  */
 export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: string }> }) => {
   const session = await requirePermission("dealers.edit");

@@ -527,8 +527,32 @@ export async function handleAtolPayCallback(
     where: { OR: [{ id: orderId }, { externalId: orderId }] },
     select: { id: true },
   });
-  if (!payment) return null;
+  if (!payment) {
+    await reportOrphanAtolPayOrder(orderId);
+    return null;
+  }
   return syncAtolPayPayment(payment.id);
+}
+
+const reportedOrphanOrders = new Set<string>();
+
+/**
+ * Неоплаченный заказ АТОЛ Pay отменить нельзя, поэтому по ссылке удалённого
+ * счёта всё ещё можно заплатить. Такую оплату видит только колбэк; статус
+ * сверяем авторизованным запросом, чтобы чужой колбэк не рассылал уведомления.
+ */
+async function reportOrphanAtolPayOrder(orderId: string) {
+  if (!/^[A-Za-z0-9:+\-_.]{1,100}$/.test(orderId) || reportedOrphanOrders.has(orderId)) return;
+  const status = await getAtolPayOrderStatus(orderId).catch(() => null);
+  if (status?.code !== ATOL_PAY_STATUS.success) return;
+  reportedOrphanOrders.add(orderId);
+  console.error(`[payments] АТОЛ Pay: оплачен заказ ${orderId}, которого нет среди платежей портала`);
+  await notifyAdmins(["payments.manage"], {
+    type: "PAYMENT_PAID",
+    title: "Оплата по удалённому счёту",
+    body: `Заказ АТОЛ Pay ${orderId} оплачен, но такого платежа в портале нет. Найдите его в журнале действий и верните деньги в ЛК АТОЛ Pay.`,
+    link: "/admin/audit",
+  });
 }
 
 /** Возврат, прерванный падением процесса, через это время можно запустить снова. */

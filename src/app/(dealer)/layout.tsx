@@ -9,6 +9,7 @@ import {
   IconCreditCardCheck,
   IconGrid,
   IconKey,
+  IconLifeBuoy,
   IconPasscodeLock,
 } from "@/components/icons";
 import { Logo } from "@/components/brand/logo";
@@ -71,6 +72,7 @@ export default async function DealerLayout({ children }: { children: React.React
     ...(sections.knowledge
       ? [{ href: "/dealer/knowledge", label: "База знаний", icon: <IconBookOpen className="h-4 w-4" /> }]
       : []),
+    { href: "/dealer/support", label: "Техподдержка", icon: <IconLifeBuoy className="h-4 w-4" /> },
     { href: "/dealer/profile", label: "Профиль", icon: <UserCircle className="h-4 w-4" /> },
   ];
 

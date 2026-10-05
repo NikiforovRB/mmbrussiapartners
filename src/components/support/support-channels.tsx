@@ -8,7 +8,7 @@ import {
   LifeBuoy,
   Link as LinkIcon,
 } from "lucide-react";
-import type { SupportChannel } from "@/lib/site-settings";
+import type { SupportChannel, SupportSettings } from "@/lib/site-settings";
 
 const PRESET_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   telegram: Send,
@@ -66,5 +66,35 @@ export function SupportLinkCard({ channel }: { channel: SupportChannel }) {
         <span className="block truncate text-xs text-ink-subtle">{channel.url}</span>
       </span>
     </a>
+  );
+}
+
+/** Раздел «Техподдержка»: вступление, каналы связи и требования. */
+export function SupportOverview({ support, empty }: { support: SupportSettings; empty: React.ReactNode }) {
+  return (
+    <div className="max-w-3xl">
+      {support.intro?.trim() ? <p className="text-sm text-ink-muted mb-5">{support.intro}</p> : null}
+
+      <div className="flex items-center gap-2 mb-4">
+        <LifeBuoy className="h-5 w-5 text-accent" />
+        <div className="font-display text-lg tracking-tight">Мы на связи</div>
+      </div>
+      {support.channels.length === 0 ? (
+        <div className="rounded-panel border border-hairline py-8 text-center text-sm text-ink-muted">{empty}</div>
+      ) : (
+        <div className="grid sm:grid-cols-2 gap-3">
+          {support.channels.map((c, i) => (
+            <SupportLinkCard key={i} channel={c} />
+          ))}
+        </div>
+      )}
+
+      {support.requirements?.trim() ? (
+        <div className="mt-6">
+          <div className="text-xs uppercase tracking-widest text-ink-muted mb-2">Требования и примечания</div>
+          <p className="text-sm text-ink-muted whitespace-pre-line">{support.requirements}</p>
+        </div>
+      ) : null}
+    </div>
   );
 }

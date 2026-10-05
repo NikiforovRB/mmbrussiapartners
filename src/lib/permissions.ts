@@ -23,6 +23,7 @@ export const PERMISSIONS = {
   "payments.view": "Просмотр платежей",
   "payments.manage": "Подтверждение оплат и фискализация",
   "payments.refund": "Возвраты по платежам",
+  "payments.delete": "Удаление платежей",
   "pricing.manage": "Справочник цен",
   "settings.edit": "Настройки компании",
   "auditLog.view": "Просмотр логов",
@@ -53,7 +54,7 @@ export const PERMISSION_GROUPS: Record<string, PermissionKey[]> = {
   ],
   "Доступ и роли": ["roles.manage", "users.manage"],
   "Аналитика и отчёты": ["reports.view", "reports.export", "stats.view", "geo.view"],
-  Платежи: ["payments.view", "payments.manage", "payments.refund", "pricing.manage"],
+  Платежи: ["payments.view", "payments.manage", "payments.refund", "payments.delete", "pricing.manage"],
   Прочее: ["settings.edit", "auditLog.view", "templates.edit"],
 };
 

@@ -112,7 +112,7 @@ export function LegacyLinkButton({
               onClose={() => setConfirmUnlink(false)}
               size="sm"
               title="Отвязать от старого ЛК?"
-              description={`${linked.fio || linked.email} перестанет считаться дилером из старого ЛК («${label}»): лицензии и оплаты этого дилера пропадут из его кабинета (кроме назначенных вручную), первая генерация снова пойдёт по клиентской цене.`}
+              description={`${linked.fio || linked.email} перестанет считаться дилером из старого ЛК («${label}»): лицензии и оплаты этого дилера пропадут из его кабинета (кроме назначенных вручную).`}
               footer={
                 <>
                   <Button variant="ghost" onClick={() => setConfirmUnlink(false)}>
@@ -142,7 +142,7 @@ export function LegacyLinkButton({
         open={open}
         onClose={() => setOpen(false)}
         title={`Привязать «${label}»`}
-        description="Выберите представителя портала. Ему перейдут лицензии, оплаты и пароли этого дилера (он увидит их в кабинете), а первая генерация пойдёт по цене дилера, а не по клиентской."
+        description="Выберите представителя портала. Ему перейдут лицензии, оплаты и пароли этого дилера — он увидит их в кабинете."
       >
         <div className="space-y-3">
           <Input

@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, Receipt, RefreshCw, SearchCheck, Undo2, XCircle } from "lucide-react";
+import { CheckCircle2, Receipt, RefreshCw, SearchCheck, Trash2, Undo2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -32,7 +32,10 @@ export function PaymentActions({
   const { can } = usePermissions();
   const canManage = can("payments.manage");
   const canRefund = can("payments.refund");
+  const canDelete = can("payments.delete");
   const [busy, setBusy] = React.useState<Action | null>(null);
+  const [deleteOpen, setDeleteOpen] = React.useState(false);
+  const [deleting, setDeleting] = React.useState(false);
   const [refundOpen, setRefundOpen] = React.useState(false);
   const [refundedManually, setRefundedManually] = React.useState(false);
 
@@ -92,7 +95,22 @@ export function PaymentActions({
     setRefundOpen(true);
   }
 
-  if (!canManage) return null;
+  async function remove() {
+    setDeleting(true);
+    const res = await fetch(`/api/payments/${id}`, { method: "DELETE" });
+    setDeleting(false);
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      toast.error(json.error ?? "Не удалось удалить платёж");
+      router.refresh();
+      return;
+    }
+    toast.success("Запись о платеже удалена");
+    setDeleteOpen(false);
+    router.refresh();
+  }
+
+  if (!canManage && !canDelete) return null;
 
   const paid = status === "PAID";
   const refunded = status === "REFUNDED";
@@ -106,7 +124,7 @@ export function PaymentActions({
 
   return (
     <div className="flex flex-wrap items-center gap-1.5">
-      {status === "PENDING" ? (
+      {canManage && status === "PENDING" ? (
         <>
           {provider === "atol_pay" ? (
             <Button
@@ -138,7 +156,7 @@ export function PaymentActions({
           </Button>
         </>
       ) : null}
-      {needsReceipt || needsRefundReceipt ? (
+      {canManage && (needsReceipt || needsRefundReceipt) ? (
         <Button
           size="sm"
           variant="secondary"
@@ -149,7 +167,7 @@ export function PaymentActions({
           {refunded ? "Пробить чек возврата" : "Пробить чек"}
         </Button>
       ) : null}
-      {waitingReceipt ? (
+      {canManage && waitingReceipt ? (
         <Button
           size="sm"
           variant="ghost"
@@ -160,7 +178,7 @@ export function PaymentActions({
           Обновить
         </Button>
       ) : null}
-      {paid && canRefund ? (
+      {canManage && paid && canRefund ? (
         <Button
           size="sm"
           variant="ghost"
@@ -171,6 +189,44 @@ export function PaymentActions({
           {refundStatus === "fail" ? "Повторить возврат" : "Вернуть средства"}
         </Button>
       ) : null}
+      {canDelete ? (
+        <Button
+          size="sm"
+          variant="ghostDanger"
+          className="px-2.5"
+          aria-label="Удалить запись о платеже"
+          title="Удалить запись о платеже"
+          icon={<Trash2 className="h-3.5 w-3.5" />}
+          onClick={() => setDeleteOpen(true)}
+        />
+      ) : null}
+
+      <Modal
+        open={deleteOpen}
+        onClose={() => setDeleteOpen(false)}
+        title={`Удалить платёж на ${amountLabel}?`}
+        description="Запись пропадёт из раздела «Платежи», из финансов по дилерам и из кабинета дилера. Отменить удаление нельзя."
+      >
+        <div className="space-y-3 text-sm text-ink-muted">
+          {paid || refunded ? (
+            <p className="rounded-panel border border-hairline p-4">
+              Платёж {paid ? "оплачен" : "возвращён"}: чеки уже переданы в ОФД и налоговую и там останутся. Лицензия
+              останется у дилера, но без счёта.
+            </p>
+          ) : provider === "atol_pay" && status === "PENDING" ? (
+            <p>Перед удалением портал сверит счёт с АТОЛ Pay: если оплата уже поступила, удалить его не получится.</p>
+          ) : null}
+          <p>В журнал действий запишется, кто и когда удалил платёж.</p>
+        </div>
+        <div className="mt-6 flex justify-end gap-2">
+          <Button variant="ghost" onClick={() => setDeleteOpen(false)}>
+            Отмена
+          </Button>
+          <Button variant="danger" loading={deleting} icon={<Trash2 className="h-4 w-4" />} onClick={remove}>
+            Удалить
+          </Button>
+        </div>
+      </Modal>
 
       <Modal
         open={refundOpen}
