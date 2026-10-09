@@ -7,8 +7,9 @@ import { Tag } from "@/components/ui/tag";
 import { StatusTag } from "@/components/ui/status-tag";
 import { Pagination, parsePage } from "@/components/cabinet/pagination";
 import { formatRuDateTime } from "@/lib/dates";
+import { formatRub } from "@/lib/money";
 import { fioFromParts } from "@/lib/utils";
-import { RequestActions } from "./request-actions";
+import { RequestActions } from "@/components/licenses/request-actions";
 import { requireAdminPage } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -43,7 +44,9 @@ export default async function CancellationRequestsPage({
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
       include: {
-        license: true,
+        license: {
+          include: { payment: { select: { status: true, amount: true, provider: true, paidManually: true } } },
+        },
         requestedBy: { include: { dealerProfile: true } },
         reviewedBy: { select: { email: true } },
       },
@@ -59,8 +62,8 @@ export default async function CancellationRequestsPage({
   return (
     <>
       <Topbar
-        title="Заявки на аннулирование"
-        subtitle="Запросы представителей на аннулирование лицензий"
+        title="Заявки на аннулирование и возврат"
+        subtitle="Запросы дилеров на аннулирование лицензий и возврат денег"
         user={{ name: me?.email ?? "Admin", email: me?.email ?? "", role: me?.role.name ?? "Admin" }}
       />
       <div className="mt-6">
@@ -94,6 +97,8 @@ export default async function CancellationRequestsPage({
                   lastName: r.requestedBy.dealerProfile?.lastName,
                   middleName: r.requestedBy.dealerProfile?.middleName,
                 });
+                const payment = r.license.payment;
+                const paid = payment?.status === "PAID";
                 return (
                   <li key={r.id} className="py-4">
                     <div className="flex flex-wrap items-start justify-between gap-3">
@@ -106,10 +111,15 @@ export default async function CancellationRequestsPage({
                             {r.license.number}
                           </Link>
                           <Tag tone={r.license.type === "Генерация" ? "accent" : "neutral"}>{r.license.type}</Tag>
+                          {r.kind === "REFUND" ? <Tag tone="danger">Возврат</Tag> : <Tag tone="warning">Аннулирование</Tag>}
+                          {r.clientRefused ? <Tag tone="neutral">Клиент отказался</Tag> : null}
                           <StatusTag kind="request" status={r.status} />
                         </div>
                         <div className="text-xs text-ink-muted mt-1.5">
                           {fio || r.requestedBy.email} · {formatRuDateTime(r.createdAt)}
+                          {payment
+                            ? ` · ${paid ? "оплачено" : payment.status === "REFUNDED" ? "возвращено" : "не оплачено"} ${formatRub(Number(payment.amount))}`
+                            : ""}
                         </div>
                         <div className="text-sm mt-2">{r.reason}</div>
                         {r.reviewNote ? (
@@ -122,7 +132,17 @@ export default async function CancellationRequestsPage({
                       <RequestActions
                         id={r.id}
                         status={r.status}
+                        kind={r.kind}
                         licenseActive={r.license.status === "ACTIVE"}
+                        payment={
+                          payment
+                            ? {
+                                paid,
+                                amount: Number(payment.amount),
+                                online: payment.provider === "atol_pay" && !payment.paidManually,
+                              }
+                            : null
+                        }
                       />
                     </div>
                   </li>

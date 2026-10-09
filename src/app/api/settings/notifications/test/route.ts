@@ -9,13 +9,15 @@ import {
   notificationEmailHtml,
   notificationTelegramText,
   sendEmail,
+  sendMax,
   sendTelegram,
 } from "@/lib/notifications";
 import { isTelegramConfigured } from "@/lib/telegram";
+import { isMaxConfigured } from "@/lib/max";
 
 export const runtime = "nodejs";
 
-const schema = z.object({ channel: z.enum(["email", "telegram"]) });
+const schema = z.object({ channel: z.enum(["email", "telegram", "max"]) });
 
 /** Проверка канала: письмо или сообщение самому администратору. */
 export const POST = route(
@@ -24,7 +26,7 @@ export const POST = route(
     const { channel } = await parseBody(req, schema);
     const me = await db.user.findUnique({
       where: { id: session.user.id },
-      select: { id: true, email: true, telegramChatId: true },
+      select: { id: true, email: true, telegramChatId: true, maxUserId: true },
     });
     if (!me) throw badRequest("Пользователь не найден");
 
@@ -45,6 +47,16 @@ export const POST = route(
       });
       if (!res.ok) throw badRequest(`Письмо не ушло: ${res.reason}`);
       return NextResponse.json({ ok: true, to: me.email });
+    }
+
+    if (channel === "max") {
+      if (!isMaxConfigured()) {
+        throw badRequest("MAX не настроен: задайте MAX_BOT_TOKEN и MAX_WEBHOOK_SECRET на сервере");
+      }
+      if (!me.maxUserId) throw badRequest("Сначала подключите MAX в своём профиле");
+      const res = await sendMax({ maxUserId: me.maxUserId, ...message, userId: me.id });
+      if (!res.ok) throw badRequest(`Сообщение не ушло: ${res.reason}`);
+      return NextResponse.json({ ok: true });
     }
 
     if (!isTelegramConfigured()) {

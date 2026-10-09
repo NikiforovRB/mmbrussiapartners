@@ -10,7 +10,7 @@ import { ApiError, badRequest, route } from "@/lib/api";
 import { db } from "@/lib/db";
 import { hasAdminScope, hasPermission } from "@/lib/permissions";
 import { blackoutBlockReason, checkCustomVersion, mergeGenerationSettings } from "@/lib/site-settings";
-import { resolvePrices } from "@/lib/pricing";
+import { inferProductRegions, resolvePrices } from "@/lib/pricing";
 import { isRepeatGeneration } from "@/lib/repeat-generation";
 import { requireApprovedUser } from "@/lib/session";
 
@@ -61,14 +61,17 @@ export const POST = route(async (req: Request) => {
           "Проверьте, что загружен device_id.bin от нужного ШГУ.",
       );
     }
-    // Цены считает сервер по справочнику и правилам этого представителя:
+    // Цены считает сервер по справочнику и правилам этого дилера:
     // ровно та же сумма попадёт в счёт, что бы ни прислал браузер. Повторная
     // генерация бесплатна, если в настройках не включена её оплата.
     const repeat = await isRepeatGeneration(info.device_id, info.recoverable);
     const free = repeat && !settings.repeatGenerationPaid;
-    const prices = free ? null : await resolvePrices(session.user.id, info.items);
+    const [prices, regions] = await Promise.all([
+      free ? null : resolvePrices(session.user.id, info.items),
+      inferProductRegions(info.items, info.version_software),
+    ]);
 
-    // Представитель видит только свои прошлые выдачи по этому ШГУ,
+    // Дилер видит только свои прошлые выдачи по этому ШГУ,
     // администратор — любые.
     const seesAll = hasAdminScope(session.user.permissions, session.user.isSuperAdmin);
     const previous = await db.license.findFirst({
@@ -106,7 +109,7 @@ export const POST = route(async (req: Request) => {
         : null,
       versionSoftware: info.version_software,
       versionCustom: info.version_custom,
-      /** Генерация для этой версии кастома запрещена — текст для представителя. */
+      /** Генерация для этой версии кастома запрещена — текст для дилера. */
       customVersionBlocked: verdict.blocked ? verdict.message : null,
       deviceId: info.device_id,
       items: info.items.map((it, index) => ({
@@ -114,6 +117,8 @@ export const POST = route(async (req: Request) => {
         product: it.product,
         bundle: it.bundle,
         region: it.region,
+        /** Регион для подписи: у части продуктов DRIVEMODS его не отдаёт. */
+        productRegion: regions[index],
         fullName: productFullName(it),
         price: prices ? prices[index].price : 0,
         /** Цена взята из справочника, а не из запасной настройки. */

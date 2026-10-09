@@ -28,6 +28,7 @@ import { Modal } from "@/components/ui/modal";
 import { Textarea } from "@/components/ui/textarea";
 import { LocationFields } from "@/components/cabinet/location-fields";
 import { fioFromParts } from "@/lib/utils";
+import { COMPANY_URL_PLACEHOLDER, TELEGRAM_NICK_PLACEHOLDER } from "@/lib/dealer-contacts";
 import { formatRuDateLong, formatRuDateTime } from "@/lib/dates";
 import { formatRub } from "@/lib/money";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -49,6 +50,8 @@ type Dealer = {
     region: string | null;
     country: string | null;
     address: string | null;
+    telegramNick?: string | null;
+    companyUrl?: string | null;
     siteComment: string | null;
     licenseLimit: number;
     licensesUsed: number;
@@ -59,7 +62,7 @@ type Dealer = {
   role: { name: string };
 };
 
-/** Сводка по представителю из старого ЛК DriveMods, если он там найден. */
+/** Сводка по дилеру из старого ЛК DriveMods, если он там найден. */
 export type LegacySummary = {
   id: string;
   name: string;
@@ -71,10 +74,10 @@ export type LegacySummary = {
   lastLicenseAt: string | null;
 };
 
-/** Записи старого ЛК, которые сейчас числятся за представителем. */
+/** Записи старого ЛК, которые сейчас числятся за дилером. */
 export type LegacyRecordCounts = { licenses: number; payments: number; other: number };
 
-/** Отказ в регистрации или блокировка: причину видит и представитель в своём кабинете. */
+/** Отказ в регистрации или блокировка: причину видит и дилер в своём кабинете. */
 export type RejectionInfo = { reason: string | null; at: string | null; by: string | null };
 
 const REJECT_REASON_MIN = 6;
@@ -423,6 +426,48 @@ export function DealerEditor({
               }
             />
             <Input
+              label="Ник в Telegram"
+              disabled={!canEdit}
+              placeholder={TELEGRAM_NICK_PLACEHOLDER}
+              value={data.dealerProfile?.telegramNick ?? ""}
+              hint={
+                data.dealerProfile?.telegramNick ? (
+                  <a
+                    href={`https://t.me/${data.dealerProfile.telegramNick.replace(/^@/, "")}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-accent hover:underline"
+                  >
+                    Написать в Telegram
+                  </a>
+                ) : undefined
+              }
+              onChange={(e) =>
+                setData({ ...data, dealerProfile: data.dealerProfile && { ...data.dealerProfile, telegramNick: e.target.value } })
+              }
+            />
+            <Input
+              label="Ссылка на компанию"
+              disabled={!canEdit}
+              placeholder={COMPANY_URL_PLACEHOLDER}
+              value={data.dealerProfile?.companyUrl ?? ""}
+              hint={
+                data.dealerProfile?.companyUrl && /^https?:\/\//i.test(data.dealerProfile.companyUrl) ? (
+                  <a
+                    href={data.dealerProfile.companyUrl}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="text-accent hover:underline"
+                  >
+                    Открыть ссылку
+                  </a>
+                ) : undefined
+              }
+              onChange={(e) =>
+                setData({ ...data, dealerProfile: data.dealerProfile && { ...data.dealerProfile, companyUrl: e.target.value } })
+              }
+            />
+            <Input
               label="Подпись на сайте"
               placeholder="Например: имя или район"
               maxLength={200}
@@ -489,7 +534,7 @@ export function DealerEditor({
           />
           {data.dealerProfile?.driveModsRequestedAt && !data.dealerProfile?.driveModsAccess ? (
             <div className="mt-3 rounded-panel border border-hairline p-3 text-xs text-ink-muted">
-              Представитель запросил доступ {formatRuDateTime(data.dealerProfile.driveModsRequestedAt)}.
+              Дилер запросил доступ {formatRuDateTime(data.dealerProfile.driveModsRequestedAt)}.
             </div>
           ) : null}
         </Card>
@@ -519,7 +564,7 @@ export function DealerEditor({
                   <History className="h-4 w-4" /> Работал в ЛК DriveMods
                 </span>
               }
-              description="Отметка для администраторов: представитель уже работал с нами в ЛК DriveMods."
+              description="Отметка для администраторов: дилер уже работал с нами в ЛК DriveMods."
             />
             {legacy ? (
               <div className="mt-3 rounded-panel border border-hairline p-3 text-xs text-ink-muted space-y-1">
@@ -586,7 +631,7 @@ export function DealerEditor({
           </div>
           <div className="text-xs text-ink-muted mt-1">не оплачено / лимит</div>
           <div className="text-xs text-ink-subtle mt-2">
-            Лимит — сколько лицензий представитель может держать неоплаченными. Оплата освобождает место.
+            Лимит — сколько лицензий дилер может держать неоплаченными. Оплата освобождает место.
           </div>
         </Card>
       </div>
@@ -595,7 +640,7 @@ export function DealerEditor({
         open={rejectOpen}
         onClose={() => setRejectOpen(false)}
         title="Отклонить заявку"
-        description="Причина сохранится в карточке представителя и будет видна ему в личном кабинете после входа."
+        description="Причина сохранится в карточке дилера и будет видна ему в личном кабинете после входа."
         footer={
           <>
             <Button variant="ghost" onClick={() => setRejectOpen(false)}>
@@ -629,8 +674,8 @@ export function DealerEditor({
       <Modal
         open={suspendOpen}
         onClose={() => setSuspendOpen(false)}
-        title="Заблокировать представителя"
-        description="Представитель увидит причину при входе в кабинет: генерация, оплаты и остальные разделы станут недоступны, открытые сеансы завершатся. Телефон снимется с публикации на сайте."
+        title="Заблокировать дилера"
+        description="Дилер увидит причину при входе в кабинет: генерация, оплаты и остальные разделы станут недоступны, открытые сеансы завершатся. Телефон снимется с публикации на сайте."
         footer={
           <>
             <Button variant="ghost" onClick={() => setSuspendOpen(false)}>
@@ -676,7 +721,7 @@ function ReasonPanel({ title, info }: { title: string; info: RejectionInfo }) {
         ) : null}
       </div>
       <p className="mt-1 whitespace-pre-line break-words text-sm">{info.reason || "Причина не указана"}</p>
-      <p className="mt-1.5 text-xs text-ink-muted">Эту причину представитель видит в личном кабинете.</p>
+      <p className="mt-1.5 text-xs text-ink-muted">Эту причину дилер видит в личном кабинете.</p>
     </div>
   );
 }

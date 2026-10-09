@@ -27,6 +27,8 @@ export type CheckoutInput = {
   returnUrl: string;
   /** Адрес для callback АТОЛ Pay о смене статуса оплаты (если задан секрет). */
   notifyUrl?: string | null;
+  /** Способы оплаты из настроек админки; пусто — все подключённые. */
+  paymentTypes?: string[];
 };
 
 export type CheckoutResult = {
@@ -105,6 +107,18 @@ export function atolPayPaymentMethods(): AtolPayMethod[] {
     .filter((m) => m.paymentType && Number.isInteger(m.bankId));
 }
 
+/**
+ * Подключённые способы, оставленные администратором в настройках оплаты.
+ * Если выбор не пересекается с подключёнными (поменяли окружение), берём все
+ * подключённые — иначе заказ не создастся вовсе.
+ */
+export function checkoutPaymentMethods(allowed: string[] = []): AtolPayMethod[] {
+  const all = atolPayPaymentMethods();
+  if (allowed.length === 0) return all;
+  const picked = all.filter((m) => allowed.includes(m.paymentType));
+  return picked.length > 0 ? picked : all;
+}
+
 const METHOD_PHRASES: Record<string, string> = {
   card: "картой",
   bank_app: "через T-Pay",
@@ -113,10 +127,10 @@ const METHOD_PHRASES: Record<string, string> = {
   account: "по счёту",
 };
 
-/** «картой или через T-Pay» — для подсказок дилеру; null, если способы берутся из ЛК. */
-export function atolPayMethodsPhrase(): string | null {
+/** «по СБП или картой» — для подсказок дилеру; null, если способы берутся из ЛК. */
+export function atolPayMethodsPhrase(allowed: string[] = []): string | null {
   const phrases = [
-    ...new Set(atolPayPaymentMethods().map((m) => METHOD_PHRASES[m.paymentType]).filter(Boolean)),
+    ...new Set(checkoutPaymentMethods(allowed).map((m) => METHOD_PHRASES[m.paymentType]).filter(Boolean)),
   ];
   if (phrases.length === 0) return null;
   if (phrases.length === 1) return phrases[0];
@@ -195,7 +209,7 @@ const atolPayProvider: PaymentProvider = {
       );
     }
     const orderId = input.orderId ?? input.paymentId;
-    const paymentMethods = atolPayPaymentMethods();
+    const paymentMethods = checkoutPaymentMethods(input.paymentTypes);
     const amountMinor = Math.round(input.amount * 100); // сумма в копейках
     const res = await fetchWithTimeout(`${atolPayBase()}/payments`, {
       method: "POST",

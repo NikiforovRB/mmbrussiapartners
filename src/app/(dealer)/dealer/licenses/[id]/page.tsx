@@ -57,12 +57,12 @@ export default async function LicenseDetailDealerPage({
         user={{
           name: fio || user?.email || session.user.email || "",
           email: user?.email ?? session.user.email ?? "",
-          role: user?.role.name ?? "Представитель",
+          role: user?.role.name ?? "Дилер",
         }}
       />
       <div className="mt-6">
         <LicenseDetailEditor
-          // ID ШГУ и базовая цена вообще не уезжают в браузер представителя:
+          // ID ШГУ и базовая цена вообще не уезжают в браузер дилера:
           // их видят только администраторы.
           license={JSON.parse(JSON.stringify({ ...license, deviceId: null, basePrice: undefined }))}
           context="dealer"

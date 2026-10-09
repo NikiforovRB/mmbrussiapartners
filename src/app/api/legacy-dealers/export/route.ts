@@ -40,7 +40,7 @@ export const GET = route(async () => {
     { header: "Пополнено", key: "paymentsAmount", width: 14, style: { numFmt: moneyFmt } },
     { header: "Первая лицензия", key: "first", width: 14, style: { numFmt: dateFmt } },
     { header: "Последняя лицензия", key: "last", width: 14, style: { numFmt: dateFmt } },
-    { header: "Представитель на портале", key: "portal", width: 28 },
+    { header: "Дилер на портале", key: "portal", width: 28 },
   ];
   for (const r of rows) {
     ws.addRow({

@@ -5,13 +5,12 @@ import { db } from "@/lib/db";
 import { badRequest, conflict, notFound, parseBody, route } from "@/lib/api";
 import { recordAdminAction } from "@/lib/admin-audit";
 import { requirePermission } from "@/lib/session";
+import { isDealerRoleName } from "@/lib/roles";
 
 export const runtime = "nodejs";
 
-// Системная роль представителя — её через управление пользователями не выдаём:
+// Системная роль дилера — её через управление пользователями не выдаём:
 // дилеры регистрируются самостоятельно и получают эту роль автоматически.
-const DEALER_ROLE_NAME = "Представитель";
-
 const schema = z.object({
   email: z.string().email("Некорректный email"),
   password: z.string().min(8, "Пароль — минимум 8 символов"),
@@ -25,8 +24,8 @@ export const POST = route(async (req: Request) => {
 
   const role = await db.role.findUnique({ where: { id: data.roleId } });
   if (!role) throw notFound("Роль не найдена");
-  if (role.name === DEALER_ROLE_NAME) {
-    throw badRequest("Роль «Представитель» назначается только при регистрации дилера.");
+  if (isDealerRoleName(role.name)) {
+    throw badRequest("Роль «Дилер» назначается только при регистрации дилера.");
   }
 
   const email = data.email.trim().toLowerCase();

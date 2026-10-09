@@ -6,9 +6,9 @@ import type { CabinetSections } from "@/lib/site-settings";
 export function SectionsForm({ initial }: { initial: CabinetSections }) {
   return (
     <Card className="max-w-2xl">
-      <div className="font-display text-lg tracking-tight mb-1">Разделы кабинета представителя</div>
+      <div className="font-display text-lg tracking-tight mb-1">Разделы кабинета дилера</div>
       <p className="text-sm text-ink-muted mb-5">
-        Выключенный раздел пропадает из меню представителей, а его страницы перестают открываться. В админке
+        Выключенный раздел пропадает из меню дилеров, а его страницы перестают открываться. В админке
         разделы остаются. Изменения сохраняются сразу.
       </p>
       <div className="space-y-5">

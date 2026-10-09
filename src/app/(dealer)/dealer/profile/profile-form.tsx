@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Save, Phone, Building2, Lock, Eye, Upload, Trash2, Send } from "lucide-react";
+import { Save, Phone, Building2, Lock, Eye, Upload, Trash2, Send, Globe } from "lucide-react";
 import { toast } from "sonner";
 import { signOut } from "next-auth/react";
 import { Card } from "@/components/ui/card";
@@ -12,6 +12,7 @@ import { Tag } from "@/components/ui/tag";
 import { Avatar } from "@/components/ui/avatar";
 import { LocationFields } from "@/components/cabinet/location-fields";
 import { formatRuDate } from "@/lib/dates";
+import { COMPANY_URL_PLACEHOLDER, TELEGRAM_NICK_PLACEHOLDER } from "@/lib/dealer-contacts";
 import type { SitePublication } from "@/lib/site-sync-labels";
 
 type ProfileInitial = {
@@ -25,6 +26,8 @@ type ProfileInitial = {
   region: string;
   country: string;
   address: string;
+  telegramNick: string;
+  companyUrl: string;
   siteComment: string;
   phoneVisibleOnSite: boolean;
 };
@@ -44,6 +47,7 @@ export function ProfileForm({
   avatarUrl: initialAvatarUrl,
   displayName,
   notifications,
+  locationEditable = false,
 }: {
   initial: ProfileInitial;
   publication: PublicationState;
@@ -52,6 +56,8 @@ export function ProfileForm({
   displayName: string;
   /** Карточка каналов уведомлений (почта, Telegram) — сохраняется отдельно. */
   notifications?: React.ReactNode;
+  /** Страну, регион и город дилера меняет только администратор. */
+  locationEditable?: boolean;
 }) {
   const [data, setData] = React.useState(initial);
   const [publication, setPublication] = React.useState(initialPublication);
@@ -96,17 +102,28 @@ export function ProfileForm({
 
   async function save() {
     setSaving(true);
+    const editable: Partial<ProfileInitial> = { ...data };
+    if (!locationEditable) {
+      delete editable.city;
+      delete editable.region;
+      delete editable.country;
+    }
     const res = await fetch("/api/profile", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
+      body: JSON.stringify(editable),
     });
     setSaving(false);
+    const j = await res.json().catch(() => ({}));
     if (!res.ok) {
-      const j = await res.json().catch(() => ({}));
       toast.error(j.error ?? "Не удалось сохранить");
       return;
     }
+    setData((prev) => ({
+      ...prev,
+      ...(j.telegramNick !== undefined && { telegramNick: j.telegramNick ?? "" }),
+      ...(j.companyUrl !== undefined && { companyUrl: j.companyUrl ?? "" }),
+    }));
     if (data.phoneVisibleOnSite !== publication.consent) {
       setPublication({
         status: data.phoneVisibleOnSite ? "PENDING" : "NONE",
@@ -174,10 +191,33 @@ export function ProfileForm({
             <Input label="Отчество" value={data.middleName} onChange={(e) => setData({ ...data, middleName: e.target.value })} />
             <Input label="Организация" icon={<Building2 className="h-4 w-4" />} value={data.organization} onChange={(e) => setData({ ...data, organization: e.target.value })} />
             <Input label="ИНН" value={data.inn} onChange={(e) => setData({ ...data, inn: e.target.value })} />
+            <Input
+              label="Ник в Telegram"
+              icon={<Send className="h-4 w-4" />}
+              placeholder={TELEGRAM_NICK_PLACEHOLDER}
+              value={data.telegramNick}
+              onChange={(e) => setData({ ...data, telegramNick: e.target.value })}
+            />
             <LocationFields
+              disabled={!locationEditable}
               value={{ country: data.country, region: data.region, city: data.city }}
               onChange={(loc) => setData({ ...data, ...loc })}
+              hint={
+                locationEditable
+                  ? undefined
+                  : "Страну, регион и город меняет администратор — напишите ему, если они неверны."
+              }
             />
+            <div className="sm:col-span-2">
+              <Input
+                label="Ссылка на вашу компанию"
+                icon={<Globe className="h-4 w-4" />}
+                placeholder={COMPANY_URL_PLACEHOLDER}
+                inputMode="url"
+                value={data.companyUrl}
+                onChange={(e) => setData({ ...data, companyUrl: e.target.value })}
+              />
+            </div>
             <div className="sm:col-span-2">
               <Input label="Адрес" value={data.address} onChange={(e) => setData({ ...data, address: e.target.value })} />
             </div>

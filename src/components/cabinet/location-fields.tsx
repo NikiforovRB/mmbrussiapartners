@@ -21,12 +21,19 @@ export function LocationFields({
   value,
   onChange,
   disabled,
+  required = false,
+  hint,
 }: {
   value: LocationValue;
   onChange: (next: LocationValue) => void;
   disabled?: boolean;
+  /** Звёздочка у подписей — поля обязательны. */
+  required?: boolean;
+  /** Подсказка под полем «Город». */
+  hint?: string;
 }) {
   const initial = React.useRef(value).current;
+  const mark = required ? " *" : "";
   const country = countryName(value.country);
   const regions = regionsFor(country);
 
@@ -51,7 +58,7 @@ export function LocationFields({
   return (
     <>
       <Select
-        label="Страна"
+        label={`Страна${mark}`}
         value={country}
         disabled={disabled}
         searchable
@@ -64,7 +71,7 @@ export function LocationFields({
       />
       {regionOptions ? (
         <Select
-          label="Регион"
+          label={`Регион${mark}`}
           value={value.region || null}
           placeholder="Выберите регион"
           disabled={disabled}
@@ -75,7 +82,7 @@ export function LocationFields({
         />
       ) : (
         <Input
-          label="Регион"
+          label={`Регион${mark}`}
           icon={<MapPin className="h-4 w-4" />}
           maxLength={120}
           disabled={disabled}
@@ -84,9 +91,10 @@ export function LocationFields({
         />
       )}
       <Input
-        label="Город"
+        label={`Город${mark}`}
         maxLength={120}
         disabled={disabled}
+        hint={hint}
         value={value.city}
         onChange={(e) => onChange({ ...value, city: e.target.value })}
       />

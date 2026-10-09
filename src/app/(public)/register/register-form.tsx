@@ -12,17 +12,24 @@ import {
   ArrowRight,
   CheckCircle2,
   AlertCircle,
+  Send,
+  Globe,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { GeoNotice } from "./geo-notice";
+import type { LocationValue } from "@/components/cabinet/location-fields";
+import { COMPANY_URL_PLACEHOLDER, TELEGRAM_NICK_PLACEHOLDER } from "@/lib/dealer-contacts";
+import { DEFAULT_COUNTRY } from "@/lib/geo-catalog";
+import { RegistrationLocation } from "./geo-notice";
 import { registerDealerAction } from "./actions";
 
 export function RegisterForm() {
   const router = useRouter();
   const [loading, setLoading] = React.useState(false);
+  const [location, setLocation] = React.useState<LocationValue>({ country: DEFAULT_COUNTRY, region: "", city: "" });
+  const [locationError, setLocationError] = React.useState<string | null>(null);
   const [password, setPassword] = React.useState("");
   const [confirm, setConfirm] = React.useState("");
   const [agreed, setAgreed] = React.useState(false);
@@ -38,6 +45,11 @@ export function RegisterForm() {
     setFormError(null);
     setPasswordError(undefined);
     setAgreeError(null);
+    setLocationError(null);
+    if (!location.country.trim() || !location.region.trim() || !location.city.trim()) {
+      setLocationError("Укажите страну, регион и город");
+      return;
+    }
     if (password.length < 8) {
       setPasswordError("Пароль должен содержать минимум 8 символов");
       return;
@@ -64,7 +76,6 @@ export function RegisterForm() {
 
   return (
     <form onSubmit={onSubmit} className="space-y-4" noValidate>
-      <GeoNotice />
       {formError ? (
         <div
           role="alert"
@@ -108,6 +119,31 @@ export function RegisterForm() {
         placeholder="ИП Иванов / ООО ..."
         icon={<Building2 className="h-4 w-4" />}
       />
+      <RegistrationLocation
+        value={location}
+        onChange={(next) => {
+          setLocation(next);
+          if (locationError) setLocationError(null);
+        }}
+        error={locationError}
+      />
+      <div className="grid md:grid-cols-2 gap-3">
+        <Input
+          label="Ник в Telegram"
+          name="telegramNick"
+          placeholder={TELEGRAM_NICK_PLACEHOLDER}
+          icon={<Send className="h-4 w-4" />}
+          autoComplete="off"
+        />
+        <Input
+          label="Ссылка на вашу компанию"
+          name="companyUrl"
+          placeholder={COMPANY_URL_PLACEHOLDER}
+          hint="Сайт, страница в VK, 2ГИС или на Авито"
+          icon={<Globe className="h-4 w-4" />}
+          inputMode="url"
+        />
+      </div>
       <Input
         label="Пароль *"
         name="password"

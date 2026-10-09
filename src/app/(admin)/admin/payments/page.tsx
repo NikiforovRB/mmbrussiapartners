@@ -9,6 +9,7 @@ import { formatRuDateTime } from "@/lib/dates";
 import { Pagination, parsePage } from "@/components/cabinet/pagination";
 import { atolMissingEnv, isAtolConfigured } from "@/lib/payments/atol";
 import { atolPayMethodsPhrase, getPaymentProvider } from "@/lib/payments/provider";
+import { loadPaymentSettings } from "@/lib/payments/service";
 import { formatRub } from "@/lib/money";
 import { PaymentActions } from "./payment-actions";
 import { requireAdminPage } from "@/lib/session";
@@ -84,7 +85,7 @@ export default async function AdminPaymentsPage({
   ]);
 
   const provider = getPaymentProvider();
-  const methodsPhrase = atolPayMethodsPhrase();
+  const methodsPhrase = atolPayMethodsPhrase((await loadPaymentSettings()).checkoutTypes);
   const atolReady = isAtolConfigured();
   const missing = atolMissingEnv();
 
@@ -152,6 +153,9 @@ export default async function AdminPaymentsPage({
                   </div>
                   <div className="mt-2 flex flex-wrap items-center gap-2">
                     {p.receiptStatus ? <StatusTag kind="receipt" status={p.receiptStatus} /> : null}
+                    {!p.receiptStatus && p.paidManually ? (
+                      <span className="text-xs text-ink-subtle">Без чека · отмечено вручную</span>
+                    ) : null}
                     {p.receiptUrl ? (
                       <a
                         href={p.receiptUrl}
@@ -173,7 +177,9 @@ export default async function AdminPaymentsPage({
                       status={p.status}
                       receiptStatus={p.receiptStatus}
                       provider={p.provider}
+                      amount={Number(p.amount)}
                       amountLabel={formatRub(p.amount)}
+                      paidManually={p.paidManually}
                       refundStatus={p.refundStatus}
                       refundReceiptStatus={p.refundReceiptStatus}
                     />
@@ -230,6 +236,8 @@ export default async function AdminPaymentsPage({
                               </a>
                             ) : null}
                           </div>
+                        ) : p.paidManually ? (
+                          <span className="text-xs text-ink-subtle whitespace-nowrap">Без чека · отмечено вручную</span>
                         ) : (
                           <span className="text-ink-subtle">—</span>
                         )}
@@ -245,7 +253,9 @@ export default async function AdminPaymentsPage({
                           status={p.status}
                           receiptStatus={p.receiptStatus}
                           provider={p.provider}
+                          amount={Number(p.amount)}
                           amountLabel={formatRub(p.amount)}
+                          paidManually={p.paidManually}
                           refundStatus={p.refundStatus}
                           refundReceiptStatus={p.refundReceiptStatus}
                         />
@@ -257,7 +267,9 @@ export default async function AdminPaymentsPage({
                           status={p.status}
                           receiptStatus={p.receiptStatus}
                           provider={p.provider}
+                          amount={Number(p.amount)}
                           amountLabel={formatRub(p.amount)}
+                          paidManually={p.paidManually}
                           refundStatus={p.refundStatus}
                           refundReceiptStatus={p.refundReceiptStatus}
                         />

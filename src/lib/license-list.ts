@@ -26,26 +26,27 @@ export const LICENSE_LIST_SELECT = {
   repeatGeneration: true,
   price: true,
   createdAt: true,
+  payment: { select: { status: true, amount: true, paidManually: true } },
   dealer: {
     select: {
       email: true,
       dealerProfile: { select: { firstName: true, lastName: true, middleName: true, city: true } },
     },
   },
-  // Заявка на аннулирование «на рассмотрении»: по ней в таблице показываем
-  // метку и блокируем повторную отправку заявки.
+  // Заявка «на рассмотрении»: по ней в таблице показываем метку и
+  // блокируем повторную отправку заявки.
   cancellationRequests: {
     where: { status: "PENDING" },
-    select: { id: true },
+    select: { id: true, kind: true },
     take: 1,
   },
 } satisfies Prisma.LicenseSelect;
 
 type LicenseListRecord = Prisma.LicenseGetPayload<{ select: typeof LICENSE_LIST_SELECT }>;
 
-/** Строка таблицы: заявку сворачиваем в признак, цену — в число, представителя — в подпись. */
+/** Строка таблицы: заявку сворачиваем в признак, цену — в число, дилера — в подпись. */
 export function toLicenseRow(license: LicenseListRecord) {
-  const { cancellationRequests, dealer, price, createdAt, ...rest } = license;
+  const { cancellationRequests, dealer, price, createdAt, payment, ...rest } = license;
   const p = dealer.dealerProfile;
   const fio = fioFromParts({ firstName: p?.firstName, lastName: p?.lastName, middleName: p?.middleName });
   return {
@@ -55,6 +56,10 @@ export function toLicenseRow(license: LicenseListRecord) {
     dealerName: fio || dealer.email,
     dealerSub: fio ? [dealer.email, p?.city].filter(Boolean).join(" · ") : (p?.city ?? ""),
     pendingCancellation: cancellationRequests.length > 0,
+    pendingRequestKind: cancellationRequests[0]?.kind ?? null,
+    paymentStatus: payment?.status ?? null,
+    paymentAmount: payment ? Number(payment.amount) : null,
+    paidManually: payment?.paidManually ?? false,
   };
 }
 
@@ -74,8 +79,8 @@ export function parseDealerIds(raw: string | undefined): string[] {
 }
 
 /**
- * Фильтр списка лицензий. dealerId — кабинет представителя: только свои
- * лицензии, фильтр по представителям тогда не действует.
+ * Фильтр списка лицензий. dealerId — кабинет дилера: только свои
+ * лицензии, фильтр по дилерам тогда не действует.
  */
 export function licenseListWhere(sp: LicenseListParams, dealerId?: string): Prisma.LicenseWhereInput {
   const where: Prisma.LicenseWhereInput = { deletedAt: null };

@@ -10,7 +10,8 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatusTag } from "@/components/ui/status-tag";
 import { formatRuDateTime } from "@/lib/dates";
-import { getPaymentProvider } from "@/lib/payments/provider";
+import { atolPayMethodsPhrase, getPaymentProvider } from "@/lib/payments/provider";
+import { loadPaymentSettings } from "@/lib/payments/service";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +45,7 @@ export default async function DealerPaymentsPage() {
   const awaiting = sumFor("PENDING");
 
   const provider = getPaymentProvider();
+  const methodsPhrase = provider.id === "atol_pay" ? atolPayMethodsPhrase((await loadPaymentSettings()).checkoutTypes) : null;
 
   const fio = fioFromParts({
     firstName: user.dealerProfile?.firstName,
@@ -69,7 +71,7 @@ export default async function DealerPaymentsPage() {
               <p className="mt-2 text-white/70 max-w-md">
                 {provider.id === "manual"
                   ? "Счёт формируется автоматически. После поступления оплаты администратор подтверждает платёж, и вам приходит фискальный чек."
-                  : "Оплата картой по защищённой ссылке. Фискальный чек приходит на вашу почту автоматически."}
+                  : `Онлайн-оплата${methodsPhrase ? ` ${methodsPhrase}` : ""} на защищённой странице АТОЛ Pay. Фискальный чек приходит на вашу почту автоматически.`}
               </p>
             </div>
             <div className="rounded-panel surface-glass-dark p-5 text-center min-w-[180px]">

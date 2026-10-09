@@ -57,7 +57,7 @@ const schema = z.object({
   // Синтетический «вид» лицензии: gen (обычная) или repeat (повторная генерация).
   type: z.string().nullable().optional(),
   product: z.string().trim().max(80).nullable().optional(),
-  // Мультивыбор представителей (только для admin scope).
+  // Мультивыбор дилеров (только для admin scope).
   dealerIds: z.array(z.string()).optional(),
   scope: z.enum(["dealer", "admin"]),
   /** Видимые колонки в нужном порядке — для XLSX. */
@@ -113,7 +113,7 @@ function toReportRow(l: LicenseRow, scope: ReportScope): ReportRow {
     region: l.region ?? "",
     city: l.city ?? "",
   };
-  // Базовая цена — внутренняя информация: представителю её не отдаём вовсе.
+  // Базовая цена — внутренняя информация: дилеру её не отдаём вовсе.
   if (scope === "admin") {
     const basePrice = money(l.basePrice);
     row.basePrice = basePrice;

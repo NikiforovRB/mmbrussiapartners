@@ -121,7 +121,7 @@ export default async function AdminFinancePage() {
     <>
       <Topbar
         title="Финансы по дилерам"
-        subtitle="Оплаты, задолженность и активность представителей"
+        subtitle="Оплаты, задолженность и активность дилеров"
         user={{ name: me?.email ?? "Admin", email: me?.email ?? "", role: me?.role.name ?? "Admin" }}
       />
       <div className="mt-6 space-y-5">
@@ -134,7 +134,7 @@ export default async function AdminFinancePage() {
 
         <Card className="p-0 overflow-hidden">
           <div className="px-5 py-4 border-b border-hairline font-display text-lg tracking-tight">
-            Разбивка по представителям
+            Разбивка по дилерам
           </div>
 
           {/* Мобильные карточки */}
@@ -170,7 +170,7 @@ export default async function AdminFinancePage() {
             <table className="w-full min-w-[900px] text-sm">
               <thead>
                 <tr className="text-left text-[11.5px] uppercase tracking-tight text-ink-subtle">
-                  <th className="px-5 py-3">Представитель</th>
+                  <th className="px-5 py-3">Дилер</th>
                   <th className="px-5 py-3 text-right">Оплачено</th>
                   <th className="px-5 py-3 text-right">За 30 дней</th>
                   <th className="px-5 py-3 text-right">Платежей</th>

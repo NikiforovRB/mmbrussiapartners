@@ -24,7 +24,7 @@ import {
 } from "./provider";
 
 /** Настройки онлайн-оплаты из админки (наименование услуги, НДС, способ расчёта). */
-async function loadPaymentSettings(): Promise<PaymentSettings> {
+export async function loadPaymentSettings(): Promise<PaymentSettings> {
   const settings = await db.companySettings.findUnique({
     where: { id: "singleton" },
     select: { payment: true },
@@ -52,7 +52,7 @@ export type CreatePaymentInput = {
   licenseId?: string | null;
   email?: string | null;
   phone?: string | null;
-  /** Email получателя чека (тег 1008). По умолчанию — почта представителя. */
+  /** Email получателя чека (тег 1008). По умолчанию — почта дилера. */
   receiptEmail?: string | null;
 };
 
@@ -85,6 +85,7 @@ export async function createPayment(input: CreatePaymentInput) {
       phone: input.phone,
       returnUrl: absolute(`/dealer/payments/${payment.id}`),
       notifyUrl: atolPayCallbackUrl(payment.id),
+      paymentTypes: (await loadPaymentSettings()).checkoutTypes,
     });
   } catch (err) {
     if (provider.id === "manual") throw err;
@@ -127,27 +128,45 @@ export async function createPayment(input: CreatePaymentInput) {
 }
 
 /**
- * Отмечает платёж оплаченным и сразу отправляет чек в кассу.
- * Ошибка фискализации не откатывает оплату: деньги получены,
- * чек можно пробить повторно из карточки платежа.
+ * Отметка оплаты администратором: деньги пришли мимо АТОЛ Pay (наличные,
+ * перевод, взаимозачёт) или лицензия засчитана в другие расчёты. Сумма —
+ * любая, в том числе 0. Чек в кассу не уходит: через нашу кассу эти деньги
+ * не проходили, а возврат по такому платежу не трогает эквайринг.
  */
-export async function markPaymentPaid(paymentId: string, confirmedById?: string | null) {
+export async function markPaymentPaidManually(
+  paymentId: string,
+  opts: { actorId: string; amount?: number },
+) {
   const payment = await db.payment.findUnique({ where: { id: paymentId } });
   if (!payment) throw new Error("Платёж не найден");
+  if (payment.status === "REFUNDED") throw new Error("По платежу уже оформлен возврат");
+  const amount = opts.amount ?? Number(payment.amount);
+  const sameAmount = Math.abs(Number(payment.amount) - amount) < 0.005;
 
-  // Условный апдейт вместо «прочитали — записали»: из двух одновременных
-  // подтверждений оплату проведёт только одно, второе получит count = 0
-  // и не уйдёт пробивать второй чек по тем же деньгам.
-  const claimed = await db.payment.updateMany({
-    where: { id: paymentId, status: { not: "PAID" } },
-    data: { status: "PAID", paidAt: new Date(), confirmedById: confirmedById ?? null },
-  });
-  if (claimed.count === 0) {
-    return (await db.payment.findUnique({ where: { id: paymentId } })) ?? payment;
+  if (payment.status === "PAID") {
+    if (sameAmount) return payment;
+    if (!payment.paidManually) throw new Error("Платёж оплачен онлайн — сумму изменить нельзя");
+    if (payment.receiptStatus === "done" || payment.receiptStatus === "wait") {
+      throw new Error("По платежу пробит чек — сумму изменить нельзя");
+    }
+    return db.payment.update({ where: { id: paymentId }, data: { amount, confirmedById: opts.actorId } });
   }
-  await syncLicenseSlots(payment.dealerId);
 
-  return fiscalizePayment(paymentId);
+  // Условный апдейт: если одновременно пришла онлайн-оплата, её проведёт
+  // сверка с АТОЛ Pay, а ручная отметка получит count = 0.
+  const claimed = await db.payment.updateMany({
+    where: { id: paymentId, status: { notIn: ["PAID", "REFUNDED"] } },
+    data: {
+      status: "PAID",
+      paidAt: new Date(),
+      confirmedById: opts.actorId,
+      paidManually: true,
+      amount,
+    },
+  });
+  if (claimed.count === 0) throw new Error("Платёж уже проведён — обновите страницу");
+  await syncLicenseSlots(payment.dealerId);
+  return (await db.payment.findUnique({ where: { id: paymentId } })) ?? payment;
 }
 
 /**
@@ -163,6 +182,7 @@ export async function fiscalizePayment(paymentId: string) {
   });
   if (!payment) throw new Error("Платёж не найден");
   if (payment.status !== "PAID") throw new Error("Чек пробивается только по оплаченному платежу");
+  if (payment.paidManually) throw new Error("Оплату отметил администратор, через кассу деньги не проходили — чек не нужен");
   if (payment.receiptStatus === "done" || payment.receiptStatus === "wait") return payment;
 
   if (!isAtolConfigured()) {
@@ -197,7 +217,7 @@ export async function fiscalizePayment(paymentId: string) {
   // служебного описания счёта (номер лицензии оставляем для внутреннего учёта).
   const name = settings.serviceLabel;
   // Чек уходит на явно указанный при выставлении счёта email, иначе — на
-  // почту представителя.
+  // почту дилера.
   const receiptEmail = payment.receiptEmail || payment.dealer.email;
 
   try {
@@ -387,10 +407,16 @@ export async function syncAtolPayPayment(paymentId: string): Promise<AtolPaySync
       providerPayload: true,
       amount: true,
       dealerId: true,
+      paidManually: true,
+      receiptStatus: true,
       license: { select: { number: true } },
     },
   });
   if (!payment || payment.provider !== "atol_pay") return null;
+  if (payment.status === "PAID" && payment.paidManually && !payment.receiptStatus) {
+    await adoptOnlinePayment(payment);
+    return { paid: true, current: null };
+  }
   if (payment.status === "PAID" || payment.status === "REFUNDED") {
     return { paid: payment.status === "PAID", current: null };
   }
@@ -467,6 +493,55 @@ export async function syncAtolPayPayment(paymentId: string): Promise<AtolPaySync
 }
 
 /**
+ * Счёт отметили оплаченным вручную, а дилер всё же заплатил по ссылке АТОЛ Pay.
+ * Деньги прошли через эквайринг — по 54-ФЗ нужен чек, а возврат должен идти
+ * туда же, поэтому платёж становится онлайн-оплатой на сумму заказа.
+ */
+async function adoptOnlinePayment(payment: {
+  id: string;
+  externalId: string | null;
+  providerPayload: unknown;
+  amount: number | { toString(): string };
+  license: { number: string } | null;
+}) {
+  let paidOrder: string | null = null;
+  for (const orderId of atolPayOrders(payment)) {
+    const status = await getAtolPayOrderStatus(orderId);
+    if (status?.code === ATOL_PAY_STATUS.success) {
+      paidOrder = orderId;
+      break;
+    }
+  }
+  if (!paidOrder) return;
+
+  const registeredMinor = atolPayAmounts(payment)[paidOrder];
+  const amount = registeredMinor !== undefined ? registeredMinor / 100 : Number(payment.amount);
+  const claimed = await db.payment.updateMany({
+    where: { id: payment.id, status: "PAID", paidManually: true, receiptStatus: null },
+    data: { paidManually: false, confirmedById: null, externalId: paidOrder, amount },
+  });
+  if (claimed.count === 0) return;
+
+  const updated = await fiscalizePayment(payment.id);
+  const amountLabel = formatRub(amount);
+  const licenseLabel = payment.license?.number ? `Лицензия ${payment.license.number}` : "Счёт";
+  await notifyAdmins(["payments.manage"], {
+    type: "PAYMENT_PAID",
+    title: `Онлайн-оплата по счёту, отмеченному вручную: ${amountLabel}`,
+    body: `${licenseLabel}. Деньги пришли через АТОЛ Pay — чек отправлен в кассу.`,
+    link: "/admin/payments",
+  });
+  if (updated.receiptStatus === "fail") {
+    await notifyAdmins(["payments.manage"], {
+      type: "RECEIPT_FAILED",
+      title: `Чек не пробит: ${amountLabel}`,
+      body: updated.receiptError ?? licenseLabel,
+      link: "/admin/payments",
+    });
+  }
+}
+
+/**
  * Рабочая ссылка на оплату счёта АТОЛ Pay: текущая, пока заказ ждёт оплаты,
  * иначе — новая (ссылка просрочена, отменена или платёж не прошёл).
  * null — счёт уже оплачен, закрыт или онлайн-оплата выключена.
@@ -493,6 +568,7 @@ export async function atolPayCheckoutUrl(paymentId: string): Promise<string | nu
     description: payment.description ?? "",
     returnUrl: absolute(`/dealer/payments/${payment.id}`),
     notifyUrl: atolPayCallbackUrl(payment.id),
+    paymentTypes: (await loadPaymentSettings()).checkoutTypes,
   });
   await db.payment.update({
     where: { id: payment.id },
@@ -576,8 +652,9 @@ async function findPaidAtolPayOrder(payment: {
 
 /**
  * Возврат средств по оплаченному счёту. Онлайн-оплату возвращает АТОЛ Pay —
- * туда, откуда платили; счёт на реквизиты (или деньги, которые администратор
- * уже вернул сам) эквайринг не трогает. Затем пробивается чек «Возврат прихода».
+ * туда, откуда платили; счёт на реквизиты, оплату, отмеченную администратором,
+ * и деньги, которые администратор уже вернул сам, эквайринг не трогает.
+ * Чек «Возврат прихода» пробивается, только если был чек прихода.
  */
 export async function refundPayment(
   paymentId: string,
@@ -593,11 +670,12 @@ export async function refundPayment(
       providerPayload: true,
       licenseId: true,
       dealerId: true,
+      paidManually: true,
     },
   });
   if (!payment) throw new Error("Платёж не найден");
   if (payment.status !== "PAID") throw new Error("Вернуть можно только оплаченный платёж");
-  const viaAtolPay = payment.provider === "atol_pay" && !opts.manual;
+  const viaAtolPay = payment.provider === "atol_pay" && !opts.manual && !payment.paidManually;
 
   // Два одновременных нажатия не должны вернуть деньги дважды.
   const claimed = await db.payment.updateMany({

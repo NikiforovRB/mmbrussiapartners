@@ -20,7 +20,7 @@ const schema = z.object({
 });
 
 /**
- * Модерация публикации телефона: одобрить (в том числе от имени представителя,
+ * Модерация публикации телефона: одобрить (в том числе от имени дилера,
  * если он уже есть на сайте), отклонить заявку или снять с сайта, отправить заново.
  */
 export const POST = route(async (req: Request, ctx: { params: Promise<{ id: string }> }) => {
@@ -30,7 +30,7 @@ export const POST = route(async (req: Request, ctx: { params: Promise<{ id: stri
 
   const target = await db.user.findUnique({ where: { id }, include: { dealerProfile: true } });
   const profile = target?.dealerProfile;
-  if (!target || !profile) throw notFound("Представитель не найден");
+  if (!target || !profile) throw notFound("Дилер не найден");
 
   if (d.action === "resync") {
     if (!isSiteSyncConfigured()) throw badRequest("Интеграция с сайтом не настроена");
@@ -45,9 +45,9 @@ export const POST = route(async (req: Request, ctx: { params: Promise<{ id: stri
   };
 
   if (d.action === "approve") {
-    if (!profile.phone.trim()) throw badRequest("У представителя не указан телефон");
+    if (!profile.phone.trim()) throw badRequest("У дилера не указан телефон");
     if (!profile.city?.trim()) {
-      throw badRequest("Укажите город представителя: без него сайт не примет телефон");
+      throw badRequest("Укажите город дилера: без него сайт не примет телефон");
     }
     if (profile.sitePublication === "APPROVED" && profile.phoneVisibleOnSite) {
       throw badRequest("Публикация уже одобрена");

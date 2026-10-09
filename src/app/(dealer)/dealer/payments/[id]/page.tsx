@@ -13,6 +13,7 @@ import { Money } from "@/components/ui/money";
 import { formatRuDateTime } from "@/lib/dates";
 import { syncAtolPayPayment } from "@/lib/payments/service";
 import { atolPayMethodsPhrase } from "@/lib/payments/provider";
+import { mergePaymentSettings } from "@/lib/site-settings";
 
 export const dynamic = "force-dynamic";
 
@@ -59,7 +60,7 @@ export default async function DealerPaymentPage({
   });
 
   const online = payment.provider === "atol_pay";
-  const methodsPhrase = atolPayMethodsPhrase();
+  const methodsPhrase = atolPayMethodsPhrase(mergePaymentSettings(company?.payment).checkoutTypes);
   const receiptTo = payment.receiptEmail || user.email;
 
   return (
@@ -156,7 +157,7 @@ export default async function DealerPaymentPage({
             <p className="text-sm text-ink-muted">
               {payment.refundedAt ? `${formatRuDateTime(payment.refundedAt)}. ` : null}
               {payment.refundMethod === "atol_pay"
-                ? "Деньги возвращены на карту, с которой вы платили. Банк зачисляет их обычно за 1–10 рабочих дней; если за это время деньги не пришли — обратитесь в свой банк с чеком возврата."
+                ? "Деньги возвращены туда, откуда вы платили (по СБП — на счёт в вашем банке). Банк зачисляет их обычно за 1–10 рабочих дней; если за это время деньги не пришли — обратитесь в свой банк с чеком возврата."
                 : "Возврат оформлен администратором."}
             </p>
             {payment.license ? (

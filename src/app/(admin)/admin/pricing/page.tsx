@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { priceKey } from "@/lib/pricing";
+import { findPriceItem, priceKey } from "@/lib/pricing";
 import { Topbar } from "@/components/cabinet/topbar";
 import { PricingManager, type PriceItem } from "./pricing-manager";
 import { requireAdminPage } from "@/lib/session";
@@ -61,14 +61,20 @@ export default async function AdminPricingPage({
     by: ["product", "bundle", "productRegion"],
     where: { deletedAt: null, product: { not: null } },
   });
-  const known = new Set(items.map((i) => priceKey(i)));
+  const seen = new Set<string>();
   const missing = issued
     .map((g) => ({
       product: (g.product ?? "").trim(),
       bundle: g.bundle ?? "",
       region: g.productRegion ?? "",
     }))
-    .filter((p) => p.product && !p.product.includes(" ") && !known.has(priceKey(p)));
+    .filter((p) => {
+      if (!p.product || p.product.includes(" ") || findPriceItem(items, p)) return false;
+      const key = priceKey(p);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
 
   return (
     <>

@@ -60,7 +60,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       middleName: user.dealerProfile?.middleName,
     }) || user.email;
 
-  // Права вида licenses.view есть и у представителя — по ним админку
+  // Права вида licenses.view есть и у дилера — по ним админку
   // открывал бы любой дилер. Пускает только выход за пределы своего кабинета.
   if (!hasAdminScope(user.role.permissions, user.isSuperAdmin)) redirect("/dealer");
   const ip = clientIp(await headers());
@@ -69,7 +69,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const items: SidebarItem[] = [];
   items.push({ href: "/admin", label: "Дашборд", icon: <IconGrid className="h-4 w-4" /> });
   if (user.isSuperAdmin || hasPermission(user.role.permissions, "dealers.view", user.isSuperAdmin))
-    items.push({ href: "/admin/dealers", label: "Представители", icon: <IconUsers className="h-4 w-4" /> });
+    items.push({ href: "/admin/dealers", label: "Дилеры", icon: <IconUsers className="h-4 w-4" /> });
   if (user.isSuperAdmin || hasPermission(user.role.permissions, "dealers.view", user.isSuperAdmin))
     items.push({ href: "/admin/legacy-dealers", label: "ЛК DriveMods", icon: <IconCodeSquare className="h-4 w-4" /> });
   if (user.isSuperAdmin || hasPermission(user.role.permissions, "licenses.view", user.isSuperAdmin))

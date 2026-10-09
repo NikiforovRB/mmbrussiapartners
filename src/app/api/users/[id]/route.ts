@@ -7,10 +7,9 @@ import { changedFields, recordAdminAction } from "@/lib/admin-audit";
 import { requirePermission } from "@/lib/session";
 import { isPublishedOnSite, queueDealerSiteSync } from "@/lib/site-dealers";
 import { normalizePhone } from "@/lib/utils";
+import { isDealerRoleName } from "@/lib/roles";
 
 export const runtime = "nodejs";
-
-const DEALER_ROLE_NAME = "Представитель";
 
 const nameField = z.string().trim().max(80, "Не длиннее 80 символов");
 
@@ -63,8 +62,8 @@ export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: str
     if (isSelf) throw badRequest("Нельзя менять собственную роль.");
     const role = await db.role.findUnique({ where: { id: data.roleId } });
     if (!role) throw notFound("Роль не найдена");
-    if (role.name === DEALER_ROLE_NAME) {
-      throw badRequest("Роль «Представитель» назначается только при регистрации дилера.");
+    if (isDealerRoleName(role.name)) {
+      throw badRequest("Роль «Дилер» назначается только при регистрации дилера.");
     }
     update.roleId = role.id;
     actions.push("USER_ROLE_CHANGED");
@@ -87,8 +86,8 @@ export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: str
     }
     // Свой флаг не снимаем: иначе можно остаться без единого суперадмина.
     if (isSelf) throw badRequest("Нельзя менять собственный доступ супер-админа.");
-    if (target.role.name === DEALER_ROLE_NAME) {
-      throw badRequest("Представителю нельзя выдать доступ супер-админа.");
+    if (isDealerRoleName(target.role.name)) {
+      throw badRequest("Дилеру нельзя выдать доступ супер-админа.");
     }
     update.isSuperAdmin = data.isSuperAdmin;
     actions.push(data.isSuperAdmin ? "USER_SUPERADMIN_GRANTED" : "USER_SUPERADMIN_REVOKED");

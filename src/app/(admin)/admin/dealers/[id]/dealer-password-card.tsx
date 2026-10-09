@@ -117,7 +117,7 @@ export function DealerPasswordCard({
     }
     setRevealed(false);
     setChangeOpen(false);
-    toast.success("Пароль изменён. Представитель выйдет из кабинета на всех устройствах.");
+    toast.success("Пароль изменён. Дилер выйдет из кабинета на всех устройствах.");
   }
 
   const shown = revealed && password !== null;
@@ -126,7 +126,7 @@ export function DealerPasswordCard({
     <Card>
       <div className="font-display text-lg tracking-tight mb-4">Пароль от кабинета</div>
       <div className="space-y-1.5">
-        <span className="block text-[12.5px] text-ink-muted">Пароль представителя</span>
+        <span className="block text-[12.5px] text-ink-muted">Пароль дилера</span>
         <div className="field-control flex h-12 items-center gap-1 rounded-panel border border-hairline bg-field pl-4 pr-2">
           <span
             className={cn(
@@ -172,7 +172,7 @@ export function DealerPasswordCard({
         ) : !known ? (
           <p className="text-xs text-ink-subtle">
             Пароль задан до появления этой функции и хранится только в виде хэша. Он появится здесь после следующего
-            входа представителя в кабинет — или задайте новый.
+            входа дилера в кабинет — или задайте новый.
           </p>
         ) : (
           <p className="text-xs text-ink-subtle">Каждый просмотр пароля записывается в логи.</p>
@@ -187,8 +187,8 @@ export function DealerPasswordCard({
       <Modal
         open={changeOpen}
         onClose={() => setChangeOpen(false)}
-        title="Новый пароль представителя"
-        description="Представитель выйдет из кабинета на всех устройствах и войдёт уже с новым паролем."
+        title="Новый пароль дилера"
+        description="Дилер выйдет из кабинета на всех устройствах и войдёт уже с новым паролем."
       >
         <div className="space-y-3">
           <Input

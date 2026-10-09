@@ -29,7 +29,7 @@ export const PUT = route(async (req: Request, ctx: { params: Promise<{ id: strin
     where: { userId: id },
     select: { priceAdjustKind: true, priceAdjustValue: true, priceTier: true, prepaid: true },
   });
-  if (!profile) throw notFound("Представитель не найден");
+  if (!profile) throw notFound("Дилер не найден");
 
   const data = await parseBody(req, schema);
   const value = data.adjustKind === "NONE" ? null : (data.adjustValue ?? null);
@@ -79,7 +79,7 @@ export const PUT = route(async (req: Request, ctx: { params: Promise<{ id: strin
     entity: "PRICE",
     entityId: id,
     action: "UPDATED",
-    summary: "Цены представителя",
+    summary: "Цены дилера",
     diff: {
       правило: { from: profile.priceAdjustKind, to: data.adjustKind },
       величина: {

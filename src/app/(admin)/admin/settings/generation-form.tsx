@@ -90,7 +90,7 @@ export function GenerationForm({ initial }: { initial: GenerationSettings }) {
       blackoutEnabled &&
       !end &&
       !confirm(
-        "Окончание запрета не указано: представители не смогут генерировать лицензии, пока вы не выключите запрет вручную. Сохранить?",
+        "Окончание запрета не указано: дилеры не смогут генерировать лицензии, пока вы не выключите запрет вручную. Сохранить?",
       )
     ) {
       return;
@@ -130,7 +130,7 @@ export function GenerationForm({ initial }: { initial: GenerationSettings }) {
           <div className="font-display text-lg tracking-tight">Запрет генерации на период</div>
         </div>
         <p className="text-sm text-ink-muted mb-4">
-          В указанный интервал представители не смогут генерировать лицензии (техработы,
+          В указанный интервал дилеры не смогут генерировать лицензии (техработы,
           стоп-продажи). Администраторы ограничение обходят. Оставьте даты пустыми — запрет
           действует, пока включён тумблер.
         </p>
@@ -144,7 +144,7 @@ export function GenerationForm({ initial }: { initial: GenerationSettings }) {
           <Tag tone={state.tone}>{state.text}</Tag>
           {blackoutEnabled && !parseMoscowLocal(blackoutEnd) ? (
             <p className="text-xs text-danger">
-              Без даты окончания запрет бессрочный: генерация у представителей не заработает, пока
+              Без даты окончания запрет бессрочный: генерация у дилеров не заработает, пока
               тумблер не выключат.
             </p>
           ) : null}
@@ -163,7 +163,7 @@ export function GenerationForm({ initial }: { initial: GenerationSettings }) {
             />
           </div>
           <Textarea
-            label="Сообщение для представителя"
+            label="Сообщение для дилера"
             value={blackoutMessage}
             disabled={!canEdit}
             onChange={(e) => setBlackoutMessage(e.target.value)}

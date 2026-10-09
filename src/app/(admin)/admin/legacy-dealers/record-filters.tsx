@@ -54,10 +54,10 @@ export function RecordFilters({
       <Select
         value={owner}
         onChange={setOwner}
-        placeholder="Представитель: все"
+        placeholder="Дилер портала: все"
         options={[
-          { value: "", label: "Представитель: все" },
-          { value: "assigned", label: "Есть представитель" },
+          { value: "", label: "Дилер портала: все" },
+          { value: "assigned", label: "Есть дилер портала" },
           { value: "unassigned", label: "Не распределены" },
           { value: "manual", label: "Назначены вручную" },
         ]}

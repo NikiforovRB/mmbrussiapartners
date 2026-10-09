@@ -64,6 +64,8 @@ export default async function AdminProfilePage() {
             region: user.dealerProfile.region ?? "",
             country: user.dealerProfile.country ?? "",
             address: user.dealerProfile.address ?? "",
+            telegramNick: user.dealerProfile.telegramNick ?? "",
+            companyUrl: user.dealerProfile.companyUrl ?? "",
             siteComment: user.dealerProfile.siteComment ?? "",
             phoneVisibleOnSite: user.dealerProfile.phoneVisibleOnSite,
           }}
@@ -75,6 +77,7 @@ export default async function AdminProfilePage() {
             consent: user.dealerProfile.phoneVisibleOnSite,
           }}
           email={user.email}
+          locationEditable
         />
       </div>
     </>

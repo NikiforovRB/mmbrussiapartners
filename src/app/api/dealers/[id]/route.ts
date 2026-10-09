@@ -5,8 +5,9 @@ import { hasAdminScope, hasPermission, type PermissionKey } from "@/lib/permissi
 import { badRequest, conflict, forbidden, notFound, parseBody, route } from "@/lib/api";
 import { recordAdminAction, changedFields } from "@/lib/admin-audit";
 import { notifyUser } from "@/lib/app-notifications";
-import { deleteObject } from "@/lib/s3";
-import { fioFromParts, normalizePhone, plural } from "@/lib/utils";
+import { dealerFootprint, deleteDealerCompletely, describeFootprint } from "@/lib/dealer-delete";
+import { ContactFieldError, normalizeCompanyUrl, normalizeTelegramNick } from "@/lib/dealer-contacts";
+import { fioFromParts, normalizePhone } from "@/lib/utils";
 import { requireApprovedUser, requirePermission } from "@/lib/session";
 import { queueDealerSiteSync } from "@/lib/site-dealers";
 import { linkLegacyDealer } from "@/lib/legacy-dealers";
@@ -26,6 +27,8 @@ const profileSchema = z.object({
   region: z.string().max(LOCATION_TEXT_MAX, `Регион — не длиннее ${LOCATION_TEXT_MAX} символов`).nullable().optional(),
   country: z.string().max(60, "Страна — не длиннее 60 символов").nullable().optional(),
   address: z.string().nullable().optional(),
+  telegramNick: z.string().max(100).nullable().optional(),
+  companyUrl: z.string().max(400).nullable().optional(),
   siteComment: z.string().max(200, "Подпись на сайте — не длиннее 200 символов").nullable().optional(),
   licenseLimit: z.number().int().min(0).optional(),
   driveModsAccess: z.boolean().optional(),
@@ -53,6 +56,8 @@ const PLAIN_PROFILE_FIELDS = [
   "region",
   "country",
   "address",
+  "telegramNick",
+  "companyUrl",
   "siteComment",
   "driveModsAccess",
 ] as const;
@@ -91,19 +96,19 @@ export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: str
     throw badRequest("Нечего сохранять");
   }
   if (wantsLegacy && !can("pricing.manage") && !can("dealers.edit")) {
-    throw forbidden("Нет права менять ценовые условия представителя");
+    throw forbidden("Нет права менять ценовые условия дилера");
   }
-  // Причину отказа представитель видит в кабинете — без неё отклонять нельзя.
+  // Причину отказа дилер видит в кабинете — без неё отклонять нельзя.
   if (d.status === "REJECTED" && (d.rejectionReason ?? "").length < 6) {
     throw badRequest("Укажите причину отклонения — минимум 6 символов");
   }
-  // Причину блокировки представитель видит на экране входа.
+  // Причину блокировки дилер видит на экране входа.
   if (d.status === "SUSPENDED" && (d.suspensionReason ?? "").length < 6) {
     throw badRequest("Укажите причину блокировки — минимум 6 символов");
   }
   if (wantsStatus) {
     const perm: PermissionKey = d.status === "SUSPENDED" ? "dealers.suspend" : "dealers.approve";
-    if (!can(perm) && !can("dealers.approve")) throw forbidden("Нет права менять статус представителя");
+    if (!can(perm) && !can("dealers.approve")) throw forbidden("Нет права менять статус дилера");
   }
   if (wantsRole && !can("users.manage")) throw forbidden("Нет права менять роль пользователя");
   if (wantsLimit && !can("dealers.setLimit")) throw forbidden("Нет права менять лимит лицензий");
@@ -117,7 +122,7 @@ export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: str
   }
 
   const target = await db.user.findUnique({ where: { id }, include: { dealerProfile: true } });
-  if (!target) throw notFound("Представитель не найден");
+  if (!target) throw notFound("Дилер не найден");
   if (target.isSuperAdmin && wantsRole) {
     throw forbidden("Роль суперадминистратора менять нельзя");
   }
@@ -150,6 +155,15 @@ export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: str
       if (d.profile.inn !== undefined) profileUpdate.inn = d.profile.inn || null;
       if (location) Object.assign(profileUpdate, location);
       if (d.profile.address !== undefined) profileUpdate.address = d.profile.address || null;
+      try {
+        if (d.profile.telegramNick !== undefined) {
+          profileUpdate.telegramNick = normalizeTelegramNick(d.profile.telegramNick);
+        }
+        if (d.profile.companyUrl !== undefined) profileUpdate.companyUrl = normalizeCompanyUrl(d.profile.companyUrl);
+      } catch (e) {
+        if (e instanceof ContactFieldError) throw badRequest(e.message);
+        throw e;
+      }
       if (d.profile.siteComment !== undefined) {
         profileUpdate.siteComment = d.profile.siteComment?.trim() || null;
       }
@@ -276,59 +290,54 @@ export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: str
   return NextResponse.json({ ok: true });
 });
 
-export const DELETE = route(async (_req: Request, ctx: { params: Promise<{ id: string }> }) => {
-  const session = await requirePermission("dealers.delete", "Нет права на удаление представителей");
+const deleteSchema = z.object({
+  /** Подтверждение: удалить вместе с лицензиями, платежами и журналами. */
+  force: z.boolean().optional(),
+});
+
+export const DELETE = route(async (req: Request, ctx: { params: Promise<{ id: string }> }) => {
+  const session = await requirePermission("dealers.delete", "Нет права на удаление дилеров");
   const { id } = await ctx.params;
   if (id === session.user.id) throw forbidden("Собственную учётную запись удалить нельзя");
+  const raw = await req.text();
+  let force = false;
+  try {
+    force = deleteSchema.parse(raw.trim() ? JSON.parse(raw) : {}).force === true;
+  } catch {
+    throw badRequest("Некорректный запрос");
+  }
 
   const target = await db.user.findUnique({
     where: { id },
-    include: {
-      dealerProfile: true,
-      role: { select: { permissions: true } },
-      _count: {
-        select: {
-          licenses: true,
-          payments: true,
-          humaxPasswords: true,
-          requestedCancellations: true,
-          auditedActions: true,
-          adminAuditActions: true,
-        },
-      },
-    },
+    include: { dealerProfile: true, role: { select: { permissions: true } } },
   });
-  if (!target) throw notFound("Представитель не найден");
+  if (!target) throw notFound("Дилер не найден");
   if (target.isSuperAdmin || hasAdminScope(target.role.permissions)) {
-    throw forbidden("Это учётная запись сотрудника, а не представителя — здесь её удалить нельзя");
+    throw forbidden("Это учётная запись сотрудника, а не дилера — здесь её удалить нельзя");
   }
 
-  // Лицензии, счета и история действий ссылаются на пользователя и нужны для
-  // отчётности, поэтому удалять можно только того, кто ещё ничего не сделал.
-  const c = target._count;
-  const records = [
-    c.licenses > 0 && `${c.licenses} ${plural(c.licenses, ["лицензия", "лицензии", "лицензий"])}`,
-    c.payments > 0 && `${c.payments} ${plural(c.payments, ["платёж", "платежа", "платежей"])}`,
-    c.humaxPasswords > 0 &&
-      `${c.humaxPasswords} ${plural(c.humaxPasswords, ["пароль HUMAX", "пароля HUMAX", "паролей HUMAX"])}`,
-    c.requestedCancellations > 0 && "заявки на аннулирование",
-    c.auditedActions + c.adminAuditActions > 0 && "записи в логах",
-  ].filter(Boolean);
-  if (records.length > 0) {
-    throw conflict(
-      `Удалить нельзя: у представителя есть ${records.join(", ")}. Эти данные нужны для отчётности — заблокируйте представителя вместо удаления.`,
-    );
+  const footprint = await dealerFootprint(id);
+  const removed = describeFootprint(footprint);
+  if (footprint.blockers.length) throw conflict(`Сейчас удалить нельзя: ${footprint.blockers.join("; ")}`);
+  if (removed.length > 0 && !force) {
+    throw conflict(`У дилера есть ${removed.join(", ")}. Подтвердите удаление вместе с ними.`);
+  }
+  const perms = session.user.permissions;
+  if (footprint.licenses > 0 && !hasPermission(perms, "licenses.delete", session.user.isSuperAdmin)) {
+    throw forbidden("Для удаления дилера с лицензиями нужно право «Удаление лицензий»");
+  }
+  if (footprint.payments > 0 && !hasPermission(perms, "payments.delete", session.user.isSuperAdmin)) {
+    throw forbidden("Для удаления дилера с платежами нужно право «Удаление платежей»");
   }
 
-  await db.user.delete({ where: { id } });
+  try {
+    await deleteDealerCompletely(id);
+  } catch (e) {
+    throw conflict((e as Error).message);
+  }
   const p = target.dealerProfile;
   if (p && (p.siteListed || p.sitePublication === "APPROVED" || p.siteSyncStatus === "failed")) {
     queueDealerSiteSync(id, "delete");
-  }
-  if (target.dealerProfile?.avatarKey) {
-    await deleteObject(target.dealerProfile.avatarKey).catch((err) =>
-      console.error("[dealer-delete] не удалось удалить фото", err),
-    );
   }
 
   const fio = fioFromParts({
@@ -341,7 +350,19 @@ export const DELETE = route(async (_req: Request, ctx: { params: Promise<{ id: s
     entity: "DEALER",
     entityId: id,
     action: "DEALER_DELETED",
-    summary: fio ? `${fio} (${target.email})` : target.email,
+    summary: [fio ? `${fio} (${target.email})` : target.email, removed.length ? `вместе с: ${removed.join(", ")}` : ""]
+      .filter(Boolean)
+      .join(" · "),
+    diff: {
+      licenses: footprint.licenses,
+      payments: footprint.payments,
+      paidTotal: footprint.paidTotal,
+      humaxPasswords: footprint.humaxPasswords,
+      requests: footprint.requests,
+      logs: footprint.logs,
+      notifications: footprint.notifications,
+      legacyRecords: footprint.legacyRecords,
+    },
   });
 
   return NextResponse.json({ ok: true });

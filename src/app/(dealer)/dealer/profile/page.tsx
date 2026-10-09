@@ -63,6 +63,8 @@ export default async function ProfilePage() {
             region: user.dealerProfile.region ?? "",
             country: user.dealerProfile.country ?? "",
             address: user.dealerProfile.address ?? "",
+            telegramNick: user.dealerProfile.telegramNick ?? "",
+            companyUrl: user.dealerProfile.companyUrl ?? "",
             siteComment: user.dealerProfile.siteComment ?? "",
             phoneVisibleOnSite: user.dealerProfile.phoneVisibleOnSite,
           }}

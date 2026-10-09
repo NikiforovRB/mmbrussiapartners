@@ -10,7 +10,7 @@ export const runtime = "nodejs";
 
 const LABEL = { legacyLk: "«ЛК DriveMods»", knowledge: "«База знаний»" } as const;
 
-/** Включает и выключает разделы кабинета представителя; можно передать один раздел. */
+/** Включает и выключает разделы кабинета дилера; можно передать один раздел. */
 export const PATCH = route(async (req: Request) => {
   const session = await requirePermission("settings.edit");
   const patch = await parseBody(req, cabinetSectionsSchema.partial());
@@ -37,7 +37,7 @@ export const PATCH = route(async (req: Request) => {
       entity: "SETTINGS",
       entityId: "sections",
       action: "UPDATED",
-      summary: changed.map((k) => `${LABEL[k]}: ${sections[k] ? "показан" : "скрыт"} у представителей`).join("; "),
+      summary: changed.map((k) => `${LABEL[k]}: ${sections[k] ? "показан" : "скрыт"} у дилеров`).join("; "),
     });
   }
 

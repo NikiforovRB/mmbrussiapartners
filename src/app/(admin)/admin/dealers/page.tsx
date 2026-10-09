@@ -71,7 +71,7 @@ export default async function AdminDealersPage({
         { dealerProfile: { signupCity: text } },
         { dealerProfile: { signupCountry: text } },
       ];
-      // Пустая страна у представителя означает Россию (так её видит и сайт).
+      // Пустая страна у дилера означает Россию (так её видит и сайт).
       if (q.length >= 3 && "россия".startsWith(q.toLowerCase())) {
         or.push({ dealerProfile: { country: null } });
       }
@@ -108,7 +108,7 @@ export default async function AdminDealersPage({
   return (
     <>
       <Topbar
-        title="Представители"
+        title="Дилеры"
         subtitle="Одобрение заявок и управление дилерской сетью"
         user={{
           name: user.email,
@@ -132,7 +132,7 @@ export default async function AdminDealersPage({
           </Link>
         ) : null}
         <LinkTabs
-          label="Представители по статусу"
+          label="Дилеры по статусу"
           className="mb-5"
           tabs={[
             { href: tabQuery("active"), label: "Активные", active: tab === "active", count: activeCount },
@@ -207,7 +207,7 @@ export default async function AdminDealersPage({
             </colgroup>
             <thead>
               <tr className="text-left text-[11.5px] uppercase tracking-tight text-ink-subtle">
-                <th className="px-3 py-3">Представитель</th>
+                <th className="px-3 py-3">Дилер</th>
                 <th className="px-3 py-3">Контакты</th>
                 <th className="px-3 py-3">Регион</th>
                 <th className="px-3 py-3">Статус</th>
@@ -314,7 +314,7 @@ function dealerRow(u: DealerListUser) {
   return { fio, organization: p?.organization ?? null, regionLine, place };
 }
 
-/** Причина отказа или блокировки — её видит и сам представитель. */
+/** Причина отказа или блокировки — её видит и сам дилер. */
 function statusReason(u: DealerListUser): string | null {
   if (u.status === "REJECTED") return u.dealerProfile?.rejectionReason ?? null;
   if (u.status === "SUSPENDED") return u.dealerProfile?.suspensionReason ?? null;

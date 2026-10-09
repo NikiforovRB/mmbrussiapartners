@@ -38,18 +38,18 @@ export default async function AdminKnowledgePage({
     <>
       <Topbar
         title="База знаний"
-        subtitle="Статьи и инструкции для представителей"
+        subtitle="Статьи и инструкции для дилеров"
         user={{ name: me?.email ?? "Admin", email: me?.email ?? "", role: me?.role.name ?? "Admin" }}
       />
       <Card className="mt-6 py-4">
         <SectionVisibilityToggle
           section="knowledge"
           initial={sections.knowledge}
-          label="Показывать базу знаний представителям"
+          label="Показывать базу знаний дилерам"
           description={
             sections.knowledge
-              ? "Раздел есть в меню кабинета представителя, опубликованные статьи открываются."
-              : "Раздел скрыт: в меню представителей его нет и статьи у них не открываются. Редактировать статьи можно и сейчас."
+              ? "Раздел есть в меню кабинета дилера, опубликованные статьи открываются."
+              : "Раздел скрыт: в меню дилеров его нет и статьи у них не открываются. Редактировать статьи можно и сейчас."
           }
         />
       </Card>

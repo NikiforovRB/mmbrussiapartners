@@ -1,16 +1,21 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { parseBody, route } from "@/lib/api";
+import { badRequest, forbidden, parseBody, route } from "@/lib/api";
 import { fioFromParts, normalizePhone } from "@/lib/utils";
 import { requireApprovedUser } from "@/lib/session";
+import { hasAdminScope } from "@/lib/permissions";
 import { notifyAdmins } from "@/lib/app-notifications";
 import { queueDealerSiteSync } from "@/lib/site-dealers";
 import { clientIp } from "@/lib/rate-limit";
 import { LOCATION_TEXT_MAX, normalizeLocation, recordLocationChange } from "@/lib/dealer-location";
+import { ContactFieldError, normalizeCompanyUrl, normalizeTelegramNick } from "@/lib/dealer-contacts";
 
 export const runtime = "nodejs";
 
+// Страну, регион и город дилер указывает при регистрации, дальше их меняет
+// только администратор: по ним строится гео-аналитика и публикация на сайте.
+// Сотрудник с админскими правами правит своё местоположение здесь же.
 const schema = z.object({
   firstName: z.string().min(1, "Укажите имя").optional(),
   lastName: z.string().min(1, "Укажите фамилию").optional(),
@@ -18,10 +23,12 @@ const schema = z.object({
   phone: z.string().min(6, "Укажите телефон").optional(),
   organization: z.string().nullable().optional(),
   inn: z.string().nullable().optional(),
+  address: z.string().nullable().optional(),
   city: z.string().max(LOCATION_TEXT_MAX, `Город — не длиннее ${LOCATION_TEXT_MAX} символов`).nullable().optional(),
   region: z.string().max(LOCATION_TEXT_MAX, `Регион — не длиннее ${LOCATION_TEXT_MAX} символов`).nullable().optional(),
   country: z.string().max(60, "Страна — не длиннее 60 символов").nullable().optional(),
-  address: z.string().nullable().optional(),
+  telegramNick: z.string().max(100).nullable().optional(),
+  companyUrl: z.string().max(400).nullable().optional(),
   siteComment: z.string().max(200, "Подпись на сайте — не длиннее 200 символов").nullable().optional(),
   phoneVisibleOnSite: z.boolean().optional(),
 });
@@ -31,6 +38,16 @@ export const PATCH = route(async (req: Request) => {
   const userId = session.user.id;
 
   const d = await parseBody(req, schema);
+  let contacts: { telegramNick?: string | null; companyUrl?: string | null };
+  try {
+    contacts = {
+      ...(d.telegramNick !== undefined && { telegramNick: normalizeTelegramNick(d.telegramNick) }),
+      ...(d.companyUrl !== undefined && { companyUrl: normalizeCompanyUrl(d.companyUrl) }),
+    };
+  } catch (e) {
+    if (e instanceof ContactFieldError) throw badRequest(e.message);
+    throw e;
+  }
 
   const before = await db.dealerProfile.findUnique({
     where: { userId },
@@ -38,6 +55,9 @@ export const PATCH = route(async (req: Request) => {
   });
 
   const wantsLocation = d.country !== undefined || d.region !== undefined || d.city !== undefined;
+  if (wantsLocation && !hasAdminScope(session.user.permissions, session.user.isSuperAdmin)) {
+    throw forbidden("Страну, регион и город меняет администратор");
+  }
   const currentLocation = {
     country: before?.country ?? null,
     region: before?.region ?? null,
@@ -91,6 +111,7 @@ export const PATCH = route(async (req: Request) => {
           ...(location && { region: location.region }),
           ...(d.address !== undefined && { address: d.address || null }),
           ...(d.phoneVisibleOnSite !== undefined && { phoneVisibleOnSite: d.phoneVisibleOnSite }),
+          ...contacts,
           ...next,
           ...publication,
         },
@@ -126,5 +147,5 @@ export const PATCH = route(async (req: Request) => {
     });
   }
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, ...contacts });
 });

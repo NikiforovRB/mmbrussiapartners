@@ -51,7 +51,7 @@ export function AnnouncementForm({ initial }: { initial: Announcement }) {
             onChange={setEnabled}
             disabled={!canEdit}
             label="Показывать объявление"
-            description="Полоса появится у всех представителей и администраторов."
+            description="Полоса появится у всех дилеров и администраторов."
           />
           <Textarea
             label="Текст объявления"

@@ -35,7 +35,7 @@ function licenseNumber(seq: number): string {
 async function main() {
   const prisma = new PrismaClient();
   try {
-    const dealerRole = await prisma.role.findUnique({ where: { name: "Представитель" } });
+    const dealerRole = await prisma.role.findFirst({ where: { name: { in: ["Дилер", "Представитель"] } } });
     const adminRole = await prisma.role.findUnique({ where: { name: "Администратор" } });
     if (!dealerRole || !adminRole) {
       throw new Error("Базовые роли не найдены. Сначала запустите основной seed (npm run db:seed).");

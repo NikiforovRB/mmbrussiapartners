@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { hasPermission } from "@/lib/permissions";
+import { hasAdminScope, hasPermission } from "@/lib/permissions";
 import { ApiError, badRequest, forbidden, parseBody, route, unauthenticated } from "@/lib/api";
 import { uploadObject, getDownloadUrl, deleteObject, LICENSE_FILE_NAME } from "@/lib/s3";
 import { createLic, describeDriveModsFailure, isDriveModsConfigured, licInfo } from "@/lib/drivemods";
@@ -9,9 +9,9 @@ import { syncLicenseSlots } from "@/lib/license-slots";
 import { isRepeatGeneration } from "@/lib/repeat-generation";
 import { generateLicenseNumber, fioFromParts } from "@/lib/utils";
 import { isLicenseType } from "@/lib/license-options";
-import { resolvePrice, positionLabel } from "@/lib/pricing";
+import { inferProductRegions, resolvePrice, positionLabel } from "@/lib/pricing";
 import { createPayment } from "@/lib/payments/service";
-import { notifyAdmins } from "@/lib/app-notifications";
+import { notifyAdmins, notifyUser } from "@/lib/app-notifications";
 import { formatRub } from "@/lib/money";
 import { formatRuDateTime } from "@/lib/dates";
 import { blackoutBlockReason, checkCustomVersion, mergeGenerationSettings } from "@/lib/site-settings";
@@ -40,7 +40,14 @@ const schema = z.object({
     .optional()
     .or(z.literal("")),
   issuedWithoutPayment: z.boolean().optional(),
-  /** Email получателя чека (тег 1008). По умолчанию — почта представителя. */
+  /** Администратор выдаёт лицензию дилеру: она числится за ним, счёт — тоже. */
+  dealerId: z.string().min(1).optional(),
+  /**
+   * Администратор сразу отмечает лицензию оплаченной на эту сумму (можно 0):
+   * деньги получены мимо онлайн-оплаты, счёт и чек не выставляются.
+   */
+  paidAmount: z.number().min(0).max(100_000_000).optional(),
+  /** Email получателя чека (тег 1008). По умолчанию — почта дилера. */
   receiptEmail: z.string().email().optional().or(z.literal("")),
   /** Дата прошлой генерации по данным DRIVEMODS (ISO) — для уведомления. */
   previousGeneratedAt: z.string().optional().nullable(),
@@ -64,15 +71,36 @@ export const POST = route(async (req: Request) => {
   });
   if (!actor) throw unauthenticated();
 
+  const can = (perm: Parameters<typeof hasPermission>[1]) =>
+    hasPermission(session.user.permissions, perm, session.user.isSuperAdmin);
+  const isAdmin = hasAdminScope(session.user.permissions, session.user.isSuperAdmin);
+
+  // Лицензия числится за тем, кому её выдали: администратор может выдать её
+  // дилеру — тогда счёт, лимит и отчёты идут на дилера.
+  let owner = actor;
+  if (p.dealerId && p.dealerId !== actor.id) {
+    if (!isAdmin || !can("licenses.create")) throw forbidden("Выдавать лицензии дилерам может только администратор");
+    const target = await db.user.findUnique({
+      where: { id: p.dealerId },
+      include: { dealerProfile: true, role: { select: { permissions: true } } },
+    });
+    if (!target?.dealerProfile || target.isSuperAdmin || hasAdminScope(target.role.permissions)) {
+      throw badRequest("Дилер не найден");
+    }
+    if (target.status !== "APPROVED") throw badRequest("Учётная запись дилера не активна");
+    owner = target;
+  }
+  if (p.paidAmount !== undefined && (!isAdmin || !can("payments.manage"))) {
+    throw forbidden("Нет права отмечать оплату");
+  }
+
   // Лимитом не связан тот, кто этими лимитами управляет. Право licenses.create
-  // здесь не подходит: оно есть и у представителя, а значит не отличает
+  // здесь не подходит: оно есть и у дилера, а значит не отличает
   // администратора и обнулило бы проверку остатка для всех.
-  const bypassesLimit =
-    session.user.isSuperAdmin ||
-    hasPermission(session.user.permissions, "dealers.setLimit", session.user.isSuperAdmin);
+  const bypassesLimit = session.user.isSuperAdmin || can("dealers.setLimit");
   if (!bypassesLimit && !actor.dealerProfile) throw badRequest("Профиль не найден");
 
-  // Окно запрета (техработы) действует на представителей; администратор,
+  // Окно запрета (техработы) действует на дилеров; администратор,
   // выдающий лицензию вручную, его обходит. Устаревший кастом проверяем ниже —
   // по файлу ШГУ и для всех.
   const settingsRow = await db.companySettings.findUnique({
@@ -110,11 +138,11 @@ export const POST = route(async (req: Request) => {
   const knownRepeat = await isRepeatGeneration(device.device_id, device.recoverable);
   const freeRepeat = knownRepeat && !settings.repeatGenerationPaid;
 
-  // Предоплатный расчёт: у новых/недоверенных представителей не должно быть
+  // Предоплатный расчёт: у новых/недоверенных дилеров не должно быть
   // непогашенных счетов. Доверенным ставят postpaid — их это не касается.
-  if (!bypassesLimit && !freeRepeat && actor.dealerProfile?.prepaid) {
+  if (!bypassesLimit && !freeRepeat && owner.dealerProfile?.prepaid) {
     const outstanding = await db.payment.count({
-      where: { dealerId: actor.id, status: "PENDING" },
+      where: { dealerId: owner.id, status: "PENDING" },
     });
     if (outstanding > 0) {
       throw badRequest(
@@ -123,20 +151,16 @@ export const POST = route(async (req: Request) => {
     }
   }
 
-  const canIssueFree = hasPermission(
-    session.user.permissions,
-    "licenses.issueFree",
-    session.user.isSuperAdmin,
-  );
-  const issuedWithoutPayment = canIssueFree && p.issuedWithoutPayment === true;
+  const issuedWithoutPayment = can("licenses.issueFree") && p.issuedWithoutPayment === true;
+  const paidAmount = issuedWithoutPayment ? undefined : p.paidAmount;
 
   // Слот занимаем до похода во внешний API: между проверкой остатка и
   // инкрементом лежат две загрузки в S3 и генерация, и без резервирования
   // два параллельных запроса пробили бы лимит.
-  const limited = Boolean(actor.dealerProfile) && !bypassesLimit && !freeRepeat;
+  const limited = Boolean(owner.dealerProfile) && !bypassesLimit && !freeRepeat;
   if (limited) {
     const reserved = await db.dealerProfile.updateMany({
-      where: { userId: actor.id, licensesUsed: { lt: actor.dealerProfile!.licenseLimit } },
+      where: { userId: owner.id, licensesUsed: { lt: owner.dealerProfile!.licenseLimit } },
       data: { licensesUsed: { increment: 1 } },
     });
     if (reserved.count === 0) throw forbidden("Лимит лицензий исчерпан");
@@ -145,7 +169,7 @@ export const POST = route(async (req: Request) => {
   const releaseSlot = async () => {
     if (!limited) return;
     await db.dealerProfile
-      .update({ where: { userId: actor.id }, data: { licensesUsed: { decrement: 1 } } })
+      .update({ where: { userId: owner.id }, data: { licensesUsed: { decrement: 1 } } })
       .catch((err) => console.error("[createlic] не удалось вернуть слот лимита", err));
   };
 
@@ -159,10 +183,10 @@ export const POST = route(async (req: Request) => {
   try {
     const dealerName =
       fioFromParts({
-        firstName: actor.dealerProfile?.firstName,
-        lastName: actor.dealerProfile?.lastName,
-        middleName: actor.dealerProfile?.middleName,
-      }) || actor.email;
+        firstName: owner.dealerProfile?.firstName,
+        lastName: owner.dealerProfile?.lastName,
+        middleName: owner.dealerProfile?.middleName,
+      }) || owner.email;
     const dealerComment = (p.dealerComment || dealerName).trim().slice(0, DEALER_COMMENT_MAX);
 
     const licenseNumber = await uniqueLicenseNumber();
@@ -209,14 +233,19 @@ export const POST = route(async (req: Request) => {
     const free = repeatGeneration && !settings.repeatGenerationPaid;
 
     const position = { product: p.product, bundle: p.bundle, region: p.region };
-    const resolved = await resolvePrice(actor.id, position);
+    const [resolved, [productRegion]] = await Promise.all([
+      resolvePrice(owner.id, position),
+      inferProductRegions([position], versionSoftware),
+    ]);
     const price = issuedWithoutPayment || free ? 0 : resolved.price;
+    const markPaid = paidAmount !== undefined && !free;
+    const paidSum = paidAmount ?? 0;
 
     const license = await db.$transaction(async (tx) => {
       const created = await tx.license.create({
         data: {
           number: licenseNumber,
-          dealerId: actor.id,
+          dealerId: owner.id,
           type: p.type,
           status: "ACTIVE",
           price: price || null,
@@ -227,16 +256,16 @@ export const POST = route(async (req: Request) => {
           licenseKey: licenseUpload.key,
           product: p.product,
           bundle: p.bundle || null,
-          productRegion: p.region || null,
+          productRegion,
           versionSoftware: versionSoftware || null,
           versionCustom: versionCustom || null,
           dealerComment,
           issuedWithoutPayment,
           repeatGeneration,
-          // Гео-аналитика считает выдачи по месту представителя: клиента у
+          // Гео-аналитика считает выдачи по месту дилера: клиента у
           // лицензии нет, а дилер потом может переехать.
-          region: actor.dealerProfile?.region ?? null,
-          city: actor.dealerProfile?.city ?? null,
+          region: owner.dealerProfile?.region ?? null,
+          city: owner.dealerProfile?.city ?? null,
         },
       });
       await tx.licenseAuditLog.create({
@@ -244,9 +273,36 @@ export const POST = route(async (req: Request) => {
           licenseId: created.id,
           actorId: actor.id,
           action: "CREATED",
-          reason: `${p.type}: ${p.product}`,
+          reason:
+            owner.id === actor.id
+              ? `${p.type}: ${p.product}`
+              : `${p.type}: ${p.product}. Выдана дилеру ${owner.email}`,
         },
       });
+      if (markPaid) {
+        await tx.payment.create({
+          data: {
+            dealerId: owner.id,
+            licenseId: created.id,
+            amount: paidSum,
+            currency: "RUB",
+            status: "PAID",
+            provider: "manual",
+            description: `Лицензия ${licenseNumber} · ${p.product}`,
+            paidAt: new Date(),
+            confirmedById: actor.id,
+            paidManually: true,
+          },
+        });
+        await tx.licenseAuditLog.create({
+          data: {
+            licenseId: created.id,
+            actorId: actor.id,
+            action: "EDITED",
+            reason: `Отмечена оплаченной: ${formatRub(paidSum)}, без чека`,
+          },
+        });
+      }
       return created;
     });
 
@@ -255,25 +311,29 @@ export const POST = route(async (req: Request) => {
     // Счёт выставляем после генерации: файл уже у дилера, а оплата и чек
     // идут своим циклом. Сбой биллинга не должен терять выданную лицензию.
     let payment: { id: string; amount: number; payUrl: string | null } | null = null;
-    if (price > 0) {
+    if (price > 0 && !markPaid) {
       try {
         const created = await createPayment({
-          dealerId: actor.id,
+          dealerId: owner.id,
           licenseId: license.id,
           amount: price,
           description: `Лицензия ${license.number} · ${p.product}`,
-          email: actor.email,
-          phone: actor.dealerProfile?.phone,
-          // Чек уйдёт на явно указанный email, иначе — на почту представителя.
-          receiptEmail: (p.receiptEmail && p.receiptEmail.trim()) || actor.email,
+          email: owner.email,
+          phone: owner.dealerProfile?.phone,
+          // Чек уйдёт на явно указанный email, иначе — на почту дилера.
+          receiptEmail: (p.receiptEmail && p.receiptEmail.trim()) || owner.email,
         });
         payment = { id: created.id, amount: Number(created.amount), payUrl: created.payUrl };
-        await notifyAdmins(["payments.manage"], {
-          type: "PAYMENT_CREATED",
-          title: `Новый счёт на ${formatRub(created.amount)}`,
-          body: `Лицензия ${license.number}, представитель ${actor.email}`,
-          link: `/admin/payments`,
-        });
+        await notifyAdmins(
+          ["payments.manage"],
+          {
+            type: "PAYMENT_CREATED",
+            title: `Новый счёт на ${formatRub(created.amount)}`,
+            body: `Лицензия ${license.number}, дилер ${owner.email}`,
+            link: `/admin/payments`,
+          },
+          { exceptUserId: actor.id },
+        );
       } catch (err) {
         // Лицензия уже выдана — счёт выставим вручную, но след обязателен.
         console.error(
@@ -318,9 +378,22 @@ export const POST = route(async (req: Request) => {
       });
     }
 
+    if (owner.id !== actor.id) {
+      await notifyUser(owner.id, {
+        type: "LICENSE_ISSUED",
+        title: `Администратор выдал вам лицензию ${license.number}`,
+        body: payment
+          ? `${p.product}. Счёт на ${formatRub(payment.amount)} — оплатите его в разделе «Платежи».`
+          : markPaid
+            ? `${p.product}. Оплата отмечена: ${formatRub(paidSum)}.`
+            : `${p.product}. Без оплаты.`,
+        link: payment ? `/dealer/payments/${payment.id}` : `/dealer/licenses/${license.id}`,
+      });
+    }
+
     // Зарезервированный слот сверяем с фактом: бесплатная лицензия его не
     // занимает, а счёт мог и не выставиться.
-    if (actor.dealerProfile) await syncLicenseSlots(actor.id);
+    if (owner.dealerProfile) await syncLicenseSlots(owner.id);
 
     return NextResponse.json({
       licenseId: license.id,
@@ -328,6 +401,8 @@ export const POST = route(async (req: Request) => {
       filename: LICENSE_FILE_NAME,
       downloadUrl,
       payment,
+      paid: markPaid ? { amount: paidSum } : null,
+      dealerEmail: owner.id === actor.id ? null : owner.email,
       repeatGeneration,
     });
   } catch (err) {

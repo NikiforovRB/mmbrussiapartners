@@ -159,7 +159,7 @@ export function PaymentSettingsPanel({ summary }: { summary: PaymentSettingsSumm
           <Row label="Прайс по комплектациям" value="используется по умолчанию" />
         )}
         <p className="mt-3 text-xs text-ink-subtle">
-          Индивидуальные цены представителей задаются в разделе «Цены».
+          Индивидуальные цены дилеров задаются в разделе «Цены».
         </p>
       </Card>
 

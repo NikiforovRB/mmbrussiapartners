@@ -3,7 +3,7 @@ import "server-only";
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 
 /**
- * Обратимое хранение паролей представителей: администратор видит пароль в
+ * Обратимое хранение паролей дилеров: администратор видит пароль в
  * карточке. Шифр — AES-256-GCM, ключ (32 байта в base64) только в окружении
  * сервера: DEALER_PASSWORD_KEY. Для входа по-прежнему проверяется bcrypt-хэш.
  *

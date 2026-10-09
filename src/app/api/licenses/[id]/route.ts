@@ -45,7 +45,7 @@ const patchSchema = z.object({
 /**
  * Запись генерации — продукт, версии, цена, статус — правит только
  * администратор с licenses.manageTerms: право licenses.edit есть и у
- * представителя, и одного его мало. Комментарий дилера правят оба.
+ * дилера, и одного его мало. Комментарий дилера правят оба.
  */
 const TERM_FIELDS = [
   "status",
@@ -81,7 +81,7 @@ export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: str
   if (!license || license.deletedAt) throw notFound("Лицензия не найдена");
 
   // Чужую лицензию правит только администратор: licenses.edit есть и у
-  // представителя, поэтому одного этого права для доступа недостаточно.
+  // дилера, поэтому одного этого права для доступа недостаточно.
   const isOwner = license.dealerId === session.user.id;
   const isAdmin = hasAdminScope(session.user.permissions, session.user.isSuperAdmin);
   const canEdit = hasPermission(session.user.permissions, "licenses.edit", session.user.isSuperAdmin);
@@ -217,7 +217,7 @@ export const DELETE = route(async (req: Request, ctx: { params: Promise<{ id: st
     }),
   ]);
 
-  // Удалённая лицензия перестаёт занимать слот лимита представителя.
+  // Удалённая лицензия перестаёт занимать слот лимита дилера.
   await syncLicenseSlots(license.dealerId);
 
   return NextResponse.json({ ok: true });

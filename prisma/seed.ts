@@ -5,7 +5,7 @@ import bcrypt from "bcryptjs";
 // и роль администратора осталась без недавно добавленного права.
 import { ALL_PERMISSIONS, DEALER_SCOPE_PERMISSIONS } from "../src/lib/permissions";
 
-// Представителю хватает прав на собственный кабинет: к своим лицензиям,
+// Дилеру хватает прав на собственный кабинет: к своим лицензиям,
 // отчётам и счетам доступ и так есть по владению. Право licenses.cancel
 // ему выдавать нельзя — оно означает аннулирование любой лицензии сети.
 const DEALER_PERMISSIONS = DEALER_SCOPE_PERMISSIONS;
@@ -25,10 +25,10 @@ async function main() {
     });
 
     const dealerRole = await prisma.role.upsert({
-      where: { name: "Представитель" },
+      where: { name: "Дилер" },
       update: { permissions: DEALER_PERMISSIONS, isSystem: true },
       create: {
-        name: "Представитель",
+        name: "Дилер",
         description: "Системная роль для дилеров",
         isSystem: true,
         permissions: DEALER_PERMISSIONS,

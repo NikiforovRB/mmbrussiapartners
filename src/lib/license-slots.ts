@@ -7,7 +7,7 @@ import { db } from "./db";
 const UNPAID: PaymentStatus[] = ["PENDING", "FAILED"];
 
 /**
- * Пересчитывает licensesUsed по фактическим лицензиям представителя.
+ * Пересчитывает licensesUsed по фактическим лицензиям дилера.
  *
  * Лимит — это сколько лицензий дилер может держать неоплаченными: слот
  * занимает только лицензия с неоплаченным счётом. Оплатил — слот свободен;
@@ -37,7 +37,7 @@ export async function syncLicenseSlots(dealerId: string): Promise<void> {
   }
 }
 
-/** Пересчёт сразу по нескольким представителям (массовые операции). */
+/** Пересчёт сразу по нескольким дилерам (массовые операции). */
 export async function syncLicenseSlotsFor(dealerIds: string[]): Promise<void> {
   await Promise.all([...new Set(dealerIds)].map((id) => syncLicenseSlots(id)));
 }

@@ -11,9 +11,11 @@ import {
   notificationEmailHtml,
   notificationTelegramText,
   sendEmail,
+  sendMax,
   sendTelegram,
 } from "./notifications";
 import { isTelegramConfigured } from "./telegram";
+import { isMaxConfigured } from "./max";
 
 type NotifyInput = {
   type: AppNotificationType;
@@ -48,7 +50,7 @@ export async function notifyUser(userId: string, input: NotifyInput): Promise<vo
  * Рассылает событие всем, кто способен на него отреагировать: суперадминам и
  * обладателям одного из указанных прав. Дилеры сюда не попадают, даже если
  * указано право, которое есть и у них (licenses.view и т. п.): события
- * админской ленты касаются чужих лицензий и представителей.
+ * админской ленты касаются чужих лицензий и дилеров.
  */
 export async function notifyAdmins(
   permissions: PermissionKey[],
@@ -91,11 +93,13 @@ export async function notifyAdmins(
   }
 }
 
-/** Почта и Telegram уходят после ответа клиенту: SMTP и бот не задерживают действие. */
+/** Почта и мессенджеры получают уведомление после ответа клиенту: SMTP и боты не задерживают действие. */
 function deliverInBackground(userIds: string[], input: NotifyInput) {
-  if (!isSmtpConfigured() && !isTelegramConfigured()) return;
+  if (!isSmtpConfigured() && !isTelegramConfigured() && !isMaxConfigured()) return;
   const task = () =>
-    deliverExternal(userIds, input).catch((err) => console.error("[notifications] доставка на почту/в Telegram упала", err));
+    deliverExternal(userIds, input).catch((err) =>
+      console.error("[notifications] доставка на почту/в мессенджеры упала", err),
+    );
   try {
     after(task);
   } catch {
@@ -112,11 +116,20 @@ async function deliverExternal(userIds: string[], input: NotifyInput) {
   const byEmail = settings.emailEnabled && !settings.emailOff.includes(input.type) && isSmtpConfigured();
   const byTelegram =
     settings.telegramEnabled && !settings.telegramOff.includes(input.type) && isTelegramConfigured();
-  if (!byEmail && !byTelegram) return;
+  const byMax = settings.maxEnabled && !settings.maxOff.includes(input.type) && isMaxConfigured();
+  if (!byEmail && !byTelegram && !byMax) return;
 
   const users = await db.user.findMany({
     where: { id: { in: userIds } },
-    select: { id: true, email: true, notifyByEmail: true, notifyByTelegram: true, telegramChatId: true },
+    select: {
+      id: true,
+      email: true,
+      notifyByEmail: true,
+      notifyByTelegram: true,
+      telegramChatId: true,
+      notifyByMax: true,
+      maxUserId: true,
+    },
   });
   const url = input.link ? cabinetUrl(input.link) : null;
   const message = { title: input.title, body: input.body ?? null, url };
@@ -136,6 +149,9 @@ async function deliverExternal(userIds: string[], input: NotifyInput) {
     }
     if (byTelegram && u.notifyByTelegram && u.telegramChatId) {
       await sendTelegram({ chatId: u.telegramChatId, text: notificationTelegramText(message), userId: u.id });
+    }
+    if (byMax && u.notifyByMax && u.maxUserId) {
+      await sendMax({ maxUserId: u.maxUserId, ...message, userId: u.id });
     }
   }
 }

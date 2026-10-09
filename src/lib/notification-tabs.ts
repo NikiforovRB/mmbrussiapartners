@@ -4,7 +4,7 @@ export type NotificationTabId = "all" | "dealers" | "licenses" | "payments";
 
 type TabDef = {
   id: Exclude<NotificationTabId, "all">;
-  /** Подпись в админке и у представителя: у дилера эти события — про его учётку. */
+  /** Подпись в админке и у дилера: у дилера эти события — про его учётку. */
   label: { admin: string; dealer: string };
   types: AppNotificationType[];
 };
@@ -12,7 +12,7 @@ type TabDef = {
 export const NOTIFICATION_TAB_TYPES: TabDef[] = [
   {
     id: "dealers",
-    label: { admin: "Представители", dealer: "Аккаунт" },
+    label: { admin: "Дилеры", dealer: "Аккаунт" },
     types: [
       "DEALER_REGISTERED",
       "DEALER_APPROVED",
@@ -60,7 +60,7 @@ export const NOTIFICATION_TYPE_LABEL: Record<AppNotificationType, string> = {
   PRICE_MISSING: "Нет цены в справочнике",
 };
 
-/** Порядок вкладок: в админке чаще всего приходят заявки представителей. */
+/** Порядок вкладок: в админке чаще всего приходят заявки дилеров. */
 export function notificationTabs(admin: boolean): { id: NotificationTabId; label: string }[] {
   const order: NotificationTabDefId[] = admin ? ["dealers", "licenses", "payments"] : ["licenses", "payments", "dealers"];
   return [

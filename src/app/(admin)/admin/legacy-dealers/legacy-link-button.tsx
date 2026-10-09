@@ -142,7 +142,7 @@ export function LegacyLinkButton({
         open={open}
         onClose={() => setOpen(false)}
         title={`Привязать «${label}»`}
-        description="Выберите представителя портала. Ему перейдут лицензии, оплаты и пароли этого дилера — он увидит их в кабинете."
+        description="Выберите дилера портала. Ему перейдут лицензии, оплаты и пароли этого дилера — он увидит их в кабинете."
       >
         <div className="space-y-3">
           <Input
@@ -153,7 +153,7 @@ export function LegacyLinkButton({
             placeholder="Имя, email, телефон, город…"
           />
           <div className="text-[11.5px] uppercase tracking-tight text-ink-subtle">
-            {results ? "Результаты поиска" : suggestions.length ? "Похожие представители" : "Начните вводить для поиска"}
+            {results ? "Результаты поиска" : suggestions.length ? "Похожие дилеры" : "Начните вводить для поиска"}
           </div>
           {list.length === 0 && results ? (
             <div className="rounded-panel bg-surface-muted px-4 py-6 text-center text-sm text-ink-muted">Никого не нашли</div>

@@ -4,10 +4,9 @@ import { getDownloadUrl } from "@/lib/s3";
 import { fioFromParts } from "@/lib/utils";
 import { UsersManager, type ManagedUser, type AssignableRole } from "./users-manager";
 import { requireAdminPage } from "@/lib/session";
+import { DEALER_ROLE_NAMES, isDealerRoleName } from "@/lib/roles";
 
 export const dynamic = "force-dynamic";
-
-const DEALER_ROLE_NAME = "Представитель";
 
 export default async function AdminUsersPage() {
   const session = await requireAdminPage("users.manage");
@@ -19,7 +18,7 @@ export default async function AdminUsersPage() {
 
   const [users, roles] = await Promise.all([
     db.user.findMany({
-      where: { role: { name: { not: DEALER_ROLE_NAME } } },
+      where: { role: { name: { notIn: DEALER_ROLE_NAMES } } },
       include: { role: true, dealerProfile: true },
       orderBy: [{ isSuperAdmin: "desc" }, { createdAt: "asc" }],
     }),
@@ -58,9 +57,9 @@ export default async function AdminUsersPage() {
     lastLoginAt: u.lastLoginAt ? u.lastLoginAt.toISOString() : null,
   }));
 
-  // Роль представителя через управление пользователями не назначаем.
+  // Роль дилера через управление пользователями не назначаем.
   const assignable: AssignableRole[] = roles
-    .filter((r) => r.name !== DEALER_ROLE_NAME)
+    .filter((r) => !isDealerRoleName(r.name))
     .map((r) => ({ id: r.id, name: r.name, isSystem: r.isSystem }));
 
   return (

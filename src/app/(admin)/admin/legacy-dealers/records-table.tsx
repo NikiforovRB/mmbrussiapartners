@@ -3,15 +3,17 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { RotateCcw, Search, UserPlus, X } from "lucide-react";
+import { CheckCircle2, RotateCcw, Search, UserPlus, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
+import { MoneyInput } from "@/components/ui/money-input";
 import { Tag } from "@/components/ui/tag";
 import { Toggle } from "@/components/ui/toggle";
+import { usePermissions } from "@/hooks/use-permissions";
 import { formatRuDate, formatRuDateTime } from "@/lib/dates";
-import { formatRub } from "@/lib/money";
+import { formatRub, parseMoney } from "@/lib/money";
 import { LEGACY_PAYMENT_LABEL, LK_TYPE_LABEL, legacyPaymentTone, legacyPosition } from "@/lib/legacy-labels";
 import { plural } from "@/lib/utils";
 import type { LegacyCandidate } from "./legacy-link-button";
@@ -39,6 +41,8 @@ export type LegacyRecordRow = {
   legacyDealer: { id: string; label: string } | null;
   user: { id: string; label: string } | null;
   manualAssign: boolean;
+  /** Оплату отметил администратор портала. */
+  manualPayment: boolean;
   assignedAt: string | null;
   assignedBy: string | null;
 };
@@ -62,10 +66,15 @@ export function RecordsTable({
   canEdit: boolean;
 }) {
   const router = useRouter();
+  const { can } = usePermissions();
+  const canMarkPaid = can("payments.manage") && tab !== "payments";
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
   const [allMatching, setAllMatching] = React.useState(false);
   const [assignOpen, setAssignOpen] = React.useState(false);
   const [resetOpen, setResetOpen] = React.useState(false);
+  const [paidOpen, setPaidOpen] = React.useState(false);
+  const [paidSame, setPaidSame] = React.useState(false);
+  const [paidAmount, setPaidAmount] = React.useState("");
   const [busy, setBusy] = React.useState<string | null>(null);
   const [q, setQ] = React.useState("");
   const [results, setResults] = React.useState<LegacyCandidate[] | null>(null);
@@ -155,11 +164,42 @@ export function RecordsTable({
     }
   }
 
+  async function markPaid() {
+    const amount = paidSame ? parseMoney(paidAmount) : null;
+    if (paidSame && (amount === null || amount < 0)) {
+      toast.error("Укажите сумму — можно 0");
+      return;
+    }
+    setBusy("paid");
+    try {
+      const res = await fetch("/api/legacy-records/mark-paid", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...(allMatching ? { filter } : { ids: [...selected] }),
+          ...(paidSame ? { amount } : {}),
+        }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(j.error ?? "Не удалось отметить оплату");
+        return;
+      }
+      const n = Number(j.count ?? 0);
+      toast.success(`Отмечено оплаченными: ${n} ${plural(n, ["запись", "записи", "записей"])}`);
+      setPaidOpen(false);
+      router.refresh();
+    } finally {
+      setBusy(null);
+    }
+  }
+
   const candidates = results ?? [];
+  const canSelect = canEdit || canMarkPaid;
 
   return (
     <>
-      {canEdit && count > 0 ? (
+      {canSelect && count > 0 ? (
         <div className="sticky top-2 z-20 mt-3 flex flex-wrap items-center gap-2 rounded-panel border border-accent/30 bg-surface px-4 py-2.5 shadow-[0_12px_32px_-20px_rgba(11,16,32,0.35)]">
           <span className="text-sm">
             Выбрано {count.toLocaleString("ru-RU")} {plural(count, noun)}
@@ -171,12 +211,30 @@ export function RecordsTable({
             </button>
           ) : null}
           <div className="ml-auto flex flex-wrap gap-2">
-            <Button size="sm" icon={<UserPlus className="h-4 w-4" />} onClick={() => setAssignOpen(true)}>
-              Назначить представителю
-            </Button>
-            <Button size="sm" variant="ghost" icon={<RotateCcw className="h-4 w-4" />} onClick={() => setResetOpen(true)}>
-              Вернуть автоматическое
-            </Button>
+            {canEdit ? (
+              <>
+                <Button size="sm" icon={<UserPlus className="h-4 w-4" />} onClick={() => setAssignOpen(true)}>
+                  Назначить дилеру
+                </Button>
+                <Button size="sm" variant="ghost" icon={<RotateCcw className="h-4 w-4" />} onClick={() => setResetOpen(true)}>
+                  Вернуть автоматическое
+                </Button>
+              </>
+            ) : null}
+            {canMarkPaid ? (
+              <Button
+                size="sm"
+                variant={canEdit ? "secondary" : "primary"}
+                icon={<CheckCircle2 className="h-4 w-4" />}
+                onClick={() => {
+                  setPaidSame(false);
+                  setPaidAmount("");
+                  setPaidOpen(true);
+                }}
+              >
+                Отметить оплаченными
+              </Button>
+            ) : null}
             <Button
               size="sm"
               variant="ghost"
@@ -200,7 +258,7 @@ export function RecordsTable({
           <table className="w-full min-w-[960px] text-sm">
             <thead className="border-b border-hairline bg-surface-muted/60">
               <tr>
-                {canEdit ? (
+                {canSelect ? (
                   <th className={`${th} w-10`}>
                     <input
                       type="checkbox"
@@ -216,13 +274,13 @@ export function RecordsTable({
                 {tab !== "payments" ? <th className={th}>Комментарий</th> : null}
                 <th className={th}>Дилер старого ЛК</th>
                 <th className={`${th} text-right`}>Сумма</th>
-                <th className={th}>Представитель</th>
+                <th className={th}>Дилер</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-hairline">
               {rows.map((r) => (
                 <tr key={r.id} className={selected.has(r.id) || allMatching ? "bg-accent/5" : undefined}>
-                  {canEdit ? (
+                  {canSelect ? (
                     <td className={td}>
                       <input
                         type="checkbox"
@@ -301,6 +359,7 @@ export function RecordsTable({
                       <span className="text-ink-subtle">—</span>
                     )}
                     {r.paidAt ? <div className="mt-1 text-[11px] text-ink-subtle">оплата {formatRuDate(r.paidAt)}</div> : null}
+                    {r.manualPayment ? <div className="mt-1 text-[11px] text-strong-warning">отмечено вручную</div> : null}
                   </td>
                   <td className={`${td} max-w-[220px]`}>
                     {r.user ? (
@@ -330,7 +389,7 @@ export function RecordsTable({
         open={assignOpen}
         onClose={() => setAssignOpen(false)}
         title={`Назначить ${count.toLocaleString("ru-RU")} ${plural(count, noun)}`}
-        description="Выбранные записи появятся в кабинете представителя в разделе «ЛК DriveMods» и останутся за ним при повторном импорте и перепривязке дилеров."
+        description="Выбранные записи появятся в кабинете дилера в разделе «ЛК DriveMods» и останутся за ним при повторном импорте и перепривязке дилеров."
       >
         <div className="space-y-3">
           {tab === "licenses" ? (
@@ -338,7 +397,7 @@ export function RecordsTable({
               checked={withPayments}
               onChange={setWithPayments}
               label="Вместе с оплатами этих лицензий"
-              description="Оплата, которой погашена лицензия, перейдёт к тому же представителю."
+              description="Оплата, которой погашена лицензия, перейдёт к тому же дилеру."
             />
           ) : null}
           <Input
@@ -371,11 +430,45 @@ export function RecordsTable({
       </Modal>
 
       <Modal
+        open={paidOpen}
+        onClose={() => setPaidOpen(false)}
+        title={`Отметить оплаченными ${count.toLocaleString("ru-RU")} ${plural(count, noun)}`}
+        description="Отметка портала: в ЛК DriveMods ничего не меняется, чеки не пробиваются. Повторный импорт отметку не затрёт. Оплаты из ЛК среди выбранных пропускаются."
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setPaidOpen(false)}>
+              Отмена
+            </Button>
+            <Button loading={busy === "paid"} onClick={markPaid} icon={<CheckCircle2 className="h-4 w-4" />}>
+              Отметить оплаченными
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <Toggle
+            checked={paidSame}
+            onChange={setPaidSame}
+            label="Задать одну сумму для всех"
+            description="Иначе у каждой записи останется её сумма."
+          />
+          {paidSame ? (
+            <MoneyInput
+              label="Оплаченная сумма за каждую запись, ₽"
+              value={paidAmount}
+              onChange={setPaidAmount}
+              hint="Можно указать любую сумму, в том числе 0."
+            />
+          ) : null}
+        </div>
+      </Modal>
+
+      <Modal
         open={resetOpen}
         onClose={() => setResetOpen(false)}
         size="sm"
         title="Вернуть автоматическое распределение?"
-        description="Назначенные вручную записи снова достанутся представителю, к которому привязан их дилер старого ЛК (или никому, если дилер не привязан). Остальные выбранные записи не изменятся."
+        description="Назначенные вручную записи снова достанутся дилеру, к которому привязан их дилер старого ЛК (или никому, если дилер не привязан). Остальные выбранные записи не изменятся."
         footer={
           <>
             <Button variant="ghost" onClick={() => setResetOpen(false)}>

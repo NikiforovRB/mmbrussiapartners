@@ -13,10 +13,13 @@ import {
   Wallet,
   Undo2,
   ExternalLink,
+  CheckCircle2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { RequestActions } from "@/components/licenses/request-actions";
 import { Tag } from "@/components/ui/tag";
 import { StatusTag } from "@/components/ui/status-tag";
 import { Modal } from "@/components/ui/modal";
@@ -45,6 +48,8 @@ type PaymentInfo = {
   paidAt: string | Date | null;
   refundedAt: string | Date | null;
   refundMethod: string | null;
+  /** Оплату отметил администратор, чек не пробивался. */
+  paidManually?: boolean;
 };
 
 type LicenseShape = {
@@ -66,7 +71,7 @@ type LicenseShape = {
   versionCustom: string | null;
   dealerComment: string | null;
   price: string | number | null;
-  /** Есть только в админке: представителю базовую цену не отдаём. */
+  /** Есть только в админке: дилеру базовую цену не отдаём. */
   basePrice?: string | number | null;
   payment: PaymentInfo | null;
   auditLogs: AuditEntry[];
@@ -76,6 +81,8 @@ type LicenseShape = {
 type CancellationRequestInfo = {
   id: string;
   status: "PENDING" | "APPROVED" | "REJECTED";
+  kind?: "CANCEL" | "REFUND";
+  clientRefused?: boolean;
   reason: string;
   reviewNote: string | null;
   createdAt: string | Date;
@@ -124,8 +131,13 @@ export function LicenseDetailEditor({
   const [cancelReason, setCancelReason] = React.useState("");
   const [cancelLoading, setCancelLoading] = React.useState(false);
   const [requestOpen, setRequestOpen] = React.useState(false);
+  const [requestKind, setRequestKind] = React.useState<"CANCEL" | "REFUND">("CANCEL");
+  const [clientRefused, setClientRefused] = React.useState(false);
   const [requestReason, setRequestReason] = React.useState("");
   const [requestLoading, setRequestLoading] = React.useState(false);
+  const [paidOpen, setPaidOpen] = React.useState(false);
+  const [paidDraft, setPaidDraft] = React.useState("");
+  const [paidSaving, setPaidSaving] = React.useState(false);
   const [withdrawOpen, setWithdrawOpen] = React.useState(false);
   const [withdrawLoading, setWithdrawLoading] = React.useState(false);
   const hasPendingRequest = latestRequest?.status === "PENDING";
@@ -138,6 +150,12 @@ export function LicenseDetailEditor({
   const basePrice = toNumber(data.basePrice);
   const payment = data.payment;
   const refunded = payment?.status === "REFUNDED";
+  const paid = payment?.status === "PAID";
+  // Возврат: по оплаченной лицензии — всегда, по неоплаченной — если клиент отказался.
+  const canRequestRefund =
+    !refunded && (paid || (data.status === "ACTIVE" && (payment !== null || (price ?? 0) > 0)));
+  const canMarkPaid = isAdmin && can("payments.manage") && !refunded && (!paid || payment?.paidManually === true);
+  const requestIsRefund = latestRequest?.kind === "REFUND";
 
   const [priceOpen, setPriceOpen] = React.useState(false);
   const [priceDraft, setPriceDraft] = React.useState(moneyField(price));
@@ -175,16 +193,27 @@ export function LicenseDetailEditor({
     router.refresh();
   }
 
+  function openRequest(kind: "CANCEL" | "REFUND") {
+    setRequestKind(kind);
+    setClientRefused(false);
+    setRequestReason("");
+    setRequestOpen(true);
+  }
+
   async function requestCancellation() {
     if (requestReason.trim().length < 10) {
       toast.error("Минимум 10 символов");
+      return;
+    }
+    if (requestKind === "REFUND" && !paid && !clientRefused) {
+      toast.error("Возврат по неоплаченной лицензии — только если клиент отказался от генерации");
       return;
     }
     setRequestLoading(true);
     const res = await fetch(`/api/licenses/${data.id}/cancel-request`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ reason: requestReason }),
+      body: JSON.stringify({ reason: requestReason, kind: requestKind, clientRefused }),
     });
     setRequestLoading(false);
     if (!res.ok) {
@@ -192,9 +221,38 @@ export function LicenseDetailEditor({
       toast.error(j.error ?? "Не удалось отправить заявку");
       return;
     }
-    toast.success("Заявка на аннулирование отправлена");
+    toast.success(requestKind === "REFUND" ? "Заявка на возврат отправлена" : "Заявка на аннулирование отправлена");
     setRequestOpen(false);
     setRequestReason("");
+    router.refresh();
+  }
+
+  function openMarkPaid() {
+    const current = payment ? toNumber(payment.amount) : price;
+    setPaidDraft(moneyField(current ?? 0));
+    setPaidOpen(true);
+  }
+
+  async function markPaid() {
+    const amount = parseMoney(paidDraft);
+    if (amount === null || amount < 0) {
+      toast.error("Укажите сумму — можно 0");
+      return;
+    }
+    setPaidSaving(true);
+    const res = await fetch("/api/licenses/mark-paid", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids: [data.id], amount }),
+    });
+    setPaidSaving(false);
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok || j.errors?.length) {
+      toast.error(j.errors?.[0] ?? j.error ?? "Не удалось отметить оплату");
+      return;
+    }
+    toast.success(`Оплата отмечена: ${formatRub(amount)}. Чек не пробивается.`);
+    setPaidOpen(false);
     router.refresh();
   }
 
@@ -341,15 +399,16 @@ export function LicenseDetailEditor({
                 </Button>
               ) : null}
               {!isAdmin && data.status === "ACTIVE" && !hasPendingRequest ? (
-                <Button
-                  variant="ghost"
-                  icon={<XCircle className="h-4 w-4" />}
-                  onClick={() => setRequestOpen(true)}
-                >
+                <Button variant="ghost" icon={<XCircle className="h-4 w-4" />} onClick={() => openRequest("CANCEL")}>
                   Запросить аннулирование
                 </Button>
               ) : null}
-              {!isAdmin && data.status === "ACTIVE" && hasPendingRequest ? (
+              {!isAdmin && canRequestRefund && !hasPendingRequest ? (
+                <Button variant="ghost" icon={<Undo2 className="h-4 w-4" />} onClick={() => openRequest("REFUND")}>
+                  Запросить возврат
+                </Button>
+              ) : null}
+              {!isAdmin && hasPendingRequest ? (
                 <Button
                   variant="ghost"
                   icon={<RotateCcw className="h-4 w-4" />}
@@ -381,8 +440,8 @@ export function LicenseDetailEditor({
                 {payment?.refundedAt ? `${formatRuDateTime(payment.refundedAt)} · ` : ""}
                 {payment?.refundMethod === "atol_pay"
                   ? isAdmin
-                    ? "Деньги вернул АТОЛ Pay на карту плательщика."
-                    : "Деньги возвращены на карту, с которой вы платили. Банк зачисляет их обычно за 1–10 рабочих дней."
+                    ? "Деньги вернул АТОЛ Pay туда, откуда платили."
+                    : "Деньги возвращены туда, откуда вы платили. Банк зачисляет их обычно за 1–10 рабочих дней."
                   : isAdmin
                     ? "Возврат отмечен вручную — деньги возвращены мимо АТОЛ Pay."
                     : "Возврат оформлен администратором."}
@@ -403,15 +462,42 @@ export function LicenseDetailEditor({
             </div>
           ) : null}
           {latestRequest ? (
-            <div className="mt-5 rounded-panel border border-hairline p-4">
+            <div
+              className={`mt-5 rounded-panel border p-4 ${
+                hasPendingRequest ? "border-warning/40 bg-soft-warning" : "border-hairline"
+              }`}
+            >
               <div className="flex items-center justify-between gap-2">
-                <div className="text-xs text-ink-subtle">Заявка на аннулирование</div>
+                <div className="flex flex-wrap items-center gap-2 text-xs text-ink-subtle">
+                  {requestIsRefund ? "Заявка на возврат" : "Заявка на аннулирование"}
+                  {latestRequest.clientRefused ? <Tag tone="neutral">Клиент отказался</Tag> : null}
+                </div>
                 <StatusTag kind="request" status={latestRequest.status} />
               </div>
               <div className="mt-1.5 text-sm">{latestRequest.reason}</div>
               <div className="text-xs text-ink-muted mt-1">{formatRuDateTime(latestRequest.createdAt)}</div>
               {latestRequest.reviewNote ? (
                 <div className="mt-2 text-xs text-ink-muted">Комментарий: {latestRequest.reviewNote}</div>
+              ) : null}
+              {isAdmin && can("licenses.cancel") && latestRequest.status !== "APPROVED" ? (
+                <div className="mt-3">
+                  <RequestActions
+                    id={latestRequest.id}
+                    status={latestRequest.status}
+                    kind={latestRequest.kind ?? "CANCEL"}
+                    licenseActive={data.status === "ACTIVE"}
+                    allowDelete={false}
+                    payment={
+                      payment
+                        ? {
+                            paid,
+                            amount: toNumber(payment.amount),
+                            online: payment.provider === "atol_pay" && !payment.paidManually,
+                          }
+                        : null
+                    }
+                  />
+                </div>
               ) : null}
             </div>
           ) : null}
@@ -423,14 +509,21 @@ export function LicenseDetailEditor({
               <Wallet className="h-4 w-4 text-accent" />
               <div className="font-display text-lg tracking-tight">Стоимость и оплата</div>
             </div>
-            {canEditTerms ? (
-              <Button variant="secondary" size="sm" icon={<Pencil className="h-4 w-4" />} onClick={openPrice}>
-                Изменить стоимость
-              </Button>
-            ) : null}
+            <div className="flex flex-wrap gap-2">
+              {canMarkPaid ? (
+                <Button variant="secondary" size="sm" icon={<CheckCircle2 className="h-4 w-4" />} onClick={openMarkPaid}>
+                  {paid ? "Изменить сумму оплаты" : "Отметить оплаченной"}
+                </Button>
+              ) : null}
+              {canEditTerms ? (
+                <Button variant="secondary" size="sm" icon={<Pencil className="h-4 w-4" />} onClick={openPrice}>
+                  Изменить стоимость
+                </Button>
+              ) : null}
+            </div>
           </div>
           <div className={isAdmin ? "grid sm:grid-cols-3 gap-3" : "grid sm:grid-cols-2 gap-3"}>
-            <InfoTile label={isAdmin ? "Цена для представителя" : "Стоимость"}>
+            <InfoTile label={isAdmin ? "Цена для дилера" : "Стоимость"}>
               <span className="font-display text-xl tracking-tight">{priceLabel}</span>
             </InfoTile>
             {isAdmin ? (
@@ -466,7 +559,11 @@ export function LicenseDetailEditor({
               {payment?.paidAt && payment.status !== "REFUNDED" ? (
                 <span className="mt-1 block text-xs text-ink-muted">
                   Оплачено {formatRuDateTime(payment.paidAt)}
+                  {paid ? ` · ${formatRub(payment.amount)}` : ""}
                 </span>
+              ) : null}
+              {isAdmin && paid && payment?.paidManually ? (
+                <span className="mt-0.5 block text-xs text-strong-warning">Отмечено администратором, без чека</span>
               ) : null}
             </InfoTile>
           </div>
@@ -542,7 +639,7 @@ export function LicenseDetailEditor({
             </div>
           )}
           <div className="mt-3 grid sm:grid-cols-2 gap-3">
-            {/* ID ШГУ — служебные данные: представителю он в карточке не нужен. */}
+            {/* ID ШГУ — служебные данные: дилеру он в карточке не нужен. */}
             {isAdmin ? (
               <ReadonlyField
                 label="ID устройства (виден только администраторам)"
@@ -631,7 +728,7 @@ export function LicenseDetailEditor({
       >
         <div className="space-y-4">
           <MoneyInput
-            label="Цена для представителя, ₽"
+            label="Цена для дилера, ₽"
             value={priceDraft}
             onChange={setPriceDraft}
             disabled={paymentLocked}
@@ -670,12 +767,12 @@ export function LicenseDetailEditor({
                   : "Лицензия останется бесплатной."
                 : payment
                   ? "Сумма неоплаченного счёта пересчитается, ссылка на оплату выпустится заново."
-                  : "Представителю будет выставлен счёт на эту сумму."}
-            {!paymentLocked ? " Представитель получит уведомление." : ""}
+                  : "Дилеру будет выставлен счёт на эту сумму."}
+            {!paymentLocked ? " Дилер получит уведомление." : ""}
           </div>
           <MoneyInput
             label="Базовая цена, ₽"
-            hint="Себестоимость для расчёта маржи — представитель её не видит"
+            hint="Себестоимость для расчёта маржи — дилер её не видит"
             value={baseDraft}
             onChange={setBaseDraft}
           />
@@ -721,22 +818,45 @@ export function LicenseDetailEditor({
       <Modal
         open={requestOpen}
         onClose={() => setRequestOpen(false)}
-        title="Заявка на аннулирование"
-        description="Заявка поступит администратору. Лицензия будет аннулирована после одобрения."
+        title={requestKind === "REFUND" ? "Заявка на возврат" : "Заявка на аннулирование"}
+        description={
+          requestKind === "REFUND"
+            ? paid
+              ? `Заявка поступит администратору. После одобрения деньги${
+                  payment ? ` (${formatRub(payment.amount)})` : ""
+                } вернутся, а лицензия будет аннулирована.`
+              : "Лицензия ещё не оплачена. Если клиент отказался от генерации, после одобрения лицензию аннулируют, а счёт отменят — платить не придётся."
+            : "Заявка поступит администратору. Лицензия будет аннулирована после одобрения."
+        }
       >
-        <Textarea
-          label="Причина (обязательно, минимум 10 символов)"
-          value={requestReason}
-          onChange={(e) => setRequestReason(e.target.value)}
-          rows={4}
-          placeholder="Например: клиент вернул устройство, лицензия больше не нужна..."
-        />
+        <div className="space-y-4">
+          {requestKind === "REFUND" ? (
+            <Checkbox
+              checked={clientRefused}
+              onChange={setClientRefused}
+              label="Клиент отказался от генерации"
+              description={paid ? undefined : "Без этого возврат по неоплаченной лицензии не оформить."}
+            />
+          ) : null}
+          <Textarea
+            label="Причина (обязательно, минимум 10 символов)"
+            value={requestReason}
+            onChange={(e) => setRequestReason(e.target.value)}
+            rows={4}
+            placeholder={
+              requestKind === "REFUND"
+                ? "Например: клиент передумал ставить прошивку, лицензию не активировали..."
+                : "Например: клиент вернул устройство, лицензия больше не нужна..."
+            }
+          />
+        </div>
         <div className="mt-6 flex justify-end gap-2">
           <Button variant="ghost" onClick={() => setRequestOpen(false)}>Отмена</Button>
           <Button
             variant="danger"
             loading={requestLoading}
-            icon={<XCircle className="h-4 w-4" />}
+            disabled={requestKind === "REFUND" && !paid && !clientRefused}
+            icon={requestKind === "REFUND" ? <Undo2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
             onClick={requestCancellation}
           >
             Отправить заявку
@@ -745,9 +865,33 @@ export function LicenseDetailEditor({
       </Modal>
 
       <Modal
+        open={paidOpen}
+        onClose={() => setPaidOpen(false)}
+        title={paid ? "Сумма оплаты" : "Отметить лицензию оплаченной"}
+        description="Деньги получены мимо онлайн-оплаты. Чек в налоговую не пробивается, неоплаченный счёт закрывается."
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setPaidOpen(false)}>
+              Отмена
+            </Button>
+            <Button loading={paidSaving} icon={<CheckCircle2 className="h-4 w-4" />} onClick={markPaid}>
+              {paid ? "Сохранить" : "Отметить оплаченной"}
+            </Button>
+          </>
+        }
+      >
+        <MoneyInput
+          label="Оплаченная сумма, ₽"
+          value={paidDraft}
+          onChange={setPaidDraft}
+          hint="Можно указать любую сумму, в том числе 0."
+        />
+      </Modal>
+
+      <Modal
         open={withdrawOpen}
         onClose={() => setWithdrawOpen(false)}
-        title="Отменить заявку на аннулирование"
+        title={requestIsRefund ? "Отменить заявку на возврат" : "Отменить заявку на аннулирование"}
         description="Заявка будет снята с рассмотрения. Позже вы сможете подать её заново."
       >
         <div className="mt-6 flex justify-end gap-2">

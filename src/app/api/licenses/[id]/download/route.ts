@@ -14,7 +14,7 @@ export const GET = route(async (_req: Request, ctx: { params: Promise<{ id: stri
   const license = await db.license.findUnique({ where: { id } });
   if (!license) throw notFound("Лицензия не найдена");
 
-  // licenses.view есть и у представителя: без проверки административной
+  // licenses.view есть и у дилера: без проверки административной
   // области ссылка на чужой файл выдавалась бы любому дилеру.
   const isOwner = license.dealerId === session.user.id;
   const canView =

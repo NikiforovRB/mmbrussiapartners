@@ -6,11 +6,11 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: {
-    default: "MMB RUSSIA — Кабинет представителей",
+    default: "MMB RUSSIA — Кабинет дилеров",
     template: "%s · MMB RUSSIA",
   },
   description:
-    "Личный кабинет представителей MMB RUSSIA: генерация лицензий, аналитика, отчёты, управление дилерами.",
+    "Личный кабинет дилеров MMB RUSSIA: генерация лицензий, аналитика, отчёты, управление дилерами.",
   applicationName: "MMB RUSSIA Partners",
   manifest: "/manifest.webmanifest",
   icons: {
@@ -22,7 +22,7 @@ export const metadata: Metadata = {
     apple: "/favicon.png",
   },
   openGraph: {
-    title: "MMB RUSSIA — Кабинет представителей",
+    title: "MMB RUSSIA — Кабинет дилеров",
     description: "Лицензии, отчёты и аналитика для дилеров MMB RUSSIA.",
     type: "website",
     locale: "ru_RU",

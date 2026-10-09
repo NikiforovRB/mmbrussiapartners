@@ -149,7 +149,7 @@ export default async function AdminAuditPage({
 }
 
 const ENTITY_LABEL: Record<string, string> = {
-  DEALER: "Представитель",
+  DEALER: "Дилер",
   ROLE: "Роль",
   PAYMENT: "Платёж",
   SETTINGS: "Настройки",

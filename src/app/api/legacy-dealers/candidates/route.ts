@@ -6,7 +6,7 @@ import { fioFromParts } from "@/lib/utils";
 
 export const runtime = "nodejs";
 
-/** Представители портала для ручной привязки к записи старого ЛК. */
+/** Дилеры портала для ручной привязки к записи старого ЛК. */
 export const GET = route(async (req: Request) => {
   await requirePermission("dealers.edit");
   const q = new URL(req.url).searchParams.get("q")?.trim() ?? "";

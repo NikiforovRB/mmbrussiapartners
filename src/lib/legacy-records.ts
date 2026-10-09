@@ -20,7 +20,7 @@ export type LegacyRecordFilter = {
   pay?: "paid" | "unpaid";
   /** Дилер старого ЛК (LegacyDealer.id) или none — без дилера. */
   dealer?: string;
-  /** Представитель портала. */
+  /** Дилер портала. */
   user?: string;
 };
 
@@ -72,7 +72,7 @@ export function legacyRecordWhere(f: LegacyRecordFilter): Prisma.LegacyRecordWhe
 }
 
 /**
- * Записи дилера старого ЛК переходят к представителю, к которому его
+ * Записи дилера старого ЛК переходят к дилеру, к которому его
  * привязали (или освобождаются при отвязке). Назначенные вручную не трогаем.
  */
 export async function syncLegacyRecordOwners(

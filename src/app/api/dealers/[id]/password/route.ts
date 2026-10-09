@@ -15,7 +15,7 @@ const schema = z.object({
   password: z.string().min(8, "Пароль — минимум 8 символов").max(128, "Слишком длинный пароль"),
 });
 
-/** Только представители: пароли сотрудников здесь не показываются и не меняются. */
+/** Только дилеры: пароли сотрудников здесь не показываются и не меняются. */
 async function loadDealer(id: string) {
   const target = await db.user.findUnique({
     where: { id },
@@ -27,7 +27,7 @@ async function loadDealer(id: string) {
       role: { select: { permissions: true } },
     },
   });
-  if (!target) throw notFound("Представитель не найден");
+  if (!target) throw notFound("Дилер не найден");
   if (target.isSuperAdmin || hasAdminScope(target.role.permissions)) {
     throw forbidden("Это учётная запись сотрудника — её пароль здесь недоступен");
   }
@@ -36,7 +36,7 @@ async function loadDealer(id: string) {
 
 export const GET = route(
   async (_req: Request, ctx: { params: Promise<{ id: string }> }) => {
-    const session = await requirePermission("dealers.passwords", "Нет права смотреть пароли представителей");
+    const session = await requirePermission("dealers.passwords", "Нет права смотреть пароли дилеров");
     const { id } = await ctx.params;
     const target = await loadDealer(id);
 
@@ -59,12 +59,12 @@ export const GET = route(
 );
 
 export const PUT = route(async (req: Request, ctx: { params: Promise<{ id: string }> }) => {
-  const session = await requirePermission("dealers.passwords", "Нет права менять пароли представителей");
+  const session = await requirePermission("dealers.passwords", "Нет права менять пароли дилеров");
   const { id } = await ctx.params;
   const target = await loadDealer(id);
   const { password } = await parseBody(req, schema);
 
-  // Новый пароль отзывает все сессии представителя.
+  // Новый пароль отзывает все сессии дилера.
   await db.user.update({
     where: { id: target.id },
     data: {

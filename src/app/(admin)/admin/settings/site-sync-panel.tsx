@@ -70,7 +70,7 @@ export function SiteSyncPanel({ overview }: { overview: SiteSyncOverview }) {
           )}
         </div>
         <p className="text-sm text-ink-muted">
-          Одобренные телефоны представителей публикуются в «Дилерской сети» на{" "}
+          Одобренные телефоны дилеров публикуются в «Дилерской сети» на{" "}
           <a
             href={`${overview.siteUrl ?? "https://mmbrussia.ru"}/contacts`}
             target="_blank"
@@ -136,7 +136,7 @@ export function SiteSyncPanel({ overview }: { overview: SiteSyncOverview }) {
             <div className="flex flex-wrap items-center gap-2">
               <Tag tone={result.ok ? "success" : "danger"}>{result.ok ? "Успешно" : "Ошибка"}</Tag>
               {result.dryRun ? <Tag tone="muted">Проверка, без изменений</Tag> : null}
-              <span className="text-xs text-ink-muted">Представителей в запросе: {result.dealers}</span>
+              <span className="text-xs text-ink-muted">Дилеров в запросе: {result.dealers}</span>
             </div>
             {result.error ? <div className="text-danger">{result.error}</div> : null}
             {formatSiteSummary(result.summary) ? (
@@ -163,7 +163,7 @@ export function SiteSyncPanel({ overview }: { overview: SiteSyncOverview }) {
               {overview.problems.map((p) => (
                 <li key={p.userId}>
                   <Link href={`/admin/dealers/${p.userId}`} className="text-accent hover:underline">
-                    {fioFromParts(p) || "Представитель"}
+                    {fioFromParts(p) || "Дилер"}
                   </Link>
                   <span className="text-ink-muted">
                     {p.city ? `, ${p.city}` : ""} — {SITE_RESULT_LABEL[p.siteSyncStatus ?? ""] ?? p.siteSyncStatus}

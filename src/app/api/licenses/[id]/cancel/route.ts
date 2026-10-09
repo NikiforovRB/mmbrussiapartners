@@ -20,7 +20,7 @@ export const POST = route(async (req: Request, ctx: { params: Promise<{ id: stri
   const license = await db.license.findUnique({ where: { id }, include: { dealer: true } });
   if (!license) throw notFound("Лицензия не найдена");
 
-  // Прямое аннулирование — административное действие. Представитель на свою
+  // Прямое аннулирование — административное действие. Дилер на свою
   // лицензию подаёт заявку (/cancel-request), её рассматривает администратор.
   const isOwner = license.dealerId === session.user.id;
   if (!hasPermission(session.user.permissions, "licenses.cancel", session.user.isSuperAdmin)) {
@@ -41,7 +41,7 @@ export const POST = route(async (req: Request, ctx: { params: Promise<{ id: stri
     }),
   ]);
 
-  // Аннулированная лицензия освобождает слот лимита представителя.
+  // Аннулированная лицензия освобождает слот лимита дилера.
   await syncLicenseSlots(license.dealerId);
 
   await notifyAdmins(

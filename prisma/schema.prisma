@@ -33,6 +33,7 @@ enum LicenseAction {
 enum NotificationChannel {
   EMAIL
   TELEGRAM
+  MAX
 }
 
 enum NotificationStatus {
@@ -70,7 +71,7 @@ enum AuditEntity {
   PRICE
 }
 
-/// Как считать цены представителя относительно справочника.
+/// Как считать цены дилера относительно справочника.
 enum PriceAdjustKind {
   /// Цены справочника без изменений.
   NONE
@@ -94,6 +95,12 @@ enum CancellationRequestStatus {
   REJECTED
 }
 
+/// Чего просит дилер: аннулировать лицензию или вернуть за неё деньги.
+enum CancellationRequestKind {
+  CANCEL
+  REFUND
+}
+
 model Role {
   id          String   @id @default(cuid())
   name        String   @unique
@@ -110,7 +117,7 @@ model User {
   id              String     @id @default(cuid())
   email           String     @unique
   passwordHash    String
-  /// Пароль представителя, зашифрованный ключом DEALER_PASSWORD_KEY из
+  /// Пароль дилера, зашифрованный ключом DEALER_PASSWORD_KEY из
   /// окружения сервера (AES-256-GCM): его видит администратор с правом
   /// dealers.passwords. У сотрудников всегда null.
   passwordEncrypted String?
@@ -129,6 +136,15 @@ model User {
   /// Одноразовый код привязки из ссылки t.me/<бот>?start=<код>.
   telegramLinkCode String?   @unique
   telegramLinkCodeExpiresAt DateTime?
+  notifyByMax     Boolean    @default(false)
+  /// user_id в MAX. Заполняется только ботом MAX по одноразовой ссылке
+  /// привязки (max.ru/<бот>?start=<код>).
+  maxUserId       String?
+  /// Имя или @никнейм в MAX — для подписи «подключён как …».
+  maxName         String?
+  maxLinkedAt     DateTime?
+  maxLinkCode     String?    @unique
+  maxLinkCodeExpiresAt DateTime?
   lastLoginAt     DateTime?
   lastLoginIp     String?
   /// Увеличение отзывает все выданные JWT-сессии (смена пароля, блокировка).
@@ -202,7 +218,7 @@ model UserIp {
   @@index([ip])
 }
 
-/// Представитель из старого ЛК DriveMods (store.drivemods.ru) со статистикой
+/// Дилер из старого ЛК DriveMods (store.drivemods.ru) со статистикой
 /// выдач. account — своя учётка субдилера в ЛК; comment — лицензии, которые
 /// выписывали за него из общего кабинета, с именем и городом в комментарии.
 model LegacyDealer {
@@ -282,7 +298,7 @@ model LegacyRecord {
   eolType        String?
   recoverable    Boolean          @default(false)
   priceBase      Decimal?         @db.Decimal(14, 2)
-  /// Сумма для представителя: по дилерской цене справочника MMB RUSSIA, если
+  /// Сумма для дилера: по дилерской цене справочника MMB RUSSIA, если
   /// позиция в нём есть, иначе как в ЛК.
   priceTotal     Decimal?         @db.Decimal(14, 2)
   /// Сумма из самого ЛК DriveMods (цена для MMB RUSSIA со скидками DriveMods).
@@ -307,6 +323,11 @@ model LegacyRecord {
   manualAssign   Boolean          @default(false)
   assignedAt     DateTime?
   assignedById   String?
+  /// Оплату отметил администратор портала: повторный импорт не меняет
+  /// paymentStatus и priceTotal.
+  manualPayment  Boolean          @default(false)
+  manualPaidAt   DateTime?
+  manualPaidById String?
   importedAt     DateTime         @default(now())
 
   legacyDealer LegacyDealer? @relation(fields: [legacyDealerId], references: [id], onDelete: SetNull)
@@ -322,13 +343,13 @@ model LegacyRecord {
 enum LocationChangeSource {
   /// Определено по IP при регистрации.
   SIGNUP_IP
-  /// Сам представитель в профиле.
+  /// Сам дилер в профиле.
   DEALER
-  /// Администратор в карточке представителя.
+  /// Администратор в карточке дилера.
   ADMIN
 }
 
-/// История страны, региона и города представителя — видна администратору.
+/// История страны, региона и города дилера — видна администратору.
 model DealerLocationChange {
   id          String               @id @default(cuid())
   userId      String
@@ -371,26 +392,26 @@ model DealerProfile {
   signupIp            String?
   licenseLimit        Int      @default(0)
   licensesUsed        Int      @default(0)
-  /// Есть ли у представителя доступ к личному кабинету DriveMods (видно
+  /// Есть ли у дилера доступ к личному кабинету DriveMods (видно
   /// только администраторам). Часть типов лицензий выдаётся только там.
   driveModsAccess      Boolean  @default(false)
-  /// Когда представитель отправил заявку на подключение к ЛК DriveMods.
+  /// Когда дилер отправил заявку на подключение к ЛК DriveMods.
   driveModsRequestedAt DateTime?
-  /// Общее правило пересчёта цен справочника для этого представителя.
+  /// Общее правило пересчёта цен справочника для этого дилера.
   priceAdjustKind     PriceAdjustKind @default(NONE)
   priceAdjustValue    Decimal? @db.Decimal(12, 2)
-  /// Ценовой тариф представителя: DEALER — по дилерской цене (обычный),
+  /// Ценовой тариф дилера: DEALER — по дилерской цене (обычный),
   /// CLIENT — по клиентской (субдилеры/реселлеры, «своя цена»).
   priceTier           String   @default("DEALER")
   /// Предоплатный расчёт: до генерации нужно погасить неоплаченные счета.
-  /// Доверенным представителям оставляют postpaid (false) — генерируют сразу.
+  /// Доверенным дилерам оставляют postpaid (false) — генерируют сразу.
   prepaid             Boolean  @default(false)
   /// Работал с нами в ЛК DriveMods — отметка для администраторов.
   legacyDealer        Boolean  @default(false)
   approvedAt          DateTime?
   approvedById        String?
   rejectionReason     String?
-  /// Причина блокировки — её видят представитель (экран при входе) и администраторы.
+  /// Причина блокировки — её видят дилер (экран при входе) и администраторы.
   suspensionReason    String?
   notes               String?
   /// Страна для «Дилерской сети» на mmbrussia.ru (города там сгруппированы
@@ -398,13 +419,17 @@ model DealerProfile {
   country             String?
   /// Подпись к телефону в «Дилерской сети»: имя, район и т.п.
   siteComment         String?
+  /// Ник в Telegram без «@».
+  telegramNick        String?
+  /// Сайт или страница компании дилера.
+  companyUrl          String?
   /// Модерация публикации телефона. На сайте телефон только при
-  /// phoneVisibleOnSite (согласие представителя) + APPROVED + активной учётке.
+  /// phoneVisibleOnSite (согласие дилера) + APPROVED + активной учётке.
   sitePublication     SitePublicationStatus @default(NONE)
   /// Когда подана заявка или изменён её статус.
   sitePublicationAt   DateTime?
   sitePublicationById String?
-  /// Причина отклонения или снятия с сайта — её видит представитель.
+  /// Причина отклонения или снятия с сайта — её видит дилер.
   sitePublicationNote String?
   /// По последнему успешному ответу сайта запись есть в «Дилерской сети».
   siteListed          Boolean  @default(false)
@@ -445,7 +470,7 @@ model SiteSyncLog {
   dryRun     Boolean  @default(false)
   ok         Boolean
   httpStatus Int?
-  /// Сколько представителей было в запросе.
+  /// Сколько дилеров было в запросе.
   dealers    Int      @default(0)
   summary    Json?
   warnings   Json?
@@ -475,7 +500,7 @@ model License {
   versionSoftware       String?
   versionCustom         String?
   dealerComment         String?
-  /// Город и регион представителя на момент выдачи: по ним строится
+  /// Город и регион дилера на момент выдачи: по ним строится
   /// гео-аналитика, и переезд дилера не должен переписывать прошлое.
   city                  String?
   region                String?
@@ -540,11 +565,14 @@ model Payment {
   providerPayload Json?
   description    String?
   /// Email получателя фискального чека (тег 1008). Задаётся при выставлении
-  /// счёта; по умолчанию — почта представителя. Именно на него ОФД и портал
+  /// счёта; по умолчанию — почта дилера. Именно на него ОФД и портал
   /// отправляют чек об оплате.
   receiptEmail   String?
   paidAt         DateTime?
   confirmedById  String?
+  /// Оплату отметил администратор, деньги через АТОЛ Pay не проходили:
+  /// чек не пробивается, а возврат не идёт в эквайринг.
+  paidManually   Boolean       @default(false)
 
   // Фискализация чека в АТОЛ Онлайн (54-ФЗ)
   receiptUuid      String?
@@ -591,6 +619,9 @@ model CancellationRequest {
   id            String                    @id @default(cuid())
   licenseId     String
   requestedById String
+  kind          CancellationRequestKind   @default(CANCEL)
+  /// Возврат: клиент отказался от генерации (так можно и по неоплаченной лицензии).
+  clientRefused Boolean                   @default(false)
   reason        String
   status        CancellationRequestStatus @default(PENDING)
   reviewedById  String?
@@ -739,7 +770,7 @@ model LoginNoticeAck {
 }
 
 /**
- * Журнал действий администратора вне карточки лицензии: представители,
+ * Журнал действий администратора вне карточки лицензии: дилеры,
  * роли, платежи, настройки. По лицензиям история пишется в LicenseAuditLog.
  */
 model AdminAuditLog {
@@ -785,11 +816,11 @@ model PriceListItem {
   bundle    String   @default("")
   /// Регион продукта (RUS, CHN). Пусто — цена общая для всех регионов.
   region    String   @default("")
-  /// Дилерская цена (базовая, по которой платит представитель).
+  /// Дилерская цена (базовая, по которой платит дилер).
   price     Decimal  @db.Decimal(12, 2)
   /// Базовая цена (себестоимость) — видна только администраторам, для маржи.
   myPrice     Decimal? @db.Decimal(12, 2)
-  /// Клиентская (розничная) цена — для представителей с тарифом CLIENT.
+  /// Клиентская (розничная) цена — для дилеров с тарифом CLIENT.
   clientPrice Decimal? @db.Decimal(12, 2)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -800,7 +831,7 @@ model PriceListItem {
   @@index([product])
 }
 
-/// Цена позиции справочника, назначенная конкретному представителю.
+/// Цена позиции справочника, назначенная конкретному дилеру.
 model DealerPrice {
   id        String   @id @default(cuid())
   dealerId  String
@@ -851,7 +882,7 @@ model CompanySettings {
   /// { serviceLabel, vatType, paymentMethod }. Секреты (токены, логины кассы)
   /// остаются в .env.
   payment      Json?
-  /// Какие разделы видят представители: { legacyLk, knowledge }.
+  /// Какие разделы видят дилеры: { legacyLk, knowledge }.
   sections     Json?
   /// Каналы уведомлений: { emailEnabled, telegramEnabled, emailOff[], telegramOff[] }.
   notifications Json?

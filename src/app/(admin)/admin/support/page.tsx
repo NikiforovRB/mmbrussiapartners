@@ -24,7 +24,7 @@ export default async function AdminSupportPage() {
     <>
       <Topbar
         title="Техподдержка"
-        subtitle="Каналы связи и ссылки для представителей"
+        subtitle="Каналы связи и ссылки для дилеров"
         user={{ name: me?.email ?? "Admin", email: me?.email ?? "", role: me?.role.name ?? "Admin" }}
         rightSlot={
           canEdit ? (

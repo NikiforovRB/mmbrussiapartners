@@ -72,7 +72,7 @@ export default async function AdminDashboard() {
           <div className="flex items-center justify-between mb-4">
             <div>
               <div className="font-display text-lg  tracking-tight">Заявки на одобрение</div>
-              <div className="text-xs text-ink-muted">Свежие заявки представителей</div>
+              <div className="text-xs text-ink-muted">Свежие заявки дилеров</div>
             </div>
             <Link href="/admin/dealers?status=PENDING">
               <Button variant="ghost" size="sm" iconRight={<ArrowUpRight className="h-4 w-4" />}>

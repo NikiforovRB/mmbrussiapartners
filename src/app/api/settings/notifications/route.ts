@@ -13,7 +13,12 @@ const known = (types: string[]) => [...new Set(types)].filter((t) => t in NOTIFI
 export const PATCH = route(async (req: Request) => {
   const session = await requirePermission("settings.edit");
   const d = await parseBody(req, notificationSettingsSchema);
-  const notifications = { ...d, emailOff: known(d.emailOff), telegramOff: known(d.telegramOff) };
+  const notifications = {
+    ...d,
+    emailOff: known(d.emailOff),
+    telegramOff: known(d.telegramOff),
+    maxOff: known(d.maxOff),
+  };
 
   await db.companySettings.upsert({
     where: { id: "singleton" },
@@ -32,7 +37,7 @@ export const PATCH = route(async (req: Request) => {
     entity: "SETTINGS",
     entityId: "notifications",
     action: "UPDATED",
-    summary: `Уведомления: почта ${notifications.emailEnabled ? "вкл" : "выкл"}, Telegram ${notifications.telegramEnabled ? "вкл" : "выкл"}`,
+    summary: `Уведомления: почта ${notifications.emailEnabled ? "вкл" : "выкл"}, Telegram ${notifications.telegramEnabled ? "вкл" : "выкл"}, MAX ${notifications.maxEnabled ? "вкл" : "выкл"}`,
   });
 
   return NextResponse.json({ ok: true });

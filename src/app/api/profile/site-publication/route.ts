@@ -13,7 +13,7 @@ export const POST = route(async () => {
   const userId = session.user.id;
 
   const profile = await db.dealerProfile.findUnique({ where: { userId } });
-  if (!profile) throw notFound("Профиль представителя не найден");
+  if (!profile) throw notFound("Профиль дилера не найден");
   if (!profile.phoneVisibleOnSite) {
     throw badRequest("Включите «Показывать телефон на сайте» и сохраните профиль");
   }

@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { paymentSettingsSchema } from "@/lib/site-settings";
 import { badRequest, route } from "@/lib/api";
 import { recordAdminAction } from "@/lib/admin-audit";
+import { atolPayPaymentMethods } from "@/lib/payments/provider";
 import { requirePermission } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -14,10 +15,17 @@ export const PATCH = route(async (req: Request) => {
   const parsed = paymentSettingsSchema.safeParse(await req.json().catch(() => ({})));
   if (!parsed.success) throw badRequest(parsed.error.errors[0]?.message ?? "Некорректные данные");
 
+  // Выбирать можно только из подключённых на сервере; выбраны все — храним пусто.
+  const connected = [...new Set(atolPayPaymentMethods().map((m) => m.paymentType))];
+  const chosen = [...new Set(parsed.data.checkoutTypes)].filter((t) => connected.includes(t));
+  if (connected.length > 0 && parsed.data.checkoutTypes.length > 0 && chosen.length === 0) {
+    throw badRequest("Оставьте хотя бы один способ оплаты");
+  }
   const payment = {
     serviceLabel: parsed.data.serviceLabel.trim(),
     vatType: parsed.data.vatType,
     paymentMethod: parsed.data.paymentMethod,
+    checkoutTypes: chosen.length === connected.length ? [] : chosen,
   };
 
   await db.companySettings.upsert({

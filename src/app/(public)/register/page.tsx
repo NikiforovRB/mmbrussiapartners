@@ -12,7 +12,7 @@ export default function RegisterPage() {
             <div className="text-xs tracking-widest uppercase text-ink-muted">Стать дилером</div>
             <h1 className="mt-3 font-display text-4xl  tracking-tightest leading-tight">
               Присоединяйтесь
-              <br /> к сети представителей
+              <br /> к сети дилеров
               <br /> <span className="gradient-text">MMB RUSSIA</span>
             </h1>
             <p className="mt-6 text-ink-muted max-w-sm">
@@ -23,7 +23,7 @@ export default function RegisterPage() {
       </div>
       <div>
         <div className="rounded-panel bg-surface p-8 md:p-10 max-w-xl mx-auto">
-          <h2 className="font-display text-2xl  tracking-tight">Регистрация представителя</h2>
+          <h2 className="font-display text-2xl  tracking-tight">Регистрация дилера</h2>
           <p className="mt-1.5 text-sm text-ink-muted">
             Все поля, помеченные звёздочкой, обязательны
           </p>

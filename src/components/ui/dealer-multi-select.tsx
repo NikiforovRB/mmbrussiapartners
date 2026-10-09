@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 
 export type DealerOption = { id: string; label: string; sub?: string };
 
-/** Мультивыбор представителей с поиском в первой строке. */
+/** Мультивыбор дилеров с поиском в первой строке. */
 export function DealerMultiSelect({
   options,
   value,
@@ -43,14 +43,14 @@ export function DealerMultiSelect({
 
   const summary =
     value.length === 0
-      ? "Все представители"
+      ? "Все дилеры"
       : value.length === 1
         ? options.find((o) => o.id === value[0])?.label ?? "1 выбран"
         : `Выбрано: ${value.length}`;
 
   return (
     <div className="relative" ref={ref}>
-      <label className="block text-[12.5px] text-ink-muted mb-1.5">Представители</label>
+      <label className="block text-[12.5px] text-ink-muted mb-1.5">Дилеры</label>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -74,7 +74,7 @@ export function DealerMultiSelect({
               autoFocus
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Поиск представителя…"
+              placeholder="Поиск дилера…"
               className="w-full bg-transparent text-sm placeholder:text-ink-subtle focus:outline-none"
             />
           </div>

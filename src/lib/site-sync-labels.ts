@@ -23,7 +23,7 @@ export const SITE_TRIGGER_LABEL: Record<string, string> = {
   profile: "изменён профиль",
   publication: "модерация",
   status: "статус учётной записи",
-  delete: "представитель удалён",
+  delete: "дилер удалён",
   daily: "ежедневная",
   manual: "вручную",
   retry: "повтор",

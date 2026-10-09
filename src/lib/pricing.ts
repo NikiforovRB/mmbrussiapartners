@@ -7,7 +7,7 @@ import { defaultLicensePrice, licensePrice } from "@/lib/payments/provider";
 /**
  * Цены лицензий. DRIVEMODS их не отдаёт — его API возвращает только продукт,
  * пакет и регион, — поэтому прайс ведётся в справочнике портала, а у
- * отдельных представителей может отличаться.
+ * отдельных дилеров может отличаться.
  *
  * Сумму всегда считает сервер: браузер присылает лишь выбранную позицию.
  */
@@ -24,7 +24,7 @@ export type ResolvedPrice = {
   price: number;
   /** Позиция справочника, по которой посчитали; null — сработала запасная цена. */
   itemId: string | null;
-  /** Цена назначена этому представителю лично. */
+  /** Цена назначена этому дилеру лично. */
   personal: boolean;
   /** Как получена цена — для подсказок в интерфейсе. */
   basis: PriceBasis;
@@ -60,19 +60,91 @@ function applyAdjust(base: number, kind: PriceAdjustKind, value: number | null):
   return base;
 }
 
+type CatalogKey = { product: string; bundle: string; region: string };
+
 /**
- * Позиция справочника для запроса — только точное совпадение тройки.
+ * Позиция справочника для запроса.
  *
  * MB-S5WM FULL RUS, MB-S5WM FULL CHN и MB-S5WM ECO — три разных товара со
- * своими ценами, поэтому подставлять цену соседа нельзя: незаполненная
- * позиция должна честно уйти на запасную цену и попасть в список без цен.
+ * своими ценами, поэтому цену соседа по региону не подставляем: незаполненная
+ * позиция честно уходит на запасную цену и попадает в список без цен.
+ * Исключения однозначны: позиция без региона — общая цена для всех регионов,
+ * а если DRIVEMODS региона не прислал (у MB-S5WM его нет), подходит
+ * единственная позиция с тем же продуктом и комплектацией.
  */
-function matchItem<T extends { product: string; bundle: string; region: string }>(
-  items: T[],
+export function findPriceItem<T extends CatalogKey>(items: T[], q: PriceQuery): T | null {
+  const product = normalizeKey(q.product);
+  const bundle = normalizeKey(q.bundle);
+  const region = normalizeKey(q.region);
+  const same = items.filter((i) => normalizeKey(i.product) === product && normalizeKey(i.bundle) === bundle);
+  return (
+    same.find((i) => normalizeKey(i.region) === region) ??
+    same.find((i) => normalizeKey(i.region) === "") ??
+    (!region && same.length === 1 ? same[0] : null)
+  );
+}
+
+/**
+ * Регион продукта для лицензии. DRIVEMODS отдаёт его не для всех продуктов:
+ * тогда берём регион позиции справочника (она для продукта и комплектации
+ * одна), иначе — код рынка из версии ПО: KA4.KOR.S5W_M.V → KOR.
+ */
+export function inferProductRegion(
   q: PriceQuery,
-): T | null {
-  const key = priceKey(q);
-  return items.find((i) => priceKey({ product: i.product, bundle: i.bundle, region: i.region }) === key) ?? null;
+  items: CatalogKey[],
+  versionSoftware?: string | null,
+): string | null {
+  const own = normalizeKey(q.region);
+  if (own) return own;
+  const item = findPriceItem(items, q);
+  if (item && normalizeKey(item.region)) return normalizeKey(item.region);
+  const market = normalizeKey((versionSoftware ?? "").split(".")[1]);
+  return /^[A-Z]{3}$/.test(market) ? market : null;
+}
+
+/**
+ * Дозаполняет у выданных лицензий пустые регион продукта и базовую цену по
+ * справочнику — после правки позиции, чтобы отчёты не показывали «—» по
+ * лицензиям, выданным до того, как позицию завели.
+ */
+export async function fillLicenseCatalogGaps(): Promise<void> {
+  await db.$executeRaw`
+    UPDATE "License" l
+    SET "productRegion" = p."region"
+    FROM (
+      SELECT "product", "bundle", min("region") AS "region"
+      FROM "PriceListItem"
+      GROUP BY "product", "bundle"
+      HAVING count(*) = 1 AND min("region") <> ''
+    ) p
+    WHERE coalesce(trim(l."productRegion"), '') = ''
+      AND upper(trim(l."product")) = p."product"
+      AND upper(coalesce(trim(l."bundle"), '')) = p."bundle"`;
+  await db.$executeRaw`
+    UPDATE "License" l
+    SET "basePrice" = i."myPrice"
+    FROM "PriceListItem" i
+    WHERE l."basePrice" IS NULL
+      AND i."myPrice" IS NOT NULL
+      AND upper(trim(l."product")) = i."product"
+      AND upper(coalesce(trim(l."bundle"), '')) = i."bundle"
+      AND (upper(coalesce(trim(l."productRegion"), '')) = i."region" OR i."region" = '')`;
+}
+
+/** Регионы продукта для набора позиций одного ШГУ (см. inferProductRegion). */
+export async function inferProductRegions(
+  queries: PriceQuery[],
+  versionSoftware?: string | null,
+): Promise<(string | null)[]> {
+  const products = [...new Set(queries.map((q) => normalizeKey(q.product)).filter(Boolean))];
+  const items =
+    products.length > 0
+      ? await db.priceListItem.findMany({
+          where: { product: { in: products } },
+          select: { product: true, bundle: true, region: true },
+        })
+      : [];
+  return queries.map((q) => inferProductRegion(q, items, versionSoftware));
 }
 
 /**
@@ -108,7 +180,7 @@ export async function resolvePrices(
   const tier = profile?.priceTier === "CLIENT" ? "CLIENT" : "DEALER";
 
   return queries.map((q) => {
-    const item = matchItem(items, q);
+    const item = findPriceItem(items, q);
     if (!item) {
       // Позиции в справочнике нет: берём запасную цену из настроек, иначе
       // выдача лицензий встала бы из-за незаполненного прайса.
@@ -123,7 +195,7 @@ export async function resolvePrices(
     const basePrice = item.myPrice == null ? null : toNumber(item.myPrice);
     const base = { itemId: item.id, basePrice };
 
-    // Личная цена представителя — высший приоритет, перекрывает всё.
+    // Личная цена дилера — высший приоритет, перекрывает всё.
     const own = personalById.get(item.id);
     if (own !== undefined) return { ...base, price: own, personal: true, basis: "personal" as const };
 

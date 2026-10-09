@@ -1,11 +1,11 @@
 export const PERMISSIONS = {
-  "dealers.view": "Просмотр представителей",
-  "dealers.approve": "Одобрение/блокировка представителей",
-  "dealers.edit": "Редактирование данных представителя",
-  "dealers.suspend": "Блокировка представителей",
+  "dealers.view": "Просмотр дилеров",
+  "dealers.approve": "Одобрение/блокировка дилеров",
+  "dealers.edit": "Редактирование данных дилера",
+  "dealers.suspend": "Блокировка дилеров",
   "dealers.setLimit": "Управление лимитами лицензий",
-  "dealers.delete": "Удаление представителей",
-  "dealers.passwords": "Просмотр и смена паролей представителей",
+  "dealers.delete": "Удаление дилеров",
+  "dealers.passwords": "Просмотр и смена паролей дилеров",
   "licenses.view": "Просмотр лицензий",
   "licenses.create": "Создание лицензий",
   "licenses.edit": "Редактирование карточки лицензии",
@@ -33,7 +33,7 @@ export const PERMISSIONS = {
 export type PermissionKey = keyof typeof PERMISSIONS;
 
 export const PERMISSION_GROUPS: Record<string, PermissionKey[]> = {
-  Представители: [
+  Дилеры: [
     "dealers.view",
     "dealers.approve",
     "dealers.edit",
@@ -61,12 +61,12 @@ export const PERMISSION_GROUPS: Record<string, PermissionKey[]> = {
 export const ALL_PERMISSIONS = Object.keys(PERMISSIONS) as PermissionKey[];
 
 /**
- * Права, которыми представитель пользуется в собственном кабинете: свои
+ * Права, которыми дилер пользуется в собственном кабинете: свои
  * лицензии, свои отчёты, свои счета описаны теми же ключами, что и у
  * администратора.
  *
  * Отличать администратора по ним нельзя. Проверка вида
- * `isOwner || can("licenses.view")` для представителя всегда истинна, то есть
+ * `isOwner || can("licenses.view")` для дилера всегда истинна, то есть
  * «право видеть своё» открывало бы и чужое.
  */
 export const DEALER_SCOPE_PERMISSIONS: PermissionKey[] = [
@@ -83,7 +83,7 @@ export const ADMIN_SCOPE_PERMISSIONS: PermissionKey[] = ALL_PERMISSIONS.filter(
 );
 
 /**
- * Работает ли пользователь с сетью представителей, а не только со своими
+ * Работает ли пользователь с сетью дилеров, а не только со своими
  * данными. Единственный допустимый признак «это администратор».
  */
 export function hasAdminScope(

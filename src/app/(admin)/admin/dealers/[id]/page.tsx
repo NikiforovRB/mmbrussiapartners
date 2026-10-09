@@ -84,7 +84,7 @@ export default async function AdminDealerPage({
     <>
       <Topbar
         title={fio || dealer.email}
-        subtitle={`Профиль представителя · ${dealer.role.name}`}
+        subtitle={`Профиль дилера · ${dealer.role.name}`}
         user={{
           name: me?.email ?? "Admin",
           email: me?.email ?? "",
@@ -94,7 +94,7 @@ export default async function AdminDealerPage({
           canManagePricing ? (
             <Link href={`/admin/pricing?dealer=${dealer.id}`}>
               <Button size="sm" variant="ghost" icon={<Tags className="h-4 w-4" />}>
-                Цены представителя
+                Цены дилера
               </Button>
             </Link>
           ) : undefined
@@ -169,6 +169,8 @@ export default async function AdminDealerPage({
                   region: dealer.dealerProfile.region,
                   country: dealer.dealerProfile.country,
                   address: dealer.dealerProfile.address,
+                  telegramNick: dealer.dealerProfile.telegramNick,
+                  companyUrl: dealer.dealerProfile.companyUrl,
                   siteComment: dealer.dealerProfile.siteComment,
                   licenseLimit: dealer.dealerProfile.licenseLimit,
                   licensesUsed: dealer.dealerProfile.licensesUsed,
@@ -236,7 +238,7 @@ export default async function AdminDealerPage({
 
 const LOCATION_SOURCE: Record<LocationChangeSource, string> = {
   SIGNUP_IP: "По IP при регистрации",
-  DEALER: "Представитель",
+  DEALER: "Дилер",
   ADMIN: "Администратор",
 };
 
@@ -348,7 +350,7 @@ async function DealerIps({ userId, signupIp }: { userId: string; signupIp: strin
       </div>
       {ips.length === 0 ? (
         <div className="px-5 py-10 text-center text-sm text-ink-muted">
-          Адреса записываются при входе и работе в кабинете — появятся после следующего визита представителя.
+          Адреса записываются при входе и работе в кабинете — появятся после следующего визита дилера.
         </div>
       ) : (
         <ul className="divide-y divide-hairline">

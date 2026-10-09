@@ -3,7 +3,7 @@ import { db } from "./db";
 import { fioFromParts } from "./utils";
 import type { DealerOption } from "@/components/ui/dealer-multi-select";
 
-/** Представители для фильтров «Представители»: ФИО, ниже организация и город. */
+/** Дилеры для фильтров «Дилеры»: ФИО, ниже организация и город. */
 export async function loadDealerOptions(): Promise<DealerOption[]> {
   const users = await db.user.findMany({
     where: { dealerProfile: { isNot: null } },

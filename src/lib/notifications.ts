@@ -3,6 +3,7 @@ import nodemailer from "nodemailer";
 import { db } from "./db";
 import { formatRub } from "./money";
 import { escapeTelegramHtml, isTelegramConfigured, telegramApi } from "./telegram";
+import { escapeMaxHtml, isMaxConfigured, sendMaxMessage } from "./max";
 
 type SendEmailParams = {
   to: string;
@@ -105,6 +106,50 @@ export async function sendTelegram(opts: { chatId: string; text: string; userId?
   }
 }
 
+/** Личное сообщение в MAX (lib/max.ts): заголовок, текст и кнопка «Открыть в кабинете». */
+export async function sendMax(opts: {
+  maxUserId: string;
+  title: string;
+  body?: string | null;
+  url?: string | null;
+  userId?: string | null;
+}) {
+  const configured = isMaxConfigured();
+  const plain = [opts.title, opts.body].filter(Boolean).join("\n\n");
+  const log = await db.notificationLog.create({
+    data: {
+      channel: "MAX",
+      recipient: opts.maxUserId,
+      body: plain,
+      userId: opts.userId ?? null,
+      status: configured ? "QUEUED" : "FAILED",
+      error: configured ? null : "MAX not configured",
+    },
+  });
+  if (!configured) return { ok: false, reason: "MAX not configured", logId: log.id };
+
+  const button = opts.url && /^https:\/\//i.test(opts.url) ? { text: "Открыть в кабинете", url: opts.url } : null;
+  const text = [
+    `<b>${escapeMaxHtml(opts.title)}</b>`,
+    opts.body ? escapeMaxHtml(opts.body) : null,
+    opts.url && !button ? `<a href="${escapeMaxHtml(opts.url)}">Открыть в кабинете</a>` : null,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+  try {
+    await sendMaxMessage({ maxUserId: opts.maxUserId, text, button });
+    await db.notificationLog.update({ where: { id: log.id }, data: { status: "SENT" } });
+    return { ok: true, logId: log.id };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    await db.notificationLog.update({
+      where: { id: log.id },
+      data: { status: "FAILED", error: message.slice(0, 500) },
+    });
+    return { ok: false, reason: message, logId: log.id };
+  }
+}
+
 /** Письмо-уведомление: заголовок, текст и кнопка в кабинет. */
 export function notificationEmailHtml(params: { title: string; body?: string | null; url?: string | null; footer: string }) {
   return `
@@ -136,7 +181,7 @@ function stripHtml(html: string) {
 }
 
 /**
- * Письмо представителю с фискальным чеком после успешной оплаты.
+ * Письмо дилеру с фискальным чеком после успешной оплаты.
  * Дублирует экземпляр ОФД (тот уходит на email, указанный в самом чеке) и
  * даёт удобную ссылку прямо в кабинете.
  */

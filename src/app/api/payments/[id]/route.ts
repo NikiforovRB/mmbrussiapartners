@@ -6,7 +6,7 @@ import { hasPermission } from "@/lib/permissions";
 import {
   fiscalizePayment,
   fiscalizeRefund,
-  markPaymentPaid,
+  markPaymentPaidManually,
   refreshReceipt,
   refundPayment,
   syncAtolPayPayment,
@@ -21,16 +21,18 @@ import { fioFromParts } from "@/lib/utils";
 export const runtime = "nodejs";
 
 const schema = z.object({
-  action: z.enum(["confirm", "cancel", "fiscalize", "refresh-receipt", "refund", "sync"]),
+  action: z.enum(["confirm", "cancel", "fiscalize", "refresh-receipt", "refund"]),
   /** Для refund: деньги администратор вернул сам, эквайринг не трогаем. */
   manual: z.boolean().optional(),
+  /** Для confirm: оплаченная сумма, по умолчанию — сумма счёта. Может быть 0. */
+  amount: z.number().min(0, "Сумма не может быть отрицательной").max(100_000_000).optional(),
 });
 
 export const POST = route(async (req: Request, ctx: { params: Promise<{ id: string }> }) => {
   const session = await requirePermission("payments.manage");
 
   const { id } = await ctx.params;
-  const { action, manual } = await parseBody(req, schema);
+  const { action, manual, amount } = await parseBody(req, schema);
 
   const payment = await db.payment.findUnique({
     where: { id },
@@ -44,28 +46,31 @@ export const POST = route(async (req: Request, ctx: { params: Promise<{ id: stri
   try {
     switch (action) {
       case "confirm": {
-        const updated = await markPaymentPaid(id, session.user.id);
+        const updated = await markPaymentPaidManually(id, { actorId: session.user.id, amount });
+        const paidLabel = formatRub(updated.amount);
         await recordAdminAction({
           actorId: session.user.id,
           entity: "PAYMENT",
           entityId: id,
           action: "CONFIRMED",
-          summary: `${licenseLabel} · ${amountLabel}`,
+          summary: `${licenseLabel} · ${paidLabel}${paidLabel !== amountLabel ? ` (счёт ${amountLabel})` : ""} · без чека`,
         });
+        if (payment.licenseId) {
+          await db.licenseAuditLog.create({
+            data: {
+              licenseId: payment.licenseId,
+              actorId: session.user.id,
+              action: "EDITED",
+              reason: `Отмечена оплаченной: ${paidLabel}, без чека`,
+            },
+          });
+        }
         await notifyUser(payment.dealerId, {
           type: "PAYMENT_PAID",
-          title: `Оплата подтверждена: ${amountLabel}`,
+          title: `Оплата подтверждена: ${paidLabel}`,
           body: licenseLabel,
           link: `/dealer/payments/${id}`,
         });
-        if (updated.receiptStatus === "fail") {
-          await notifyAdmins(["payments.manage"], {
-            type: "RECEIPT_FAILED",
-            title: `Чек не пробит: ${amountLabel}`,
-            body: updated.receiptError ?? licenseLabel,
-            link: "/admin/payments",
-          });
-        }
         return NextResponse.json({ ok: true, payment: updated });
       }
       case "cancel": {
@@ -97,15 +102,6 @@ export const POST = route(async (req: Request, ctx: { params: Promise<{ id: stri
         const updated = await refreshReceipt(id);
         return NextResponse.json({ ok: true, payment: updated });
       }
-      case "sync": {
-        if (payment.provider !== "atol_pay") throw badRequest("Счёт выставлен не через АТОЛ Pay");
-        const synced = await syncAtolPayPayment(id);
-        return NextResponse.json({
-          ok: true,
-          paid: synced?.paid ?? false,
-          statusMessage: synced?.current?.message ?? null,
-        });
-      }
       case "refund": {
         if (!hasPermission(session.user.permissions, "payments.refund", session.user.isSuperAdmin)) {
           throw forbidden("Нет права оформлять возвраты");
@@ -130,7 +126,7 @@ export const POST = route(async (req: Request, ctx: { params: Promise<{ id: stri
           title: `Возврат средств: ${amountLabel}`,
           body:
             (viaAtolPay
-              ? "Деньги возвращены на карту, с которой вы платили; банк зачислит их обычно за 1–10 рабочих дней."
+              ? "Деньги возвращены туда, откуда вы платили; банк зачислит их обычно за 1–10 рабочих дней."
               : "Администратор оформил возврат средств.") + licenseNote,
           link: payment.licenseId ? `/dealer/licenses/${payment.licenseId}` : `/dealer/payments/${id}`,
         });
@@ -146,7 +142,7 @@ export const POST = route(async (req: Request, ctx: { params: Promise<{ id: stri
             firstName: dealer?.dealerProfile?.firstName,
             lastName: dealer?.dealerProfile?.lastName,
             middleName: dealer?.dealerProfile?.middleName,
-          }) || dealer?.email || "представитель";
+          }) || dealer?.email || "дилер";
         await notifyAdmins(["payments.manage"], {
           type: "PAYMENT_REFUNDED",
           title: `Возврат ${amountLabel}: ${dealerName}`,

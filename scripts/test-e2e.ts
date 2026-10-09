@@ -192,8 +192,8 @@ async function trackLicense(id: string) {
 // ───────────────────────── подготовка ─────────────────────────
 
 async function ensureTestDealer() {
-  const role = await prisma.role.findUnique({ where: { name: "Представитель" } });
-  if (!role) throw new Error("Нет роли «Представитель» — выполните npm run db:seed");
+  const role = await prisma.role.findFirst({ where: { name: { in: ["Дилер", "Представитель"] } } });
+  if (!role) throw new Error("Нет роли «Дилер» — выполните npm run db:seed");
 
   const passwordHash = await bcrypt.hash(TEST_DEALER_PASSWORD, 10);
   const user = await prisma.user.upsert({
@@ -292,7 +292,7 @@ async function testGeneration(dealer: Session, dealerId: string) {
     );
   }
 
-  section("Лимит представителя");
+  section("Лимит дилера");
   const profile = await prisma.dealerProfile.findUnique({ where: { userId: dealerId } });
   const realCount = await prisma.license.count({
     where: { dealerId, deletedAt: null, status: "ACTIVE" },
@@ -374,12 +374,12 @@ async function testFreeIssue(dealer: Session, admin: Session) {
     await trackLicense(body.licenseId);
     const lic = await prisma.license.findUnique({ where: { id: body.licenseId } });
     check(
-      "Представитель не может выдать без оплаты",
+      "Дилер не может выдать без оплаты",
       lic?.issuedWithoutPayment === false,
       `issuedWithoutPayment=${lic?.issuedWithoutPayment}, цена=${lic?.price ?? "—"}`,
     );
   } else {
-    skip("Представитель не может выдать без оплаты", "лицензия не создана (лимит)");
+    skip("Дилер не может выдать без оплаты", "лицензия не создана (лимит)");
   }
 
   const adminRes = await admin.post(
@@ -623,14 +623,14 @@ async function testNotificationsAndAudit(admin: Session, dealerId: string) {
 }
 
 async function testDealerCannotTouchOthers(dealer: Session, dealerId: string) {
-  section("Представитель и чужие данные");
+  section("Дилер и чужие данные");
 
   const other = await prisma.user.findFirst({
     where: { id: { not: dealerId }, dealerProfile: { isNot: null } },
     select: { id: true },
   });
   if (!other) {
-    skip("Дилер не правит чужой профиль", "нет другого представителя");
+    skip("Дилер не правит чужой профиль", "нет другого дилера");
     return;
   }
 
@@ -819,7 +819,7 @@ async function testRepeatDetection(dealer: Session) {
 }
 
 /**
- * Цена лицензии складывается из справочника, правила представителя и его
+ * Цена лицензии складывается из справочника, правила дилера и его
  * личной цены. Проверяем всю цепочку там, где её видит пользователь: в мастере
  * выдачи, в самой лицензии и в счёте.
  */
@@ -866,7 +866,7 @@ async function testPricing(dealer: Session, admin: Session, dealerId: string) {
     bundle: "ECO",
     price: 4000,
   });
-  check("Представитель не заводит позицию прайса", denied.status === 403, `${denied.status}`);
+  check("Дилер не заводит позицию прайса", denied.status === 403, `${denied.status}`);
 
   const ecoId = await addItem({ product: "ТЕСТ-S5WM", bundle: "ECO", price: 4000 });
   check("Администратор заводит позицию", Boolean(ecoId), ecoId ? "создана" : "не создана");
@@ -978,7 +978,7 @@ async function main() {
     const admin = await login(ADMIN_EMAIL, ADMIN_PASSWORD);
     const dealer = await login(TEST_DEALER_EMAIL, TEST_DEALER_PASSWORD);
     if (!admin) throw new Error(`Не удалось войти администратором ${ADMIN_EMAIL}`);
-    if (!dealer) throw new Error("Не удалось войти тестовым представителем");
+    if (!dealer) throw new Error("Не удалось войти тестовым дилером");
 
     await testAuthGate();
     await testGeneration(dealer, dealerId);

@@ -8,9 +8,9 @@
  *  - клиенты общего кабинета — их лицензии выписывал владелец, а имя и город
  *    писал в комментарии («Ленар Казань»).
  * Группы комментариев сливаются с учёткой, если имя и город совпадают
- * однозначно. Учётки привязываются к представителям портала по email или
- * телефону — такие представители отмечаются как «работал в старом ЛК».
- * Записи достаются представителю, к которому привязан их дилер; поштучное
+ * однозначно. Учётки привязываются к дилерам портала по email или
+ * телефону — такие дилеры отмечаются как «работал в старом ЛК».
+ * Записи достаются дилеру, к которому привязан их дилер; поштучное
  * распределение администратора повторный импорт не меняет.
  *
  * Суммы — по дилерскому прайсу MMB RUSSIA (PriceListItem.price): в ЛК стоит
@@ -583,7 +583,7 @@ async function main() {
         `записей с дилером ${dealerOf.size} из ${data.records.length}`,
     );
 
-    // 5. Привязка к представителям портала: email, затем телефон.
+    // 5. Привязка к дилерам портала: email, затем телефон.
     const portal = await db.user.findMany({
       where: { dealerProfile: { isNot: null } },
       select: { id: true, email: true, dealerProfile: { select: { phone: true } } },
@@ -602,7 +602,7 @@ async function main() {
       const userId = byEmail ?? (byPhone.length === 1 ? byPhone[0] : undefined);
       if (userId && ![...links.values()].includes(userId)) links.set(d.externalKey, userId);
     }
-    console.log(`Совпало с представителями портала: ${links.size}`);
+    console.log(`Совпало с дилерами портала: ${links.size}`);
 
     // 6. База.
     if (!dryRun) {
@@ -664,7 +664,13 @@ async function main() {
           OR: [
             { id: { in: [...prepared.dropped] } },
             { kind: "LICENSE", product: { in: EXCLUDED_PRODUCTS } },
-            { kind: "LICENSE", licenseType: LICENSE_TYPES[1], paymentStatus: "PAID", priceTotal: { lte: 0 } },
+            {
+              kind: "LICENSE",
+              licenseType: LICENSE_TYPES[1],
+              paymentStatus: "PAID",
+              priceTotal: { lte: 0 },
+              manualPayment: false,
+            },
           ],
         },
       });
@@ -743,15 +749,22 @@ async function main() {
               legacyDealerId: true,
               paidById: true,
               paidItems: true,
+              manualPayment: true,
             },
           })
-        ).map((x) => [x.id, signature(x)]),
+        ).map((x) => [x.id, x]),
       );
       const fresh = rows.filter((r) => !stored.has(r.id));
       for (let i = 0; i < fresh.length; i += 1000) {
         await db.legacyRecord.createMany({ data: fresh.slice(i, i + 1000), skipDuplicates: true });
       }
-      const changed = rows.filter((r) => stored.has(r.id) && stored.get(r.id) !== signature(r));
+      // Оплату, отмеченную администратором портала, импорт не перезаписывает.
+      const changed = rows.flatMap((r) => {
+        const s = stored.get(r.id);
+        if (!s) return [];
+        const row = s.manualPayment ? { ...r, paymentStatus: s.paymentStatus, priceTotal: s.priceTotal } : r;
+        return signature(row) !== signature(s) ? [row] : [];
+      });
       for (const { id, ...row } of changed) await db.legacyRecord.update({ where: { id }, data: row });
       // Владелец на портале — от привязки дилера старого ЛК, кроме назначенных вручную.
       const owners = await db.$executeRaw`
@@ -815,7 +828,7 @@ async function main() {
       { header: "Пополнено", key: "paymentsAmount", width: 14, style: { numFmt: moneyFmt } },
       { header: "Первая лицензия", key: "first", width: 18, style: { numFmt: dateFmt } },
       { header: "Последняя лицензия", key: "last", width: 18, style: { numFmt: dateFmt } },
-      { header: "Представитель на портале", key: "portal", width: 28 },
+      { header: "Дилер на портале", key: "portal", width: 28 },
     ];
     for (const d of list) {
       const s = d.stats;

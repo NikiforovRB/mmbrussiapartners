@@ -49,7 +49,10 @@ export default async function AdminSettingsPage() {
           notifications={<NotificationSettingsPanel />}
           payment={
             <div className="space-y-6">
-              <PaymentSettingsForm initial={mergePaymentSettings(settings?.payment)} />
+              <PaymentSettingsForm
+                initial={mergePaymentSettings(settings?.payment)}
+                connectedTypes={getPaymentSettingsSummary(mergePaymentSettings(settings?.payment)).acquiring.connectedTypes}
+              />
               <PaymentSettingsPanel
                 summary={getPaymentSettingsSummary(mergePaymentSettings(settings?.payment))}
               />

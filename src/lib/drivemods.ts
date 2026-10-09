@@ -2,7 +2,7 @@ import "server-only";
 import { fetchWithTimeout } from "@/lib/http";
 
 /**
- * Клиент REST API DRIVEMODS Store (личный кабинет представителя).
+ * Клиент REST API DRIVEMODS Store (личный кабинет дилера).
  * Документация: DRIVEMODS_StoreAPI v1.1 — базовый адрес https://storeapi.drivemods.org
  *
  * Портал работает от имени единого мастер-аккаунта DriveMods

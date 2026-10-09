@@ -6,7 +6,7 @@ import { db } from "./db";
 
 /**
  * Синхронизация «Дилерской сети» на mmbrussia.ru: одобренные телефоны
- * представителей уходят на сайт, снятые — удаляются оттуда.
+ * дилеров уходят на сайт, снятые — удаляются оттуда.
  *
  * Секрет MMB_DEALERS_SYNC_SECRET даёт право записи в список на сайте, поэтому
  * модуль работает только на сервере, а переменные — без префикса NEXT_PUBLIC_.
@@ -30,7 +30,7 @@ export type SiteResultStatus =
   | "conflict"
   | "error";
 
-/** После этих статусов запись представителя есть на сайте. */
+/** После этих статусов запись дилера есть на сайте. */
 const LISTED_STATUSES = new Set<string>(["created", "linked", "updated", "unchanged"]);
 
 export type SiteDealer = {
@@ -80,7 +80,7 @@ export function isPublishedOnSite(
 }
 
 /**
- * Что уходит на сайт. Адрес и email не отправляем: представитель давал
+ * Что уходит на сайт. Адрес и email не отправляем: дилер давал
  * согласие на публикацию только телефона.
  */
 export function toSiteDealer(
@@ -248,7 +248,7 @@ async function logExchange(input: {
 }
 
 // Все обращения к сайту идут по одному: иначе медленный upsert мог бы прийти
-// на сайт позже remove того же представителя и вернуть его в список.
+// на сайт позже remove того же дилера и вернуть его в список.
 type SyncState = {
   queue?: Promise<unknown>;
   retries?: Map<string, NodeJS.Timeout>;
@@ -296,7 +296,7 @@ function scheduleRetry(userId: string, attempt: number) {
 }
 
 /**
- * Приводит запись представителя на сайте к текущему состоянию в БД: состояние
+ * Приводит запись дилера на сайте к текущему состоянию в БД: состояние
  * читается в момент отправки, поэтому повтор и дубли события безопасны.
  */
 async function syncDealerNow(userId: string, trigger: string, attempt: number): Promise<SiteOutcome | null> {
@@ -328,7 +328,7 @@ async function syncDealerNow(userId: string, trigger: string, attempt: number): 
     action = "upsert";
     outcome = await pushToSite({ action, dealers: [dealer] });
   } else if (!profile || profile.siteListed || profile.siteSyncStatus === "failed") {
-    // Профиля нет — представителя удалили. «failed» — прошлая отправка не
+    // Профиля нет — дилера удалили. «failed» — прошлая отправка не
     // дошла, и неизвестно, успел ли сайт её применить.
     action = "remove";
     outcome = await pushToSite({ action, externalIds: [userId] });
@@ -365,7 +365,7 @@ async function applyDealerOutcome(userId: string, action: "upsert" | "remove", o
 }
 
 /**
- * Ставит в очередь отправку представителя на сайт (upsert или remove — по
+ * Ставит в очередь отправку дилера на сайт (upsert или remove — по
  * текущему состоянию). Вызывать после записи изменений в БД.
  */
 export function queueDealerSiteSync(userId: string, trigger: string): void {
@@ -374,7 +374,7 @@ export function queueDealerSiteSync(userId: string, trigger: string): void {
   runInBackground(() => syncDealerNow(userId, trigger, 0));
 }
 
-/** Отправляет представителя на сайт сразу и возвращает ответ сайта. */
+/** Отправляет дилера на сайт сразу и возвращает ответ сайта. */
 export async function syncDealerToSiteNow(userId: string, trigger: string): Promise<SiteOutcome | null> {
   cancelRetry(userId);
   return enqueue(() => syncDealerNow(userId, trigger, 0));
@@ -413,7 +413,7 @@ async function fullSyncNow({
   };
 
   if (dealers.length > MAX_DEALERS_PER_REQUEST) {
-    return finish(failure(null, `Слишком много представителей для одного запроса: ${dealers.length}`, false));
+    return finish(failure(null, `Слишком много дилеров для одного запроса: ${dealers.length}`, false));
   }
 
   let allowEmpty = false;

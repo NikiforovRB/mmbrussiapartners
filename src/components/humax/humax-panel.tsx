@@ -152,7 +152,7 @@ export function HumaxPanel({
           <div>
             <div className="font-display text-lg tracking-tight">История паролей</div>
             <div className="text-sm text-ink-muted">
-              {context === "admin" ? "Пароли, сгенерированные представителями" : "Ваши сгенерированные пароли"}
+              {context === "admin" ? "Пароли, сгенерированные дилерами" : "Ваши сгенерированные пароли"}
             </div>
           </div>
         </div>
@@ -168,7 +168,7 @@ export function HumaxPanel({
                 <tr className="border-b border-hairline text-left text-[12.5px] text-ink-muted">
                   <th className="px-6 py-3 font-normal">Серийный номер</th>
                   <th className="px-6 py-3 font-normal">Пароль</th>
-                  {context === "admin" ? <th className="px-6 py-3 font-normal">Представитель</th> : null}
+                  {context === "admin" ? <th className="px-6 py-3 font-normal">Дилер</th> : null}
                   <th className="px-6 py-3 font-normal">Комментарий</th>
                   <th className="px-6 py-3 font-normal">Дата</th>
                 </tr>

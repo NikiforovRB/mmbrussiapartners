@@ -1,12 +1,13 @@
 import "server-only";
 import {
+  CHECKOUT_TYPE_LABELS,
   PAYMENT_METHOD_OPTIONS,
   PAYMENT_VAT_OPTIONS,
   type PaymentSettings,
 } from "@/lib/site-settings";
 import { isSmtpConfigured, smtpFrom } from "@/lib/notifications";
 import { isAtolConfigured, atolMissingEnv } from "./atol";
-import { atolPayPaymentMethods, defaultLicensePrice } from "./provider";
+import { atolPayPaymentMethods, checkoutPaymentMethods, defaultLicensePrice } from "./provider";
 
 const PAYMENT_TYPE_TITLES: Record<string, string> = {
   card: "Карта",
@@ -46,6 +47,8 @@ export type PaymentSettingsSummary = {
     atolPayConfigured: boolean;
     /** Способы оплаты на форме АТОЛ Pay; пусто — из настроек ЛК АТОЛ Pay. */
     paymentMethods: string[];
+    /** Подключённые на сервере способы, из которых администратор выбирает. */
+    connectedTypes: { value: string; label: string }[];
     webhookConfigured: boolean;
   };
   fiscalization: {
@@ -107,10 +110,14 @@ export function getPaymentSettingsSummary(payment: PaymentSettings): PaymentSett
       configuredProvider,
       activeProvider,
       atolPayConfigured,
-      paymentMethods: atolPayPaymentMethods().map(
+      paymentMethods: checkoutPaymentMethods(payment.checkoutTypes).map(
         (m) =>
           `${PAYMENT_TYPE_TITLES[m.paymentType] ?? m.paymentType} (${BANK_TITLES[m.bankId] ?? m.bankId})`,
       ),
+      connectedTypes: [...new Set(atolPayPaymentMethods().map((m) => m.paymentType))].map((value) => ({
+        value,
+        label: CHECKOUT_TYPE_LABELS[value] ?? value,
+      })),
       webhookConfigured: Boolean(process.env.ATOL_PAY_WEBHOOK_SECRET || process.env.ATOL_WEBHOOK_SECRET),
     },
     fiscalization: {

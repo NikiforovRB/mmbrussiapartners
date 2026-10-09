@@ -6,12 +6,13 @@ export const LICENSE_TABLE_COLUMNS = [
   { key: "createdAt", label: "Дата" },
   { key: "type", label: "Тип" },
   { key: "product", label: "Продукт" },
-  { key: "dealer", label: "Представитель", adminOnly: true },
+  { key: "dealer", label: "Дилер", adminOnly: true },
   { key: "dealerComment", label: "Комментарий дилера" },
   { key: "status", label: "Статус" },
   { key: "versionSoftware", label: "Версия ПО" },
   { key: "versionCustom", label: "Версия кастома", hidden: true },
   { key: "price", label: "Стоимость", hidden: true },
+  { key: "payment", label: "Оплата" },
 ] as const satisfies readonly { key: string; label: string; adminOnly?: boolean; hidden?: boolean }[];
 
 export type LicenseColumnKey = (typeof LICENSE_TABLE_COLUMNS)[number]["key"];

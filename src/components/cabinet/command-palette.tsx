@@ -83,7 +83,7 @@ const ITEMS: Item[] = [
   },
   {
     id: "a-dealers",
-    label: "Представители",
+    label: "Дилеры",
     href: "/admin/dealers",
     icon: <Users className="h-4 w-4" />,
     scope: "admin",

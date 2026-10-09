@@ -86,7 +86,7 @@ export default async function DealerDashboard() {
   return (
     <>
       <Topbar
-        title={`Здравствуйте, ${user.dealerProfile?.firstName ?? "представитель"}`}
+        title={`Здравствуйте, ${user.dealerProfile?.firstName ?? "дилер"}`}
         subtitle={user.role.name}
         user={{
           name: fio || user.email,

@@ -1,53 +1,74 @@
 "use client";
 
 import * as React from "react";
-import { MapPin, RefreshCw } from "lucide-react";
+import { MapPin } from "lucide-react";
+import { LocationFields, type LocationValue } from "@/components/cabinet/location-fields";
+import { findCountry, regionsFor } from "@/lib/geo-catalog";
 
 type Geo = { city?: string | null; region?: string | null; country?: string | null };
 
-export function GeoNotice() {
-  const [geo, setGeo] = React.useState<Geo | null>(null);
-  const [loaded, setLoaded] = React.useState(false);
+/**
+ * Страна, регион и город дилера — обязательные поля регистрации. Подставляем
+ * их по IP-адресу, дилер поправляет на форме (чаще всего город). После
+ * регистрации их меняет только администратор.
+ */
+export function RegistrationLocation({
+  value,
+  onChange,
+  error,
+}: {
+  value: LocationValue;
+  onChange: (next: LocationValue) => void;
+  error?: string | null;
+}) {
+  const [detected, setDetected] = React.useState<boolean | null>(null);
+  const touched = React.useRef(false);
+  const latest = React.useRef(value);
+  latest.current = value;
 
   React.useEffect(() => {
     fetch("/api/geo")
       .then((r) => (r.ok ? r.json() : null))
-      .then((d: Geo | null) => setGeo(d))
-      .catch(() => {})
-      .finally(() => setLoaded(true));
+      .then((d: Geo | null) => {
+        const found = Boolean(d?.city || d?.region || d?.country);
+        setDetected(found);
+        if (found && !touched.current) {
+          // Регион не из справочника страны не подставляем: его выберут из списка.
+          const country = findCountry(d?.country ?? "")?.name ?? latest.current.country;
+          const regions = regionsFor(country);
+          const region = d?.region && (!regions || regions.some((r) => r.name === d.region)) ? d.region : "";
+          onChange({ country, region, city: d?.city ?? "" });
+        }
+      })
+      .catch(() => setDetected(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  if (!loaded) return null;
-
-  // «Москва, Москва» читается как ошибка — повтор города в регионе опускаем.
-  const parts = [geo?.city, geo?.region, geo?.country].filter((p): p is string => Boolean(p));
-  const place = parts.filter((p, i) => parts.indexOf(p) === i).join(", ");
-
   return (
-    <div className="mb-5 rounded-panel bg-[#fff6e6] p-4 text-sm">
-      <div className="flex items-start gap-2.5">
-        <MapPin className="h-4 w-4 text-warning mt-0.5 shrink-0" />
-        <div>
-          <div className="text-ink">
-            {place ? (
-              <>
-                Ваше местоположение — <b>{place}</b>?
-              </>
-            ) : (
-              <>Не удалось определить ваше местоположение.</>
-            )}{" "}
-            Страну, регион и город мы определяем по IP-адресу при регистрации. Если они неверны,{" "}
-            <b>отключите VPN</b> и обновите страницу. После одобрения их можно поправить в профиле.
-          </div>
-          <button
-            type="button"
-            onClick={() => window.location.reload()}
-            className="mt-2 inline-flex items-center gap-1.5 text-xs text-accent hover:underline"
-          >
-            <RefreshCw className="h-3.5 w-3.5" /> Обновить страницу
-          </button>
+    <div className="rounded-panel border border-hairline p-4">
+      <div className="flex items-start gap-2.5 text-sm">
+        <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+        <div className="text-ink-muted">
+          {detected === false
+            ? "Не удалось определить местоположение по IP-адресу — укажите страну, регион и город."
+            : "Страну, регион и город мы подставили по IP-адресу. Проверьте их и при необходимости поправьте — особенно город. С VPN адрес может определиться неверно."}{" "}
+          После регистрации изменить их сможет только администратор.
         </div>
       </div>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <LocationFields
+          required
+          value={value}
+          onChange={(next) => {
+            touched.current = true;
+            onChange(next);
+          }}
+        />
+      </div>
+      {error ? <p className="mt-2 text-xs text-danger">{error}</p> : null}
+      <input type="hidden" name="country" value={value.country} />
+      <input type="hidden" name="region" value={value.region} />
+      <input type="hidden" name="city" value={value.city} />
     </div>
   );
 }

@@ -27,7 +27,7 @@ export const PATCH = route(async (req: Request) => {
   if (!ok) throw badRequest("Неверный текущий пароль");
 
   const passwordHash = await hashPassword(data.next);
-  // Копию для администратора храним только у представителей.
+  // Копию для администратора храним только у дилеров.
   const isStaff = hasAdminScope(session.user.permissions, session.user.isSuperAdmin);
   // Сессии на всех устройствах, включая текущую, отзываются: клиент выводит
   // пользователя и просит войти с новым паролем.

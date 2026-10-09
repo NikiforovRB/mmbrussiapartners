@@ -3,7 +3,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { badRequest, notFound, parseBody, route } from "@/lib/api";
 import { recordAdminAction } from "@/lib/admin-audit";
-import { normalizeKey } from "@/lib/pricing";
+import { fillLicenseCatalogGaps, normalizeKey } from "@/lib/pricing";
 import { requirePermission } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -66,6 +66,7 @@ export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: str
         }),
     },
   });
+  await fillLicenseCatalogGaps().catch((err) => console.error("[pricing] не удалось дозаполнить лицензии", err));
 
   return NextResponse.json({ ok: true });
 });

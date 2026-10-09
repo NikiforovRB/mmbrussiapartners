@@ -43,7 +43,7 @@ export async function requireSuperAdmin() {
  * Сессия администратора для серверной страницы админки. Раскладка (admin)
  * проверяет то же самое, но полагаться на неё нельзя: раскладка не
  * перерисовывается при переходах, а страница выдаёт данные всей сети. Права
- * вида licenses.view есть и у представителя, поэтому сначала — admin scope.
+ * вида licenses.view есть и у дилера, поэтому сначала — admin scope.
  */
 export async function requireAdminPage(perm?: PermissionKey | PermissionKey[]) {
   const session = await auth();

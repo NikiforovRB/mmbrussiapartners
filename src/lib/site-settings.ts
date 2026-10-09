@@ -197,7 +197,7 @@ function parseBlackoutTime(value: string | null | undefined): number {
 
 /**
  * Запрет генерации на период. Возвращает причину отказа или null. Время
- * задаётся по Москве. Действует на представителей: администратор может выдать
+ * задаётся по Москве. Действует на дилеров: администратор может выдать
  * лицензию и во время техработ.
  */
 export function blackoutBlockReason(settings: GenerationSettings): string | null {
@@ -248,6 +248,15 @@ const METHOD_VALUES = PAYMENT_METHOD_OPTIONS.map((o) => o.value) as [
   ...PaymentMethodType[],
 ];
 
+/** Способы оплаты на форме АТОЛ Pay (paymentType). */
+export const CHECKOUT_TYPE_LABELS: Record<string, string> = {
+  sbp: "СБП",
+  card: "Банковская карта",
+  bank_app: "T-Pay (приложение банка)",
+  bnpl: "Рассрочка",
+  account: "По счёту",
+};
+
 export const paymentSettingsSchema = z.object({
   /** Наименование услуги в фискальном чеке (тег 1030). */
   serviceLabel: z.string().min(1, "Укажите наименование услуги").max(200),
@@ -255,6 +264,11 @@ export const paymentSettingsSchema = z.object({
   vatType: z.enum(VAT_VALUES),
   /** Признак способа расчёта (тег 1214). */
   paymentMethod: z.enum(METHOD_VALUES),
+  /**
+   * Какие из подключённых на сервере способов оплаты показывать на форме
+   * АТОЛ Pay. Пусто — все подключённые.
+   */
+  checkoutTypes: z.array(z.string().regex(/^[a-z_]{2,20}$/)).max(10).default([]),
 });
 export type PaymentSettings = z.infer<typeof paymentSettingsSchema>;
 
@@ -262,6 +276,7 @@ export const DEFAULT_PAYMENT_SETTINGS: PaymentSettings = {
   serviceLabel: "Услуга по модификации программного обеспечения",
   vatType: "vat5",
   paymentMethod: "full_payment",
+  checkoutTypes: [],
 };
 
 export function mergePaymentSettings(raw: unknown): PaymentSettings {
@@ -277,11 +292,14 @@ export function mergePaymentSettings(raw: unknown): PaymentSettings {
     typeof d.serviceLabel === "string" && d.serviceLabel.trim()
       ? d.serviceLabel.trim().slice(0, 200)
       : DEFAULT_PAYMENT_SETTINGS.serviceLabel;
-  return { serviceLabel, vatType, paymentMethod };
+  const checkoutTypes = Array.isArray(d.checkoutTypes)
+    ? [...new Set(d.checkoutTypes.filter((t): t is string => typeof t === "string" && /^[a-z_]{2,20}$/.test(t)))]
+    : [];
+  return { serviceLabel, vatType, paymentMethod, checkoutTypes };
 }
 
-// ── Разделы кабинета представителя ───────────────────────────────────────────
-/** Выключенный раздел пропадает из меню представителя, а его страницы закрываются. */
+// ── Разделы кабинета дилера ───────────────────────────────────────────
+/** Выключенный раздел пропадает из меню дилера, а его страницы закрываются. */
 export const cabinetSectionsSchema = z.object({
   /** История из ЛК DriveMods (раздел «ЛК DriveMods»). */
   legacyLk: z.boolean(),
@@ -302,23 +320,27 @@ export function mergeCabinetSections(raw: unknown): CabinetSections {
 
 // ── Каналы уведомлений ───────────────────────────────────────────────────────
 /**
- * Уведомления из колокольчика дублируются на почту и в Telegram. Здесь —
+ * Уведомления из колокольчика дублируются на почту, в Telegram и MAX. Здесь —
  * общие выключатели каналов и события, которые в канал не уходят. Храним
  * именно выключенные: новый тип события по умолчанию отправляется.
  */
 export const notificationSettingsSchema = z.object({
   emailEnabled: z.boolean(),
   telegramEnabled: z.boolean(),
+  maxEnabled: z.boolean().default(true),
   emailOff: z.array(z.string().max(60)).max(50),
   telegramOff: z.array(z.string().max(60)).max(50),
+  maxOff: z.array(z.string().max(60)).max(50).default([]),
 });
 export type NotificationSettings = z.infer<typeof notificationSettingsSchema>;
 
 export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
   emailEnabled: true,
   telegramEnabled: true,
+  maxEnabled: true,
   emailOff: [],
   telegramOff: [],
+  maxOff: [],
 };
 
 export function mergeNotificationSettings(raw: unknown): NotificationSettings {
@@ -328,8 +350,10 @@ export function mergeNotificationSettings(raw: unknown): NotificationSettings {
     emailEnabled: typeof d.emailEnabled === "boolean" ? d.emailEnabled : DEFAULT_NOTIFICATION_SETTINGS.emailEnabled,
     telegramEnabled:
       typeof d.telegramEnabled === "boolean" ? d.telegramEnabled : DEFAULT_NOTIFICATION_SETTINGS.telegramEnabled,
+    maxEnabled: typeof d.maxEnabled === "boolean" ? d.maxEnabled : DEFAULT_NOTIFICATION_SETTINGS.maxEnabled,
     emailOff: list(d.emailOff),
     telegramOff: list(d.telegramOff),
+    maxOff: list(d.maxOff),
   };
 }
 

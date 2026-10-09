@@ -251,7 +251,7 @@ export function ReportsBuilder({
             <Line label="Тип лицензии">{type ? kindLabel(type) : "Все типы"}</Line>
             <Line label="Продукт">{product || "Все"}</Line>
             {context === "admin" ? (
-              <Line label="Представители">
+              <Line label="Дилеры">
                 {dealerIds.length === 0 ? "Все" : `Выбрано: ${dealerIds.length}`}
               </Line>
             ) : null}

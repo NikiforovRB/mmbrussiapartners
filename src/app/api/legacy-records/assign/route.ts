@@ -31,13 +31,13 @@ const schema = z
     withPayments: z.boolean().optional(),
   })
   .refine((d) => Boolean(d.ids?.length) || Boolean(d.filter), { message: "Не выбраны записи" })
-  .refine((d) => d.action !== "assign" || Boolean(d.userId), { message: "Не выбран представитель" });
+  .refine((d) => d.action !== "assign" || Boolean(d.userId), { message: "Не выбран дилер" });
 
 const chunks = <T,>(list: T[]) =>
   Array.from({ length: Math.ceil(list.length / CHUNK) }, (_, i) => list.slice(i * CHUNK, (i + 1) * CHUNK));
 
 /**
- * Поштучное распределение записей старого ЛК по представителям портала:
+ * Поштучное распределение записей старого ЛК по дилерам портала:
  * назначить выбранные (или все найденные по фильтру) либо вернуть их к
  * владельцу по привязке дилера старого ЛК.
  */
@@ -89,7 +89,7 @@ export const POST = route(async (req: Request) => {
       where: { id: d.userId! },
       select: { id: true, email: true, dealerProfile: { select: { id: true } } },
     });
-    if (!target?.dealerProfile) throw badRequest("Представитель не найден");
+    if (!target?.dealerProfile) throw badRequest("Дилер не найден");
     const moved = before.filter((r) => r.userId !== target.id || !r.manualAssign);
     const now = new Date();
     await db.$transaction(async (tx) => {

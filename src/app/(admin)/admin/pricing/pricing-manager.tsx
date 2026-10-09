@@ -93,7 +93,7 @@ export function PricingManager({
   dealers: PricingDealer[];
   /** Тройки из выданных лицензий, которых нет в справочнике. */
   missing: MissingPosition[];
-  /** Приходит из карточки представителя: открываем сразу его цены. */
+  /** Приходит из карточки дилера: открываем сразу его цены. */
   initialDealerId?: string | null;
 }) {
   const [tab, setTab] = React.useState<"catalog" | "dealers">(
@@ -105,7 +105,7 @@ export function PricingManager({
       <div className="mb-5 flex flex-wrap gap-2">
         {[
           { key: "catalog" as const, label: "Справочник" },
-          { key: "dealers" as const, label: "Цены представителей" },
+          { key: "dealers" as const, label: "Цены дилеров" },
         ].map((t) => (
           <button
             key={t.key}
@@ -163,7 +163,7 @@ function Catalog({ items, missing }: { items: PriceItem[]; missing: MissingPosit
 
   async function remove(item: PriceItem) {
     const name = [item.product, item.bundle, item.region].filter(Boolean).join(" ");
-    if (!confirm(`Удалить позицию «${name}»? Личные цены представителей по ней тоже исчезнут.`)) {
+    if (!confirm(`Удалить позицию «${name}»? Личные цены дилеров по ней тоже исчезнут.`)) {
       return;
     }
     const res = await fetch(`/api/pricing/items/${item.id}`, { method: "DELETE" });
@@ -467,7 +467,7 @@ function ItemModal({
           value={price}
           onChange={setPrice}
           placeholder="10 000"
-          hint="Цена, по которой платит представитель"
+          hint="Цена, по которой платит дилер"
         />
         <div className="grid sm:grid-cols-2 gap-3">
           <MoneyInput
@@ -498,7 +498,7 @@ function ItemModal({
   );
 }
 
-// ──────────────────── цены отдельных представителей ────────────────────
+// ──────────────────── цены отдельных дилеров ────────────────────
 
 function DealerPrices({
   items,
@@ -536,7 +536,7 @@ function DealerPrices({
     return (
       <Card>
         <div className="py-12 text-center text-sm text-ink-muted">
-          Представителей пока нет.
+          Дилеров пока нет.
         </div>
       </Card>
     );
@@ -573,7 +573,7 @@ function DealerPrices({
       toast.error(j.error ?? "Не удалось сохранить");
       return;
     }
-    toast.success("Цены представителя сохранены");
+    toast.success("Цены дилера сохранены");
     router.refresh();
   }
 
@@ -582,7 +582,7 @@ function DealerPrices({
       <Card>
         <div className="grid sm:grid-cols-2 gap-3">
           <Select
-            label="Представитель"
+            label="Дилер"
             value={dealerId}
             onChange={setDealerId}
             searchable
@@ -709,7 +709,7 @@ function DealerPrices({
 
       <div className="flex justify-end">
         <Button loading={saving} onClick={save} icon={<Save className="h-4 w-4" />}>
-          Сохранить цены представителя
+          Сохранить цены дилера
         </Button>
       </div>
     </div>

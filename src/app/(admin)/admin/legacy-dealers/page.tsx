@@ -109,7 +109,7 @@ export default async function LegacyDealersPage({ searchParams }: { searchParams
             <Kpi
               label="Есть на портале"
               value={`${linkedCount} из ${summary._count}`}
-              hint={`Записей у представителей: ${assignedRecords.toLocaleString("ru-RU")} из ${totalRecords.toLocaleString("ru-RU")}`}
+              hint={`Записей у дилеров: ${assignedRecords.toLocaleString("ru-RU")} из ${totalRecords.toLocaleString("ru-RU")}`}
             />
           </div>
 
@@ -235,7 +235,7 @@ async function DealersTab({ sp, canEdit }: { sp: SearchParams; canEdit: boolean 
       <div className="mt-5 flex gap-3 rounded-panel bg-surface-muted px-4 py-3 text-sm text-ink-muted">
         <History className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
         <div>
-          Привязка дилера из ЛК DriveMods к представителю передаёт ему все лицензии, оплаты и пароли этого дилера —
+          Привязка дилера из ЛК DriveMods к дилеру портала передаёт ему все лицензии, оплаты и пароли этого дилера —
           он увидит их в своём кабинете в разделе «ЛК DriveMods». Субдилеры со своей учёткой привязываются сами — по email или телефону при регистрации и одобрении.
           Клиентов общего кабинета (имя и город в комментарии) привяжите кнопкой «Привязать». Отдельные лицензии
           можно переназначить на вкладке «Лицензии».
@@ -388,9 +388,9 @@ async function DealersTab({ sp, canEdit }: { sp: SearchParams; canEdit: boolean 
         query={{ q: sp.q, source: sp.source, link: sp.link }}
       />
       <p className="mt-3 text-xs text-ink-subtle">
-        Карточки представителей:{" "}
+        Карточки дилеров:{" "}
         <Link href="/admin/dealers" className="underline hover:text-accent">
-          Представители
+          Дилеры
         </Link>
         .
       </p>

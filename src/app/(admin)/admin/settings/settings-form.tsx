@@ -64,7 +64,7 @@ export function SettingsForm({
             mmbrussia.ru
           </h2>
           <p className="mt-2 text-white/70 text-sm">
-            Представители, чью публикацию телефона одобрил администратор, доступны по адресу:
+            Дилеры, чью публикацию телефона одобрил администратор, доступны по адресу:
           </p>
           <code className="mt-3 block rounded-panel surface-glass-dark p-3 text-xs">
             GET https://&lt;your-domain&gt;/api/public/representatives

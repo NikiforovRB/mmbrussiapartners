@@ -17,7 +17,7 @@ export function GenerationBlockedNotice({
     <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-panel bg-soft-danger px-4 py-2.5 text-sm text-strong-danger">
       <Ban className="h-4 w-4 shrink-0" />
       <span className="flex-1">
-        Генерация лицензий для представителей запрещена{" "}
+        Генерация лицензий для дилеров запрещена{" "}
         {end ? `до ${formatRuDateTime(end)} МСК` : "без даты окончания — до ручного отключения"}.
       </span>
       {canEdit ? (

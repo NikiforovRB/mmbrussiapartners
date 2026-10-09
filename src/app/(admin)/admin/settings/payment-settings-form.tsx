@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select } from "@/components/ui/select";
 import { usePermissions } from "@/hooks/use-permissions";
 import {
@@ -16,24 +17,44 @@ import {
   type PaymentVatType,
 } from "@/lib/site-settings";
 
-export function PaymentSettingsForm({ initial }: { initial: PaymentSettings }) {
+export function PaymentSettingsForm({
+  initial,
+  connectedTypes,
+}: {
+  initial: PaymentSettings;
+  /** Способы оплаты, подключённые на сервере (ATOL_PAY_PAYMENT_METHODS). */
+  connectedTypes: { value: string; label: string }[];
+}) {
   const { can } = usePermissions();
   const canEdit = can("settings.edit");
   const [serviceLabel, setServiceLabel] = React.useState(initial.serviceLabel);
   const [vatType, setVatType] = React.useState<PaymentVatType>(initial.vatType);
   const [paymentMethod, setPaymentMethod] = React.useState<PaymentMethodType>(initial.paymentMethod);
+  const [checkoutTypes, setCheckoutTypes] = React.useState<string[]>(() => {
+    const connected = connectedTypes.map((t) => t.value);
+    const picked = initial.checkoutTypes.filter((t) => connected.includes(t));
+    return picked.length > 0 ? picked : connected;
+  });
   const [saving, setSaving] = React.useState(false);
+
+  function toggleType(value: string, on: boolean) {
+    setCheckoutTypes((prev) => (on ? [...new Set([...prev, value])] : prev.filter((t) => t !== value)));
+  }
 
   async function save() {
     if (!serviceLabel.trim()) {
       toast.error("Укажите наименование услуги в чеке");
       return;
     }
+    if (connectedTypes.length > 0 && checkoutTypes.length === 0) {
+      toast.error("Оставьте хотя бы один способ оплаты");
+      return;
+    }
     setSaving(true);
     const res = await fetch("/api/settings/payment", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ serviceLabel: serviceLabel.trim(), vatType, paymentMethod }),
+      body: JSON.stringify({ serviceLabel: serviceLabel.trim(), vatType, paymentMethod, checkoutTypes }),
     });
     setSaving(false);
     if (!res.ok) {
@@ -78,6 +99,32 @@ export function PaymentSettingsForm({ initial }: { initial: PaymentSettings }) {
             onChange={(v) => setPaymentMethod(v as PaymentMethodType)}
             options={PAYMENT_METHOD_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
           />
+        </div>
+        <div>
+          <div className="text-sm">Способы оплаты на странице АТОЛ Pay</div>
+          {connectedTypes.length > 0 ? (
+            <>
+              <div className="mt-2 flex flex-wrap gap-x-6 gap-y-2">
+                {connectedTypes.map((t) => (
+                  <Checkbox
+                    key={t.value}
+                    checked={checkoutTypes.includes(t.value)}
+                    disabled={!canEdit}
+                    onChange={(on) => toggleType(t.value, on)}
+                    label={t.label}
+                  />
+                ))}
+              </div>
+              <div className="mt-1.5 text-xs text-ink-muted">
+                Можно оставить один способ, например только СБП. Новые ссылки на оплату будут с выбранными
+                способами; уже выданные не меняются.
+              </div>
+            </>
+          ) : (
+            <div className="mt-1 text-xs text-ink-muted">
+              Способы оплаты берутся из настроек ЛК АТОЛ Pay: на сервере не задан список ATOL_PAY_PAYMENT_METHODS.
+            </div>
+          )}
         </div>
       </div>
       <div className="mt-5 flex justify-end">

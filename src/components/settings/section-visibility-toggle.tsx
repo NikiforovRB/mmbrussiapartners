@@ -7,7 +7,7 @@ import { Toggle } from "@/components/ui/toggle";
 import { usePermissions } from "@/hooks/use-permissions";
 import type { CabinetSections } from "@/lib/site-settings";
 
-/** Показывает или скрывает раздел в кабинетах представителей — сохраняется сразу. */
+/** Показывает или скрывает раздел в кабинетах дилеров — сохраняется сразу. */
 export function SectionVisibilityToggle({
   section,
   initial,
@@ -39,7 +39,7 @@ export function SectionVisibilityToggle({
       toast.error(j.error ?? "Не удалось сохранить");
       return;
     }
-    toast.success(next ? "Раздел показан представителям" : "Раздел скрыт у представителей");
+    toast.success(next ? "Раздел показан дилерам" : "Раздел скрыт у дилеров");
     router.refresh();
   }
 

@@ -52,7 +52,7 @@ export default async function AdminGeoPage() {
     <>
       <Topbar
         title="Гео-аналитика"
-        subtitle="Распределение представителей и лицензий по регионам"
+        subtitle="Распределение дилеров и лицензий по регионам"
         user={{ name: me?.email ?? "Admin", email: me?.email ?? "", role: me?.role.name ?? "Admin" }}
       />
       <div className="mt-6 grid lg:grid-cols-3 gap-5">
@@ -68,7 +68,7 @@ export default async function AdminGeoPage() {
             </div>
             <div>
               <div className="flex items-center gap-2 text-white/70 text-xs">
-                <TrendingUp className="h-4 w-4" /> Представителей
+                <TrendingUp className="h-4 w-4" /> Дилеров
               </div>
               <div className="mt-2 font-display text-4xl  tracking-tightest">{totalDealers}</div>
             </div>

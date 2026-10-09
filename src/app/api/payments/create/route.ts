@@ -18,7 +18,7 @@ const schema = z.object({
   amount: z.number().positive().max(10_000_000).optional(),
   description: z.string().max(200).optional(),
   licenseId: z.string().optional(),
-  /** Email получателя чека (тег 1008). По умолчанию — почта представителя. */
+  /** Email получателя чека (тег 1008). По умолчанию — почта дилера. */
   receiptEmail: z.string().email().optional().or(z.literal("")),
 });
 
@@ -53,7 +53,7 @@ export const POST = route(async (req: Request) => {
     });
     if (!license) throw badRequest("Лицензия не найдена");
     if (license.dealerId !== session.user.id && !canSetAmount) {
-      throw forbidden("Лицензия принадлежит другому представителю");
+      throw forbidden("Лицензия принадлежит другому дилеру");
     }
     if (license.payment) throw badRequest("По этой лицензии счёт уже выставлен");
     // Бесплатный повтор хранится без цены; платный (включён в настройках) — с ценой.

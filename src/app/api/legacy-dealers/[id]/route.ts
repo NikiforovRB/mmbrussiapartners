@@ -11,8 +11,8 @@ export const runtime = "nodejs";
 const schema = z.object({ userId: z.string().min(1).nullable() });
 
 /**
- * Привязка записи старого ЛК к представителю портала. Привязанный
- * представитель отмечается как работавший в ЛК DriveMods. Отвязка снимает
+ * Привязка записи старого ЛК к дилеру портала. Привязанный
+ * дилер отмечается как работавший в ЛК DriveMods. Отвязка снимает
  * эту отметку — обычно это исправление ошибочной связи.
  */
 export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: string }> }) => {
@@ -49,7 +49,7 @@ export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: str
     where: { id: userId },
     select: { id: true, email: true, dealerProfile: { select: { id: true } }, legacyDealer: { select: { id: true, name: true } } },
   });
-  if (!user?.dealerProfile) throw badRequest("Представитель не найден");
+  if (!user?.dealerProfile) throw badRequest("Дилер не найден");
   if (user.legacyDealer && user.legacyDealer.id !== id) {
     throw conflict(`${user.email} уже привязан к записи «${user.legacyDealer.name}»`);
   }

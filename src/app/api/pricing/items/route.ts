@@ -3,7 +3,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { badRequest, parseBody, route } from "@/lib/api";
 import { recordAdminAction } from "@/lib/admin-audit";
-import { normalizeKey } from "@/lib/pricing";
+import { fillLicenseCatalogGaps, normalizeKey } from "@/lib/pricing";
 import { requirePermission } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -51,6 +51,7 @@ export const POST = route(async (req: Request) => {
     summary: [product, bundle, region].filter(Boolean).join(" "),
     diff: { price: data.price },
   });
+  await fillLicenseCatalogGaps().catch((err) => console.error("[pricing] не удалось дозаполнить лицензии", err));
 
   return NextResponse.json({ id: item.id });
 });

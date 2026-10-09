@@ -7,9 +7,9 @@ import { requireApprovedUser } from "@/lib/session";
 export const runtime = "nodejs";
 
 /**
- * Представитель отправляет заявку на подключение к личному кабинету DriveMods.
+ * Дилер отправляет заявку на подключение к личному кабинету DriveMods.
  * Мы только фиксируем время заявки и уведомляем администраторов — сам доступ
- * выдаёт администратор вручную (флаг в профиле представителя).
+ * выдаёт администратор вручную (флаг в профиле дилера).
  */
 export const POST = route(async () => {
   const session = await requireApprovedUser();
@@ -18,7 +18,7 @@ export const POST = route(async () => {
     where: { userId: session.user.id },
     include: { user: { select: { email: true } } },
   });
-  if (!profile) throw notFound("Профиль представителя не найден");
+  if (!profile) throw notFound("Профиль дилера не найден");
   if (profile.driveModsAccess) throw badRequest("Доступ уже предоставлен");
 
   await db.dealerProfile.update({

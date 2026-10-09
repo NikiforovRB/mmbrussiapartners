@@ -20,12 +20,30 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card } from "@/components/ui/card";
 import { Tag } from "@/components/ui/tag";
+import { Select } from "@/components/ui/select";
+import { MoneyInput } from "@/components/ui/money-input";
 import { usePermissions } from "@/hooks/use-permissions";
 import { Money } from "@/components/ui/money";
 import { formatRuDateTime } from "@/lib/dates";
+import { formatRub, parseMoney } from "@/lib/money";
 import { DEALER_COMMENT_MAX } from "@/lib/license-options";
 
 type Step = 1 | 2 | 3 | 4;
+
+/** Дилер, на которого администратор выдаёт лицензию. */
+export type DealerChoice = {
+  id: string;
+  label: string;
+  hint: string;
+  email: string;
+  /** Комментарий дилера по умолчанию: имя и город. */
+  comment: string;
+};
+
+const SELF = "__self__";
+
+/** Как администратор оформляет оплату выдаваемой лицензии. */
+type PayMode = "invoice" | "paid" | "free";
 
 /** Мастер выдаёт только новые лицензии, поэтому тип здесь не выбирают. */
 const LICENSE_TYPE_GENERATION = "Генерация";
@@ -34,7 +52,10 @@ type LicItem = {
   index: number;
   product: string;
   bundle: string | null;
+  /** Регион как его прислал DRIVEMODS — уходит в генерацию без изменений. */
   region: string | null;
+  /** Регион для подписи: если DRIVEMODS его не прислал, — из справочника или версии ПО. */
+  productRegion: string | null;
   fullName: string;
   /** Цена комплектации; приходит с сервера, клиент её не задаёт. */
   price: number;
@@ -55,7 +76,7 @@ type LicInfo = {
   previous: { id: string; number: string; type: string; createdAt: string } | null;
   versionSoftware: string;
   versionCustom: string;
-  /** Версия кастома под запретом генерации: сообщение для представителя. */
+  /** Версия кастома под запретом генерации: сообщение для дилера. */
   customVersionBlocked: string | null;
   deviceId: string;
   items: LicItem[];
@@ -81,6 +102,7 @@ export function LicenseStepper({
   context = "dealer",
   dealerName = "",
   defaultEmail = "",
+  dealers = [],
 }: {
   limit: number;
   used: number;
@@ -88,12 +110,15 @@ export function LicenseStepper({
   dealerName?: string;
   /** Почта по умолчанию для поля «Email для чека» (обязательное). */
   defaultEmail?: string;
+  /** Администратор может выдать лицензию любому из этих дилеров. */
+  dealers?: DealerChoice[];
 }) {
   const router = useRouter();
   const { can } = usePermissions();
   const isAdmin = context === "admin";
   // Выдача без оплаты — отдельное право, а не «любой, кто попал в админку».
   const canIssueFree = can("licenses.issueFree");
+  const canMarkPaid = isAdmin && can("payments.manage");
   const basePath = isAdmin ? "/admin/licenses" : "/dealer/licenses";
   const remaining = Math.max(0, limit - used);
   const [step, setStep] = React.useState<Step>(1);
@@ -107,6 +132,12 @@ export function LicenseStepper({
   const [dealerComment, setDealerComment] = React.useState<string>(dealerName);
   const [receiptEmail, setReceiptEmail] = React.useState<string>(defaultEmail);
   const [withoutPayment, setWithoutPayment] = React.useState<boolean>(false);
+  const [dealerId, setDealerId] = React.useState<string>(SELF);
+  /** Цены под выбранного дилера; null — свои, как их посчитал /licinfo. */
+  const [dealerPrices, setDealerPrices] = React.useState<{ price: number; priced: boolean }[] | null>(null);
+  const [quoting, setQuoting] = React.useState(false);
+  const [payMode, setPayMode] = React.useState<PayMode>("invoice");
+  const [paidAmount, setPaidAmount] = React.useState("");
 
   const [submitting, setSubmitting] = React.useState(false);
   const [result, setResult] = React.useState<{
@@ -115,10 +146,60 @@ export function LicenseStepper({
     downloadUrl: string;
     filename?: string;
     payment?: { id: string; amount: number; payUrl: string | null } | null;
+    paid?: { amount: number } | null;
+    /** Лицензию выдали дилеру — счёт оплачивает он. */
+    dealerEmail?: string | null;
   } | null>(null);
 
-  const selectedItem =
-    info?.items.find((i) => String(i.index) === productIndex) ?? null;
+  const dealer = dealers.find((d) => d.id === dealerId) ?? null;
+  const items = React.useMemo(
+    () =>
+      info?.items.map((it, i) =>
+        dealerPrices?.[i] ? { ...it, price: dealerPrices[i].price, priced: dealerPrices[i].priced } : it,
+      ) ?? [],
+    [info, dealerPrices],
+  );
+  const selectedItem = items.find((i) => String(i.index) === productIndex) ?? null;
+
+  function chooseDealer(id: string) {
+    const next = dealers.find((d) => d.id === id) ?? null;
+    setDealerId(id);
+    setDealerComment(next?.comment ?? dealerName);
+    setReceiptEmail(next?.email ?? defaultEmail);
+  }
+
+  // У каждого дилера свои цены: пересчитываем под выбранного, в том числе
+  // после повторной проверки другого device_id.bin.
+  React.useEffect(() => {
+    setDealerPrices(null);
+    if (dealerId === SELF || !info || info.free || info.items.length === 0) return;
+    let cancelled = false;
+    setQuoting(true);
+    fetch("/api/pricing/quote", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        dealerId,
+        items: info.items.map((it) => ({ product: it.product, bundle: it.bundle, region: it.region })),
+      }),
+    })
+      .then(async (res) => {
+        const json = await res.json().catch(() => ({}));
+        if (cancelled) return;
+        if (res.ok) setDealerPrices(json.prices);
+        else toast.error(json.error ?? "Не удалось получить цены дилера");
+      })
+      .catch(() => {
+        if (!cancelled) toast.error("Не удалось получить цены дилера");
+      })
+      .finally(() => {
+        if (!cancelled) setQuoting(false);
+      });
+    return () => {
+      cancelled = true;
+      setQuoting(false);
+    };
+  }, [dealerId, info]);
 
   // Устройство обычно даёт один продукт с несколькими комплектациями, но
   // список приходит плоским — собираем названия без повторов.
@@ -176,15 +257,28 @@ export function LicenseStepper({
       toast.error("Укажите комментарий дилера (имя субдилера)");
       return;
     }
+    if (quoting) {
+      toast.error("Подождите: пересчитываем цены для выбранного дилера");
+      return;
+    }
+    setPaidAmount(String(selectedItem.price));
     setStep(3);
   }
 
   async function submit() {
     if (!selectedItem || !deviceBase64 || !info) return;
     const email = receiptEmail.trim();
+    const free = isAdmin ? payMode === "free" && canIssueFree : canIssueFree && withoutPayment;
+    const paid = isAdmin && payMode === "paid" && canMarkPaid && !info.free;
+    const paidValue = paid ? parseMoney(paidAmount) : null;
+    if (paid && (paidValue === null || paidValue < 0)) {
+      toast.error("Укажите оплаченную сумму — можно 0");
+      return;
+    }
     // Email обязателен, когда будет выставлен счёт (чек уйдёт на этот адрес).
-    // Без оплаты (повторная генерация или право админа) чека нет — email не нужен.
-    const needsEmail = !info.free && !(canIssueFree && withoutPayment);
+    // Без оплаты (повторная генерация, выдача без оплаты, оплата отмечена
+    // администратором) чека нет — email не нужен.
+    const needsEmail = !info.free && !free && !paid;
     if (needsEmail && !EMAIL_RE.test(email)) {
       toast.error("Укажите корректный Email — на него придёт чек об оплате");
       return;
@@ -208,7 +302,9 @@ export function LicenseStepper({
         // Дата прошлой генерации из DRIVEMODS — для уведомления о повторной выдаче.
         previousGeneratedAt: info.lastGeneratedAt ?? info.firstGeneratedAt ?? null,
         ...(EMAIL_RE.test(email) ? { receiptEmail: email } : {}),
-        ...(canIssueFree && !info.free ? { issuedWithoutPayment: withoutPayment } : {}),
+        ...(canIssueFree && !info.free ? { issuedWithoutPayment: free } : {}),
+        ...(paid && paidValue !== null ? { paidAmount: paidValue } : {}),
+        ...(isAdmin && dealer ? { dealerId: dealer.id } : {}),
       }),
     });
     setSubmitting(false);
@@ -224,6 +320,8 @@ export function LicenseStepper({
       downloadUrl: data.downloadUrl,
       filename: data.filename,
       payment: data.payment ?? null,
+      paid: data.paid ?? null,
+      dealerEmail: data.dealerEmail ?? null,
     });
     setStep(4);
     router.refresh();
@@ -379,6 +477,26 @@ export function LicenseStepper({
                   <div className="font-display text-lg  tracking-tight mb-4">
                     Продукт и комплектация
                   </div>
+                  {isAdmin && dealers.length > 0 ? (
+                    <div className="mb-5 max-w-xl">
+                      <Select
+                        label="Дилер"
+                        value={dealerId}
+                        onChange={chooseDealer}
+                        searchable
+                        searchPlaceholder="Поиск по имени, городу или почте"
+                        options={[
+                          { value: SELF, label: "На себя", hint: "Лицензия будет числиться за вами" },
+                          ...dealers.map((d) => ({ value: d.id, label: d.label, hint: d.hint })),
+                        ]}
+                      />
+                      <p className="mt-1.5 text-xs text-ink-muted">
+                        {dealer
+                          ? "Лицензия, счёт и отчёты — на дилере: счёт он оплатит в своём кабинете. Цены — по его условиям."
+                          : "Выберите дилера, чтобы лицензия и счёт числились за ним."}
+                      </p>
+                    </div>
+                  ) : null}
                   <div className="grid sm:grid-cols-2 gap-3">
                     <ReadonlyField
                       label="Продукт"
@@ -395,8 +513,8 @@ export function LicenseStepper({
                         Для этого устройства нет доступных комплектаций.
                       </p>
                     ) : (
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {info.items.map((it) => (
+                      <div className={`mt-3 flex flex-wrap gap-2 transition-opacity ${quoting ? "opacity-50" : ""}`}>
+                        {items.map((it) => (
                           <BundleButton
                             key={it.index}
                             item={it}
@@ -407,7 +525,7 @@ export function LicenseStepper({
                         ))}
                       </div>
                     )}
-                    {isAdmin && info.items.some((it) => !it.priced) ? (
+                    {isAdmin && items.some((it) => !it.priced) ? (
                       <p className="mt-3 text-xs text-warning">
                         Для части позиций цены нет в справочнике — показана запасная.
                       </p>
@@ -456,6 +574,12 @@ export function LicenseStepper({
                   Подтверждение
                 </div>
                 <div className="grid sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
+                  {isAdmin && dealers.length > 0 ? (
+                    <Row
+                      label="Дилер"
+                      value={dealer ? `${dealer.label} · ${dealer.email}` : "На себя"}
+                    />
+                  ) : null}
                   <Row
                     label="Тип лицензии"
                     value={
@@ -506,11 +630,54 @@ export function LicenseStepper({
                 </div>
 
                 <div className="divider my-5" />
+                {isAdmin && !info.free && (canMarkPaid || canIssueFree) ? (
+                  <div className="mb-5">
+                    <div className="text-xs uppercase tracking-widest text-ink-muted">Оплата</div>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                      <ModeButton
+                        active={payMode === "invoice"}
+                        onSelect={() => setPayMode("invoice")}
+                        title="Выставить счёт"
+                        description={
+                          dealer
+                            ? "Дилер оплатит его в своём кабинете, чек придёт автоматически."
+                            : "Ссылка на онлайн-оплату, чек придёт автоматически."
+                        }
+                      />
+                      {canMarkPaid ? (
+                        <ModeButton
+                          active={payMode === "paid"}
+                          onSelect={() => setPayMode("paid")}
+                          title="Оплачено"
+                          description="Деньги получены мимо онлайн-оплаты. Чек не пробивается."
+                        />
+                      ) : null}
+                      {canIssueFree ? (
+                        <ModeButton
+                          active={payMode === "free"}
+                          onSelect={() => setPayMode("free")}
+                          title="Без оплаты"
+                          description="Комплимент или тест: лицензия помечается как выданная без оплаты."
+                        />
+                      ) : null}
+                    </div>
+                    {payMode === "paid" ? (
+                      <div className="mt-4 max-w-md">
+                        <MoneyInput
+                          label="Оплаченная сумма, ₽"
+                          value={paidAmount}
+                          onChange={setPaidAmount}
+                          hint={`Цена по прайсу — ${formatRub(selectedItem?.price ?? 0)}. Можно указать любую сумму, в том числе 0.`}
+                        />
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
                 {info.free ? (
                   <p className="text-sm text-ink-muted">
                     Повторная генерация бесплатна — счёт и чек не выставляются.
                   </p>
-                ) : (
+                ) : isAdmin && payMode !== "invoice" ? null : (
                   <div className="max-w-md">
                     <Input
                       label="Email для чека"
@@ -523,7 +690,7 @@ export function LicenseStepper({
                   </div>
                 )}
 
-                {canIssueFree && !info.free ? (
+                {!isAdmin && canIssueFree && !info.free ? (
                   <>
                     <div className="divider my-5" />
                     <div className="rounded-panel border border-hairline p-4">
@@ -610,25 +777,34 @@ export function LicenseStepper({
                       <div className="flex items-center gap-2">
                         <CreditCard className="h-4 w-4 text-accent" />
                         <div className="font-display tracking-tight">
-                          Счёт на оплату
+                          {result.dealerEmail ? "Счёт выставлен дилеру" : "Счёт на оплату"}
                         </div>
                       </div>
                       <p className="mt-1 text-sm text-ink-muted">
                         К оплате <Money value={result.payment.amount} />.
-                        {receiptEmail.trim()
-                          ? ` Фискальный чек придёт на ${receiptEmail.trim()} после оплаты.`
-                          : " Фискальный чек придёт после оплаты."}
+                        {result.dealerEmail
+                          ? ` Дилер ${result.dealerEmail} получил уведомление и оплатит счёт в своём кабинете.`
+                          : receiptEmail.trim()
+                            ? ` Фискальный чек придёт на ${receiptEmail.trim()} после оплаты.`
+                            : " Фискальный чек придёт после оплаты."}
                       </p>
                     </div>
-                    <a
-                      href={
-                        result.payment.payUrl ??
-                        `/dealer/payments/${result.payment.id}`
-                      }
-                    >
-                      <Button variant="secondary">Перейти к оплате</Button>
-                    </a>
+                    {result.dealerEmail ? null : (
+                      <a href={result.payment.payUrl ?? `/dealer/payments/${result.payment.id}`}>
+                        <Button variant="secondary">Перейти к оплате</Button>
+                      </a>
+                    )}
                   </div>
+                </Card>
+              ) : result.paid ? (
+                <Card className="mt-4">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-accent" />
+                    <div className="font-display tracking-tight">Оплата отмечена</div>
+                  </div>
+                  <p className="mt-1 text-sm text-ink-muted">
+                    Оплачено <Money value={result.paid.amount} />. Счёт не выставлялся, чек не пробивался.
+                  </p>
                 </Card>
               ) : null}
             </div>
@@ -664,7 +840,33 @@ function ReadonlyField({ label, value }: { label: string; value: string }) {
 
 /** У части продуктов пакета и региона нет — тогда подписью служит сам продукт. */
 function bundleLabel(item: LicItem) {
-  return [item.bundle, item.region].filter(Boolean).join(" ") || item.product;
+  return [item.bundle, item.productRegion ?? item.region].filter(Boolean).join(" ") || item.product;
+}
+
+function ModeButton({
+  active,
+  onSelect,
+  title,
+  description,
+}: {
+  active: boolean;
+  onSelect: () => void;
+  title: string;
+  description: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-pressed={active}
+      className={`rounded-panel border p-3.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+        active ? "border-accent bg-accent/5" : "border-hairline hover:border-accent"
+      }`}
+    >
+      <div className={`text-sm ${active ? "text-accent" : "text-ink"}`}>{title}</div>
+      <div className="mt-1 text-xs text-ink-muted">{description}</div>
+    </button>
+  );
 }
 
 /** Комплектация как в админке DRIVEMODS: название и цена на одной кнопке. */

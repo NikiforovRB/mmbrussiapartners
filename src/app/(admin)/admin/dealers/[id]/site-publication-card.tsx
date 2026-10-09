@@ -164,7 +164,7 @@ export function SitePublicationCard({
         ) : null}
         {status === "REJECTED" && publication.note ? <div>Причина: {publication.note}</div> : null}
         {!consent && status === "NONE" ? (
-          <div>Представитель не включал «Показывать телефон на сайте».</div>
+          <div>Дилер не включал «Показывать телефон на сайте».</div>
         ) : null}
       </div>
 
@@ -232,7 +232,7 @@ export function SitePublicationCard({
               loading={busy === "approve"}
               onClick={approve}
               icon={<Globe className="h-4 w-4" />}
-              title="Включает публикацию от имени представителя — например, если его телефон уже есть на сайте"
+              title="Включает публикацию от имени дилера — например, если его телефон уже есть на сайте"
             >
               Опубликовать
             </Button>
@@ -246,8 +246,8 @@ export function SitePublicationCard({
         title={approved ? "Снять телефон с сайта" : "Отклонить заявку"}
         description={
           approved
-            ? "Телефон исчезнет с сайта сразу. Представитель увидит причину в профиле."
-            : "Представитель увидит причину в профиле."
+            ? "Телефон исчезнет с сайта сразу. Дилер увидит причину в профиле."
+            : "Дилер увидит причину в профиле."
         }
       >
         <Textarea

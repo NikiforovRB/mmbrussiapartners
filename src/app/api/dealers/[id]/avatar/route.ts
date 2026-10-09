@@ -10,9 +10,9 @@ export const runtime = "nodejs";
 const MAX_SIZE = 2 * 1024 * 1024;
 const ALLOWED = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 
-/** Администратор с правом dealers.edit загружает фото профиля представителя. */
+/** Администратор с правом dealers.edit загружает фото профиля дилера. */
 export const POST = route(async (req: Request, ctx: { params: Promise<{ id: string }> }) => {
-  const session = await requirePermission("dealers.edit", "Нет права редактировать представителей");
+  const session = await requirePermission("dealers.edit", "Нет права редактировать дилеров");
   const { id } = await ctx.params;
 
   const form = await req.formData();
@@ -56,7 +56,7 @@ export const POST = route(async (req: Request, ctx: { params: Promise<{ id: stri
 });
 
 export const DELETE = route(async (_req: Request, ctx: { params: Promise<{ id: string }> }) => {
-  const session = await requirePermission("dealers.edit", "Нет права редактировать представителей");
+  const session = await requirePermission("dealers.edit", "Нет права редактировать дилеров");
   const { id } = await ctx.params;
 
   const profile = await db.dealerProfile.findUnique({

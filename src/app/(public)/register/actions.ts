@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { headers } from "next/headers";
 import { db } from "@/lib/db";
+import { ApiError } from "@/lib/api";
 import { hashPassword } from "@/lib/auth";
 import { sealPassword } from "@/lib/password-vault";
 import { normalizePhone } from "@/lib/utils";
@@ -10,7 +11,9 @@ import { notifyAdmins } from "@/lib/app-notifications";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
 import { lookupIpGeo } from "@/lib/geo-ip";
 import { linkLegacyDealer } from "@/lib/legacy-dealers";
-import { recordLocationChange } from "@/lib/dealer-location";
+import { normalizeLocation, recordLocationChange, type DealerLocation } from "@/lib/dealer-location";
+import { ContactFieldError, normalizeCompanyUrl, normalizeTelegramNick } from "@/lib/dealer-contacts";
+import { DEALER_ROLE_NAMES } from "@/lib/roles";
 
 const schema = z.object({
   email: z.string().email(),
@@ -20,6 +23,11 @@ const schema = z.object({
   middleName: z.string().optional().or(z.literal("")),
   phone: z.string().min(6),
   organization: z.string().optional().or(z.literal("")),
+  country: z.string().trim().min(1, "Укажите страну"),
+  region: z.string().trim().min(1, "Укажите регион"),
+  city: z.string().trim().min(1, "Укажите город"),
+  telegramNick: z.string().max(100).optional().or(z.literal("")),
+  companyUrl: z.string().max(400).optional().or(z.literal("")),
 });
 
 export async function registerDealerAction(formData: FormData) {
@@ -37,19 +45,37 @@ export async function registerDealerAction(formData: FormData) {
   const data = parsed.data;
   const email = data.email.toLowerCase().trim();
 
+  let location: DealerLocation;
+  let telegramNick: string | null;
+  let companyUrl: string | null;
+  try {
+    location = normalizeLocation(
+      { country: data.country, region: data.region, city: data.city },
+      { country: null, region: null, city: null },
+    );
+    telegramNick = normalizeTelegramNick(data.telegramNick);
+    companyUrl = normalizeCompanyUrl(data.companyUrl);
+  } catch (e) {
+    if (e instanceof ApiError || e instanceof ContactFieldError) return { ok: false as const, error: e.message };
+    throw e;
+  }
+  if (!location.country || !location.region || !location.city) {
+    return { ok: false as const, error: "Укажите страну, регион и город" };
+  }
+
   const exists = await db.user.findUnique({ where: { email } });
   if (exists) {
     return { ok: false as const, error: "Пользователь с таким email уже существует" };
   }
 
-  const dealerRole = await db.role.findUnique({ where: { name: "Представитель" } });
+  const dealerRole = await db.role.findFirst({ where: { name: { in: DEALER_ROLE_NAMES } }, orderBy: { name: "asc" } });
   if (!dealerRole) {
-    return { ok: false as const, error: "Роль 'Представитель' не настроена. Обратитесь к администратору." };
+    return { ok: false as const, error: "Роль «Дилер» не настроена. Обратитесь к администратору." };
   }
 
   const passwordHash = await hashPassword(data.password);
-  // Страна, регион и город — по IP, дилер потом поправит их в профиле.
-  // Гео-сервис — не повод задерживать регистрацию.
+  // По IP только подсказываем местоположение на форме и запоминаем, откуда
+  // регистрировались. Гео-сервис — не повод задерживать регистрацию.
   const geo = await lookupIpGeo(ip, 3_000);
 
   const created = await db.user.create({
@@ -66,9 +92,11 @@ export async function registerDealerAction(formData: FormData) {
           middleName: data.middleName?.trim() || null,
           phone: normalizePhone(data.phone),
           organization: data.organization?.trim() || null,
-          country: geo.country,
-          region: geo.region,
-          city: geo.city,
+          telegramNick,
+          companyUrl,
+          country: location.country,
+          region: location.region,
+          city: location.city,
           licenseLimit: 0,
           signupIp: geo.ip,
           signupCountry: geo.country,
@@ -78,13 +106,20 @@ export async function registerDealerAction(formData: FormData) {
       },
     },
   });
-  await recordLocationChange({
-    userId: created.id,
-    source: "SIGNUP_IP",
-    before: null,
-    after: { country: geo.country, region: geo.region, city: geo.city },
-    ip: geo.ip,
-  }).catch((err) => console.error("[register] не удалось записать местоположение", err));
+  // В истории: что определилось по IP и что дилер поправил на форме.
+  const fromIp = { country: geo.country, region: geo.region, city: geo.city };
+  await recordLocationChange({ userId: created.id, source: "SIGNUP_IP", before: null, after: fromIp, ip: geo.ip })
+    .then(() =>
+      recordLocationChange({
+        userId: created.id,
+        actorId: created.id,
+        source: "DEALER",
+        before: fromIp,
+        after: location,
+        ip: geo.ip,
+      }),
+    )
+    .catch((err) => console.error("[register] не удалось записать местоположение", err));
   const sealed = sealPassword(created.id, data.password);
   if (sealed) {
     await db.user.update({ where: { id: created.id }, data: { passwordEncrypted: sealed } });
@@ -111,7 +146,7 @@ export async function registerDealerAction(formData: FormData) {
     type: "DEALER_REGISTERED",
     title: "Новая заявка на регистрацию",
     body:
-      `${data.lastName.trim()} ${data.firstName.trim()} · ${email}` +
+      `${data.lastName.trim()} ${data.firstName.trim()} · ${email} · ${location.city}` +
       (legacy ? " · работал в старом ЛК DriveMods" : ""),
     link: `/admin/dealers/${created.id}`,
   });

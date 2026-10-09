@@ -17,9 +17,10 @@ const PAGE_SIZE = 50;
 
 const HINTS: Record<LegacyRecordTab, string> = {
   licenses:
-    "Каждая лицензия из старого ЛК. Владелец на портале по умолчанию — представитель, к которому привязан дилер " +
-    "старого ЛК. Отметьте лицензии (или все найденные по фильтру) и назначьте их другому представителю — вместе " +
-    "с оплатами, которыми они погашены. Назначенное вручную повторный импорт и перепривязка дилера не меняют.",
+    "Каждая лицензия из старого ЛК. Владелец на портале по умолчанию — дилер, к которому привязан дилер " +
+    "старого ЛК. Отметьте лицензии (или все найденные по фильтру) и назначьте их другому дилеру — вместе " +
+    "с оплатами, которыми они погашены, или отметьте оплаченными. Назначенное вручную и отмеченную оплату " +
+    "повторный импорт и перепривязка дилера не меняют.",
   payments:
     "Оплаты из учёток субдилеров и внешние оплаты, которые вносил владелец ЛК. Внешняя оплата отнесена к дилеру, " +
     "чьи лицензии она погасила.",
@@ -102,6 +103,7 @@ export async function LegacyRecordsView({
       ? { id: r.user.id, label: (r.user.dealerProfile && fioFromParts(r.user.dealerProfile)) || r.user.email }
       : null,
     manualAssign: r.manualAssign,
+    manualPayment: r.manualPayment,
     assignedAt: r.assignedAt?.toISOString() ?? null,
     assignedBy: r.assignedBy?.email ?? null,
   }));
@@ -126,7 +128,7 @@ export async function LegacyRecordsView({
       : null,
     filter.user
       ? {
-          label: `Представитель: ${(user?.dealerProfile && fioFromParts(user.dealerProfile)) || user?.email || "—"}`,
+          label: `Дилер: ${(user?.dealerProfile && fioFromParts(user.dealerProfile)) || user?.email || "—"}`,
           clear: query({ user: undefined }),
         }
       : null,
@@ -166,7 +168,7 @@ export async function LegacyRecordsView({
 
       <div className="mt-4 text-xs text-ink-muted">
         Найдено {total.toLocaleString("ru-RU")}
-        {tab !== "other" ? ` на ${formatRub(Number(sums._sum.priceTotal ?? 0))}` : ""} · у представителей портала{" "}
+        {tab !== "other" ? ` на ${formatRub(Number(sums._sum.priceTotal ?? 0))}` : ""} · у дилеров портала{" "}
         {assigned.toLocaleString("ru-RU")}
       </div>
 
