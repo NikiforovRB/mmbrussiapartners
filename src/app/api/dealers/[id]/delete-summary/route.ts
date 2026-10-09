@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { forbidden, notFound, route } from "@/lib/api";
-import { dealerFootprint, describeFootprint } from "@/lib/dealer-delete";
+import { dealerFootprint, describeFootprint, settleDealerReceipts } from "@/lib/dealer-delete";
 import { hasAdminScope } from "@/lib/permissions";
 import { requirePermission } from "@/lib/session";
 
@@ -19,6 +19,7 @@ export const GET = route(async (_req: Request, ctx: { params: Promise<{ id: stri
   if (target.isSuperAdmin || hasAdminScope(target.role.permissions)) {
     throw forbidden("Это учётная запись сотрудника, а не дилера");
   }
+  await settleDealerReceipts(id);
   const footprint = await dealerFootprint(id);
   return NextResponse.json({
     items: describeFootprint(footprint),

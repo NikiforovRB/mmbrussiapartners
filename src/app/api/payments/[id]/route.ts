@@ -204,7 +204,14 @@ export const DELETE = route(async (_req: Request, ctx: { params: Promise<{ id: s
     throw badRequest("По платежу идёт возврат средств — дождитесь, пока он завершится");
   }
   if (payment.receiptStatus === "wait" || payment.refundReceiptStatus === "wait") {
-    throw badRequest("Касса ещё пробивает чек по этому платежу — обновите статус чека и повторите");
+    await refreshReceipt(id).catch((err) => console.error(`[payments] не удалось обновить чек ${id}`, err));
+    const fresh = await db.payment.findUnique({
+      where: { id },
+      select: { receiptStatus: true, refundReceiptStatus: true },
+    });
+    if (fresh?.receiptStatus === "wait" || fresh?.refundReceiptStatus === "wait") {
+      throw badRequest("Касса АТОЛ ещё не подтвердила чек по этому платежу — повторите через несколько минут");
+    }
   }
 
   if (payment.provider === "atol_pay" && payment.status !== "PAID" && payment.status !== "REFUNDED") {

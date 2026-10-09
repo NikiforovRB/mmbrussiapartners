@@ -5,7 +5,7 @@ import { hasAdminScope, hasPermission, type PermissionKey } from "@/lib/permissi
 import { badRequest, conflict, forbidden, notFound, parseBody, route } from "@/lib/api";
 import { recordAdminAction, changedFields } from "@/lib/admin-audit";
 import { notifyUser } from "@/lib/app-notifications";
-import { dealerFootprint, deleteDealerCompletely, describeFootprint } from "@/lib/dealer-delete";
+import { dealerFootprint, deleteDealerCompletely, describeFootprint, settleDealerReceipts } from "@/lib/dealer-delete";
 import { ContactFieldError, normalizeCompanyUrl, normalizeTelegramNick } from "@/lib/dealer-contacts";
 import { fioFromParts, normalizePhone } from "@/lib/utils";
 import { requireApprovedUser, requirePermission } from "@/lib/session";
@@ -293,6 +293,8 @@ export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: str
 const deleteSchema = z.object({
   /** Подтверждение: удалить вместе с лицензиями, платежами и журналами. */
   force: z.boolean().optional(),
+  /** Принудительно: несмотря на чек в кассе, идущий возврат или несверенную оплату. */
+  ignoreBlockers: z.boolean().optional(),
 });
 
 export const DELETE = route(async (req: Request, ctx: { params: Promise<{ id: string }> }) => {
@@ -301,8 +303,11 @@ export const DELETE = route(async (req: Request, ctx: { params: Promise<{ id: st
   if (id === session.user.id) throw forbidden("Собственную учётную запись удалить нельзя");
   const raw = await req.text();
   let force = false;
+  let ignoreBlockers = false;
   try {
-    force = deleteSchema.parse(raw.trim() ? JSON.parse(raw) : {}).force === true;
+    const body = deleteSchema.parse(raw.trim() ? JSON.parse(raw) : {});
+    force = body.force === true;
+    ignoreBlockers = body.ignoreBlockers === true;
   } catch {
     throw badRequest("Некорректный запрос");
   }
@@ -316,9 +321,12 @@ export const DELETE = route(async (req: Request, ctx: { params: Promise<{ id: st
     throw forbidden("Это учётная запись сотрудника, а не дилера — здесь её удалить нельзя");
   }
 
+  await settleDealerReceipts(id);
   const footprint = await dealerFootprint(id);
   const removed = describeFootprint(footprint);
-  if (footprint.blockers.length) throw conflict(`Сейчас удалить нельзя: ${footprint.blockers.join("; ")}`);
+  if (footprint.blockers.length && !ignoreBlockers) {
+    throw conflict(`Обычное удаление недоступно: ${footprint.blockers.join("; ")}. Удалите принудительно.`);
+  }
   if (removed.length > 0 && !force) {
     throw conflict(`У дилера есть ${removed.join(", ")}. Подтвердите удаление вместе с ними.`);
   }
@@ -330,11 +338,13 @@ export const DELETE = route(async (req: Request, ctx: { params: Promise<{ id: st
     throw forbidden("Для удаления дилера с платежами нужно право «Удаление платежей»");
   }
 
+  let ignored: string[];
   try {
-    await deleteDealerCompletely(id);
+    ignored = await deleteDealerCompletely(id, { forced: ignoreBlockers });
   } catch (e) {
-    throw conflict((e as Error).message);
+    throw conflict(`${(e as Error).message}. Если всё равно нужно удалить — удалите принудительно.`);
   }
+  const overridden = [...footprint.blockers, ...ignored];
   const p = target.dealerProfile;
   if (p && (p.siteListed || p.sitePublication === "APPROVED" || p.siteSyncStatus === "failed")) {
     queueDealerSiteSync(id, "delete");
@@ -350,7 +360,11 @@ export const DELETE = route(async (req: Request, ctx: { params: Promise<{ id: st
     entity: "DEALER",
     entityId: id,
     action: "DEALER_DELETED",
-    summary: [fio ? `${fio} (${target.email})` : target.email, removed.length ? `вместе с: ${removed.join(", ")}` : ""]
+    summary: [
+      fio ? `${fio} (${target.email})` : target.email,
+      removed.length ? `вместе с: ${removed.join(", ")}` : "",
+      overridden.length ? `принудительно, несмотря на: ${overridden.join("; ")}` : "",
+    ]
       .filter(Boolean)
       .join(" · "),
     diff: {
@@ -362,6 +376,7 @@ export const DELETE = route(async (req: Request, ctx: { params: Promise<{ id: st
       logs: footprint.logs,
       notifications: footprint.notifications,
       legacyRecords: footprint.legacyRecords,
+      ...(ignoreBlockers ? { forced: true, overridden } : {}),
     },
   });
 

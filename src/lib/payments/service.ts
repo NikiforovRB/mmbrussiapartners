@@ -1,5 +1,6 @@
 import "server-only";
 
+import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { mergePaymentSettings, type PaymentSettings } from "@/lib/site-settings";
 import { notifyDealerReceipt } from "@/lib/notifications";
@@ -328,8 +329,59 @@ export async function applyReceiptReport(paymentId: string, report: AtolReport) 
   return updated;
 }
 
+/**
+ * Попытка пробить чек занимается статусом "wait" ещё до ответа кассы. Если за
+ * это время номер документа АТОЛ так и не появился, отправка прервалась, и сам
+ * такой статус уже никогда не сменится.
+ */
+const STALE_RECEIPT_CLAIM_MS = 10 * 60_000;
+const STUCK_RECEIPT_ERROR = "Отправка чека в кассу прервалась, касса номер документа не вернула. Пробейте чек заново.";
+
+/**
+ * Снимает зависшую отправку чека (прихода и возврата). Номер попытки
+ * откатывается: если касса всё же приняла документ, повтор придёт с тем же
+ * идентификатором, и АТОЛ вернёт исходный чек вместо второго.
+ */
+export async function releaseStuckReceipt(paymentId: string) {
+  const payment = await db.payment.findUnique({
+    where: { id: paymentId },
+    select: {
+      updatedAt: true,
+      receiptStatus: true,
+      receiptUuid: true,
+      receiptAttempt: true,
+      refundReceiptStatus: true,
+      refundReceiptUuid: true,
+      refundReceiptAttempt: true,
+    },
+  });
+  if (!payment || payment.updatedAt.getTime() > Date.now() - STALE_RECEIPT_CLAIM_MS) return false;
+  const data: Prisma.PaymentUpdateManyMutationInput = {};
+  if (payment.receiptStatus === "wait" && !payment.receiptUuid) {
+    Object.assign(data, {
+      receiptStatus: "fail",
+      receiptError: STUCK_RECEIPT_ERROR,
+      receiptAttempt: Math.max(0, payment.receiptAttempt - 1),
+    });
+  }
+  if (payment.refundReceiptStatus === "wait" && !payment.refundReceiptUuid) {
+    Object.assign(data, {
+      refundReceiptStatus: "fail",
+      refundReceiptError: STUCK_RECEIPT_ERROR,
+      refundReceiptAttempt: Math.max(0, payment.refundReceiptAttempt - 1),
+    });
+  }
+  if (Object.keys(data).length === 0) return false;
+  const { count } = await db.payment.updateMany({ where: { id: paymentId, updatedAt: payment.updatedAt }, data });
+  return count > 0;
+}
+
 /** Опрашивает АТОЛ о судьбе чека — на случай, если колбэк не дошёл. После возврата — о чеке возврата. */
 export async function refreshReceipt(paymentId: string) {
+  if (await releaseStuckReceipt(paymentId)) {
+    const released = await db.payment.findUnique({ where: { id: paymentId } });
+    if (released) return released;
+  }
   const payment = await db.payment.findUnique({ where: { id: paymentId } });
   if (payment?.status === "REFUNDED" && payment.refundReceiptUuid) {
     return applyRefundReceiptReport(paymentId, await getReceiptReport(payment.refundReceiptUuid));

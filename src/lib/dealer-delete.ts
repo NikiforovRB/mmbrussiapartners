@@ -2,7 +2,7 @@ import "server-only";
 
 import { db } from "./db";
 import { deleteObject } from "./s3";
-import { syncAtolPayPayment } from "./payments/service";
+import { refreshReceipt, syncAtolPayPayment } from "./payments/service";
 import { formatRub } from "./money";
 import { plural } from "./utils";
 
@@ -17,9 +17,28 @@ export type DealerFootprint = {
   notifications: number;
   /** Записи старого ЛК: не удаляются, а становятся «без владельца». */
   legacyRecords: number;
-  /** Что мешает удалить прямо сейчас (чек в кассе, возврат в процессе). */
+  /** Что мешает обычному удалению (чек в кассе, возврат в процессе); снимается принудительным. */
   blockers: string[];
 };
+
+/**
+ * Перед удалением узнаём у кассы судьбу чеков «в обработке»: обычно они давно
+ * пробиты, просто колбэк не дошёл. Зависшие отправки без номера документа
+ * при этом снимаются.
+ */
+export async function settleDealerReceipts(dealerId: string) {
+  const waiting = await db.payment.findMany({
+    where: { dealerId, OR: [{ receiptStatus: "wait" }, { refundReceiptStatus: "wait" }] },
+    select: { id: true },
+  });
+  for (const p of waiting) {
+    await refreshReceipt(p.id).catch((err) => console.error("[dealer-delete] не удалось обновить чек", p.id, err));
+  }
+}
+
+function paymentLabel(p: { amount: unknown; license: { number: string } | null }) {
+  return `${formatRub(Number(p.amount))}${p.license ? ` (${p.license.number})` : ""}`;
+}
 
 function adminLogWhere(dealerId: string, paymentIds: string[]) {
   return {
@@ -34,7 +53,15 @@ function adminLogWhere(dealerId: string, paymentIds: string[]) {
 export async function dealerFootprint(dealerId: string): Promise<DealerFootprint> {
   const payments = await db.payment.findMany({
     where: { dealerId },
-    select: { id: true, status: true, amount: true, refundStatus: true, receiptStatus: true, refundReceiptStatus: true },
+    select: {
+      id: true,
+      status: true,
+      amount: true,
+      refundStatus: true,
+      receiptStatus: true,
+      refundReceiptStatus: true,
+      license: { select: { number: true } },
+    },
   });
   const paymentIds = payments.map((p) => p.id);
   const [licenses, humaxPasswords, requests, licenseLogs, adminLogs, notifications, legacyRecords] = await Promise.all([
@@ -48,11 +75,15 @@ export async function dealerFootprint(dealerId: string): Promise<DealerFootprint
   ]);
   const paid = payments.filter((p) => p.status === "PAID" || p.status === "REFUNDED");
   const blockers: string[] = [];
-  if (payments.some((p) => p.refundStatus === "processing")) {
-    blockers.push("по одному из платежей идёт возврат средств — дождитесь, пока он завершится");
-  }
-  if (payments.some((p) => p.receiptStatus === "wait" || p.refundReceiptStatus === "wait")) {
-    blockers.push("касса ещё пробивает чек по одному из платежей — обновите статус чека в «Платежах»");
+  for (const p of payments) {
+    if (p.refundStatus === "processing") {
+      blockers.push(`по платежу на ${paymentLabel(p)} идёт возврат средств`);
+    }
+    if (p.receiptStatus === "wait" || p.refundReceiptStatus === "wait") {
+      blockers.push(
+        `касса АТОЛ ещё не подтвердила ${p.refundReceiptStatus === "wait" ? "чек возврата" : "чек"} по платежу на ${paymentLabel(p)}`,
+      );
+    }
   }
   return {
     licenses,
@@ -89,23 +120,33 @@ export function describeFootprint(f: DealerFootprint): string[] {
  * паролями HUMAX, заявками и записями журналов. Записи старого ЛК DriveMods
  * остаются, но теряют владельца. Неоплаченные счета АТОЛ Pay сначала
  * сверяются с эквайрингом: пришедшие деньги без записи потерялись бы.
+ *
+ * forced — удалить, даже если сверка не удалась или деньги пришли: сверка
+ * всё равно запускается, чтобы по пришедшей оплате ушёл чек. Возвращает, что
+ * при этом пришлось проигнорировать, — для журнала.
  */
-export async function deleteDealerCompletely(dealerId: string) {
+export async function deleteDealerCompletely(dealerId: string, { forced = false } = {}): Promise<string[]> {
+  const ignored: string[] = [];
   const openOnline = await db.payment.findMany({
     where: { dealerId, provider: "atol_pay", status: { in: ["PENDING", "FAILED"] } },
     select: { id: true, amount: true },
   });
   for (const p of openOnline) {
+    const amount = formatRub(Number(p.amount));
     let synced;
     try {
       synced = await syncAtolPayPayment(p.id);
     } catch (e) {
-      throw new Error(`Не удалось сверить счёт на ${formatRub(Number(p.amount))} с АТОЛ Pay: ${(e as Error).message}`);
+      const message = `не удалось сверить счёт на ${amount} с АТОЛ Pay: ${(e as Error).message}`;
+      if (!forced) throw new Error(message[0].toUpperCase() + message.slice(1));
+      ignored.push(message);
+      continue;
     }
     if (synced?.paid || synced?.amountMismatch) {
-      throw new Error(
-        `По счёту на ${formatRub(Number(p.amount))} пришла оплата в АТОЛ Pay — сначала разберитесь с ней в «Платежах»`,
-      );
+      if (!forced) {
+        throw new Error(`По счёту на ${amount} пришла оплата в АТОЛ Pay — сначала разберитесь с ней в «Платежах»`);
+      }
+      ignored.push(`по счёту на ${amount} пришла оплата в АТОЛ Pay`);
     }
   }
 
@@ -140,4 +181,5 @@ export async function deleteDealerCompletely(dealerId: string) {
       await deleteObject(key).catch((err) => console.error("[dealer-delete] не удалось удалить файл", key, err));
     }
   })();
+  return ignored;
 }

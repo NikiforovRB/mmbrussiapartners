@@ -13,7 +13,9 @@ type Summary = { items: string[]; legacyRecords: number; paidPayments: number; b
 /**
  * Удаление дилера с подтверждением. В списке — иконка, в карточке —
  * кнопка с подписью; после удаления из карточки уходим обратно к списку.
- * Вместе с дилером удаляется всё, что на нём числится.
+ * Вместе с дилером удаляется всё, что на нём числится. Если обычному
+ * удалению что-то мешает (чек в кассе, возврат, несверенная оплата),
+ * предлагается принудительное.
  */
 export function DeleteDealerButton({
   dealerId,
@@ -32,12 +34,15 @@ export function DeleteDealerButton({
   const [summary, setSummary] = React.useState<Summary | null>(null);
   const [loadError, setLoadError] = React.useState<string | null>(null);
   const [confirmed, setConfirmed] = React.useState(false);
+  /** Отказ обычного удаления, пришедший уже при попытке удалить. */
+  const [refusal, setRefusal] = React.useState<string | null>(null);
 
   async function openModal() {
     setOpen(true);
     setSummary(null);
     setLoadError(null);
     setConfirmed(false);
+    setRefusal(null);
     const res = await fetch(`/api/dealers/${dealerId}/delete-summary`);
     const j = await res.json().catch(() => ({}));
     if (!res.ok) {
@@ -47,17 +52,28 @@ export function DeleteDealerButton({
     setSummary(j as Summary);
   }
 
+  const hasData = (summary?.items.length ?? 0) > 0;
+  const blockers = summary?.blockers ?? [];
+  const forced = blockers.length > 0 || refusal !== null;
+  const ready = summary !== null && (confirmed || (!hasData && !forced));
+
   async function remove() {
     setBusy(true);
     const res = await fetch(`/api/dealers/${dealerId}`, {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ force: true }),
+      body: JSON.stringify({ force: true, ignoreBlockers: forced }),
     });
     setBusy(false);
     if (!res.ok) {
       const j = await res.json().catch(() => ({}));
-      toast.error(j.error ?? "Не удалось удалить дилера");
+      const message = j.error ?? "Не удалось удалить дилера";
+      if (res.status === 409 && !forced) {
+        setRefusal(message);
+        setConfirmed(false);
+        return;
+      }
+      toast.error(message);
       return;
     }
     setOpen(false);
@@ -65,10 +81,6 @@ export function DeleteDealerButton({
     if (redirectTo) router.push(redirectTo);
     router.refresh();
   }
-
-  const hasData = (summary?.items.length ?? 0) > 0;
-  const blocked = (summary?.blockers.length ?? 0) > 0;
-  const ready = summary !== null && !blocked && (!hasData || confirmed);
 
   return (
     <>
@@ -110,7 +122,7 @@ export function DeleteDealerButton({
               icon={<Trash2 className="h-4 w-4" />}
               onClick={remove}
             >
-              {hasData ? "Удалить всё" : "Удалить"}
+              {forced ? "Удалить принудительно" : hasData ? "Удалить всё" : "Удалить"}
             </Button>
           </>
         }
@@ -119,37 +131,53 @@ export function DeleteDealerButton({
           <div className="text-sm text-danger">{loadError}</div>
         ) : !summary ? (
           <div className="flex items-center gap-2 text-sm text-ink-muted">
-            <Loader2 className="h-4 w-4 animate-spin" /> Проверяем, что числится за дилером…
-          </div>
-        ) : blocked ? (
-          <div className="rounded-panel border border-danger/30 bg-danger/5 p-3 text-sm">
-            Сейчас удалить нельзя: {summary.blockers.join("; ")}.
-          </div>
-        ) : hasData ? (
-          <div className="space-y-3">
-            <div className="rounded-panel border border-danger/30 bg-danger/5 p-3 text-sm">
-              <div className="font-medium">Вместе с ним удалятся:</div>
-              <ul className="mt-1.5 list-disc space-y-0.5 pl-5">
-                {summary.items.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-              <div className="mt-2 text-xs text-ink-muted">
-                Эти данные пропадут из отчётов.
-                {summary.paidPayments > 0 ? " Пробитые чеки в налоговой останутся — их это не отменяет." : ""}
-                {summary.legacyRecords > 0
-                  ? ` Записи старого ЛК DriveMods (${summary.legacyRecords}) останутся без владельца.`
-                  : ""}
-              </div>
-            </div>
-            <Checkbox
-              checked={confirmed}
-              onChange={setConfirmed}
-              label="Понимаю, что всё это будет удалено без возможности восстановления"
-            />
+            <Loader2 className="h-4 w-4 animate-spin" /> Проверяем, что числится за дилером, и сверяем чеки с кассой…
           </div>
         ) : (
-          <div className="text-sm text-ink-muted">Лицензий, платежей и записей в журналах у дилера нет.</div>
+          <div className="space-y-3">
+            {forced ? (
+              <div className="rounded-panel border border-warning/40 bg-soft-warning p-3 text-sm">
+                <div className="font-medium">Обычное удаление недоступно</div>
+                <ul className="mt-1.5 list-disc space-y-0.5 pl-5">
+                  {refusal ? <li>{refusal}</li> : blockers.map((b) => <li key={b}>{b}</li>)}
+                </ul>
+                <div className="mt-2 text-xs text-ink-muted">
+                  Принудительное удаление этого не остановит: касса и АТОЛ Pay доведут начатое сами — чек будет
+                  пробит, возврат завершится. Но в кабинете записей об этом уже не останется.
+                </div>
+              </div>
+            ) : null}
+            {hasData ? (
+              <div className="rounded-panel border border-danger/30 bg-danger/5 p-3 text-sm">
+                <div className="font-medium">Вместе с ним удалятся:</div>
+                <ul className="mt-1.5 list-disc space-y-0.5 pl-5">
+                  {summary.items.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+                <div className="mt-2 text-xs text-ink-muted">
+                  Эти данные пропадут из отчётов.
+                  {summary.paidPayments > 0 ? " Пробитые чеки в налоговой останутся — их это не отменяет." : ""}
+                  {summary.legacyRecords > 0
+                    ? ` Записи старого ЛК DriveMods (${summary.legacyRecords}) останутся без владельца.`
+                    : ""}
+                </div>
+              </div>
+            ) : !forced ? (
+              <div className="text-sm text-ink-muted">Лицензий, платежей и записей в журналах у дилера нет.</div>
+            ) : null}
+            {hasData || forced ? (
+              <Checkbox
+                checked={confirmed}
+                onChange={setConfirmed}
+                label={
+                  forced
+                    ? "Удалить принудительно: понимаю, что всё это пропадёт без возможности восстановления"
+                    : "Понимаю, что всё это будет удалено без возможности восстановления"
+                }
+              />
+            ) : null}
+          </div>
         )}
       </Modal>
     </>
