@@ -79,7 +79,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   if (user.isSuperAdmin || hasPermission(user.role.permissions, "licenses.cancel", user.isSuperAdmin))
     items.push({
       href: "/admin/cancellation-requests",
-      label: "Заявки на аннулирование",
+      label: "Аннулирование и возврат",
       icon: <IconFolderClosed className="h-4 w-4" />,
     });
   if (user.isSuperAdmin || hasPermission(user.role.permissions, "users.manage", user.isSuperAdmin))

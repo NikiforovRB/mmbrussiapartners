@@ -8,13 +8,12 @@ import { cn } from "@/lib/utils";
 
 /** w-72 */
 const PANEL_WIDTH = 288;
-const LIST_MAX_HEIGHT = 360;
-/** Шапка панели с подсказкой и «Сброс». */
-const PANEL_HEADER = 44;
+/** Шапка с подсказкой и «Сброс» плюс список высотой до 360px. */
+const PANEL_MAX_HEIGHT = 430;
 const GAP = 6;
 const VIEWPORT_MARGIN = 8;
 
-type PanelPosition = { left: number; top?: number; bottom?: number; listMaxHeight: number };
+type PanelPosition = { left: number; top?: number; bottom?: number; maxHeight: number };
 
 /** Панель прижата к правому краю кнопки и раскрывается вниз, а если снизу мало места — вверх. */
 function panelPosition(anchor: HTMLElement): PanelPosition {
@@ -23,13 +22,13 @@ function panelPosition(anchor: HTMLElement): PanelPosition {
     VIEWPORT_MARGIN,
     Math.min(r.right - PANEL_WIDTH, window.innerWidth - PANEL_WIDTH - VIEWPORT_MARGIN),
   );
-  const below = window.innerHeight - r.bottom - GAP - VIEWPORT_MARGIN - PANEL_HEADER;
-  const above = r.top - GAP - VIEWPORT_MARGIN - PANEL_HEADER;
-  const up = below < Math.min(LIST_MAX_HEIGHT, 200) && above > below;
-  const listMaxHeight = Math.max(120, Math.min(LIST_MAX_HEIGHT, up ? above : below));
+  const below = window.innerHeight - r.bottom - GAP - VIEWPORT_MARGIN;
+  const above = r.top - GAP - VIEWPORT_MARGIN;
+  const up = below < 260 && above > below;
+  const maxHeight = Math.max(180, Math.min(PANEL_MAX_HEIGHT, up ? above : below));
   return up
-    ? { left, bottom: window.innerHeight - r.top + GAP, listMaxHeight }
-    : { left, top: r.bottom + GAP, listMaxHeight };
+    ? { left, bottom: window.innerHeight - r.top + GAP, maxHeight }
+    : { left, top: r.bottom + GAP, maxHeight };
 }
 
 /**
@@ -121,10 +120,10 @@ export function ColumnsMenu<K extends string>({
       {open && position ? createPortal(
         <div
           ref={panelRef}
-          className="fixed z-[70] w-72 rounded-panel border border-hairline bg-surface shadow-lg"
-          style={{ left: position.left, top: position.top, bottom: position.bottom }}
+          className="fixed z-[70] flex w-72 flex-col rounded-panel border border-hairline bg-surface shadow-lg"
+          style={{ left: position.left, top: position.top, bottom: position.bottom, maxHeight: position.maxHeight }}
         >
-          <div className="flex items-center justify-between gap-2 border-b border-hairline px-3 py-2.5">
+          <div className="flex shrink-0 items-center justify-between gap-2 border-b border-hairline px-3 py-2.5">
             <span className="text-xs text-ink-muted">Перетащите, чтобы изменить порядок</span>
             <button
               type="button"
@@ -135,7 +134,7 @@ export function ColumnsMenu<K extends string>({
               <RotateCcw className="h-3 w-3" /> Сброс
             </button>
           </div>
-          <ul className="overflow-y-auto scrollbar-clean py-1" style={{ maxHeight: position.listMaxHeight }}>
+          <ul className="min-h-0 max-h-[360px] flex-1 overflow-y-auto scrollbar-clean py-1">
             {columns.map((c, index) => (
               <li
                 key={c.key}

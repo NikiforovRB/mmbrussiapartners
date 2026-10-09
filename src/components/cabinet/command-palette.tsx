@@ -105,11 +105,11 @@ const ITEMS: Item[] = [
   },
   {
     id: "a-cancel-req",
-    label: "Заявки на аннулирование",
+    label: "Аннулирование и возврат",
     href: "/admin/cancellation-requests",
     icon: <ClipboardList className="h-4 w-4" />,
     scope: "admin",
-    keywords: ["аннулирование", "заявки"],
+    keywords: ["аннулирование", "заявки", "возврат", "деньги"],
   },
   {
     id: "a-roles",
