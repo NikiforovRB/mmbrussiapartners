@@ -26,6 +26,7 @@ export const PATCH = route(async (req: Request) => {
     vatType: parsed.data.vatType,
     paymentMethod: parsed.data.paymentMethod,
     checkoutTypes: chosen.length === connected.length ? [] : chosen,
+    merchantName: parsed.data.merchantName,
   };
 
   await db.companySettings.upsert({

@@ -269,6 +269,11 @@ export const paymentSettingsSchema = z.object({
    * АТОЛ Pay. Пусто — все подключённые.
    */
   checkoutTypes: z.array(z.string().regex(/^[a-z_]{2,20}$/)).max(10).default([]),
+  /**
+   * Название магазина на форме АТОЛ Pay, над реквизитами продавца. Пусто — не
+   * показывать. Название в приложении банка и в выписке задаёт эквайер.
+   */
+  merchantName: z.string().trim().max(64, "Название магазина — не длиннее 64 символов").default("MMB RUSSIA"),
 });
 export type PaymentSettings = z.infer<typeof paymentSettingsSchema>;
 
@@ -277,6 +282,7 @@ export const DEFAULT_PAYMENT_SETTINGS: PaymentSettings = {
   vatType: "vat5",
   paymentMethod: "full_payment",
   checkoutTypes: [],
+  merchantName: "MMB RUSSIA",
 };
 
 export function mergePaymentSettings(raw: unknown): PaymentSettings {
@@ -295,7 +301,9 @@ export function mergePaymentSettings(raw: unknown): PaymentSettings {
   const checkoutTypes = Array.isArray(d.checkoutTypes)
     ? [...new Set(d.checkoutTypes.filter((t): t is string => typeof t === "string" && /^[a-z_]{2,20}$/.test(t)))]
     : [];
-  return { serviceLabel, vatType, paymentMethod, checkoutTypes };
+  const merchantName =
+    typeof d.merchantName === "string" ? d.merchantName.trim().slice(0, 64) : DEFAULT_PAYMENT_SETTINGS.merchantName;
+  return { serviceLabel, vatType, paymentMethod, checkoutTypes, merchantName };
 }
 
 // ── Разделы кабинета дилера ───────────────────────────────────────────

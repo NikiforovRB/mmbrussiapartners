@@ -78,6 +78,7 @@ export async function createPayment(input: CreatePaymentInput) {
 
   let checkout: CheckoutResult;
   try {
+    const settings = await loadPaymentSettings();
     checkout = await provider.createCheckout({
       paymentId: payment.id,
       amount: input.amount,
@@ -86,7 +87,8 @@ export async function createPayment(input: CreatePaymentInput) {
       phone: input.phone,
       returnUrl: absolute(`/dealer/payments/${payment.id}`),
       notifyUrl: atolPayCallbackUrl(payment.id),
-      paymentTypes: (await loadPaymentSettings()).checkoutTypes,
+      paymentTypes: settings.checkoutTypes,
+      merchantName: settings.merchantName,
     });
   } catch (err) {
     if (provider.id === "manual") throw err;
@@ -613,6 +615,7 @@ export async function atolPayCheckoutUrl(paymentId: string): Promise<string | nu
   if (provider.id !== "atol_pay") return null;
 
   // У АТОЛ Pay номер заказа одноразовый, поэтому новая ссылка — новый заказ.
+  const settings = await loadPaymentSettings();
   const checkout = await provider.createCheckout({
     paymentId: payment.id,
     orderId: `${payment.id}-${Date.now().toString(36)}`,
@@ -620,7 +623,8 @@ export async function atolPayCheckoutUrl(paymentId: string): Promise<string | nu
     description: payment.description ?? "",
     returnUrl: absolute(`/dealer/payments/${payment.id}`),
     notifyUrl: atolPayCallbackUrl(payment.id),
-    paymentTypes: (await loadPaymentSettings()).checkoutTypes,
+    paymentTypes: settings.checkoutTypes,
+    merchantName: settings.merchantName,
   });
   await db.payment.update({
     where: { id: payment.id },

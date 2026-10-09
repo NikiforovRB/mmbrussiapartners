@@ -35,6 +35,7 @@ export function PaymentSettingsForm({
     const picked = initial.checkoutTypes.filter((t) => connected.includes(t));
     return picked.length > 0 ? picked : connected;
   });
+  const [merchantName, setMerchantName] = React.useState(initial.merchantName);
   const [saving, setSaving] = React.useState(false);
 
   function toggleType(value: string, on: boolean) {
@@ -54,7 +55,13 @@ export function PaymentSettingsForm({
     const res = await fetch("/api/settings/payment", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ serviceLabel: serviceLabel.trim(), vatType, paymentMethod, checkoutTypes }),
+      body: JSON.stringify({
+        serviceLabel: serviceLabel.trim(),
+        vatType,
+        paymentMethod,
+        checkoutTypes,
+        merchantName: merchantName.trim(),
+      }),
     });
     setSaving(false);
     if (!res.ok) {
@@ -100,6 +107,15 @@ export function PaymentSettingsForm({
             options={PAYMENT_METHOD_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
           />
         </div>
+        <Input
+          label="Название магазина на странице оплаты"
+          value={merchantName}
+          maxLength={64}
+          disabled={!canEdit}
+          onChange={(e) => setMerchantName(e.target.value)}
+          hint="Показывается на форме АТОЛ Pay над реквизитами продавца. Название в приложении банка и в выписке задаёт эквайер (для СБП — ЮKassa), отсюда его не поменять."
+          placeholder="MMB RUSSIA"
+        />
         <div>
           <div className="text-sm">Способы оплаты на странице АТОЛ Pay</div>
           {connectedTypes.length > 0 ? (

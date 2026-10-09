@@ -29,6 +29,8 @@ export type CheckoutInput = {
   notifyUrl?: string | null;
   /** Способы оплаты из настроек админки; пусто — все подключённые. */
   paymentTypes?: string[];
+  /** Название магазина над реквизитами продавца на форме оплаты. */
+  merchantName?: string;
 };
 
 export type CheckoutResult = {
@@ -223,6 +225,7 @@ const atolPayProvider: PaymentProvider = {
         orderId,
         sessionType: "oneStep",
         ...(paymentMethods.length > 0 ? { paymentMethods } : {}),
+        ...(input.merchantName ? { merchant: { name: input.merchantName } } : {}),
         additionalProps: {
           returnUrl: input.returnUrl,
           ...(input.notifyUrl ? { notificationUrl: input.notifyUrl } : {}),
