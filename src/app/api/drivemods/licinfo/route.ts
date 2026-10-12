@@ -117,7 +117,7 @@ export const POST = route(async (req: Request) => {
         product: it.product,
         bundle: it.bundle,
         region: it.region,
-        /** Регион для подписи: у части продуктов DRIVEMODS его не отдаёт. */
+        /** Регион продукта — рынок ШГУ из версии ПО (см. inferProductRegion). */
         productRegion: regions[index],
         fullName: productFullName(it),
         price: prices ? prices[index].price : 0,

@@ -49,6 +49,8 @@ enum AppNotificationType {
   DEALER_REJECTED
   DEALER_SUSPENDED
   LICENSE_ISSUED
+  /// DRIVEMODS отклонил запрос на генерацию.
+  LICENSE_FAILED
   LICENSE_CANCELLED
   LICENSE_REVOKED
   CANCELLATION_REQUESTED
@@ -496,7 +498,11 @@ model License {
   licenseKey            String?
   product               String?
   bundle                String?
+  /// Регион рынка ШГУ — код из версии ПО (SP2CPE.CHN.S5W_M… → CHN).
   productRegion         String?
+  /// Регион позиции, как его прислал DRIVEMODS (у MB-S5WM-A9 FULL — RUS):
+  /// по нему ищется цена в справочнике. С регионом ШГУ не совпадает.
+  catalogRegion         String?
   versionSoftware       String?
   versionCustom         String?
   dealerComment         String?
@@ -812,9 +818,11 @@ model PriceListItem {
   id        String   @id @default(cuid())
   /// Название продукта из DRIVEMODS, например MB-S5WM.
   product   String
-  /// Пакет продукта (FULL, ECO). Пусто — у продукта одна цена.
+  /// Пакет продукта (FULL, ECO, CUSTOM+RUS). Пусто — у продукта одна цена.
   bundle    String   @default("")
-  /// Регион продукта (RUS, CHN). Пусто — цена общая для всех регионов.
+  /// Регион позиции, как его присылает DRIVEMODS (MB-S5WM-A9 FULL RUS).
+  /// Пусто — цена общая для всех регионов. Регион рынка ШГУ из версии ПО
+  /// (CHN, KOR, USA) на цену не влияет.
   region    String   @default("")
   /// Дилерская цена (базовая, по которой платит дилер).
   price     Decimal  @db.Decimal(12, 2)

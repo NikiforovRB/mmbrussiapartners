@@ -41,6 +41,8 @@ const schema = z.object({
   rejectionReason: z.string().trim().max(500, "Причина — не длиннее 500 символов").nullable().optional(),
   suspensionReason: z.string().trim().max(500, "Причина — не длиннее 500 символов").nullable().optional(),
   roleId: z.string().optional(),
+  /** Логин дилера: исправить опечатку, сделанную при регистрации. */
+  email: z.string().trim().toLowerCase().email("Некорректный email").max(254).optional(),
   profile: profileSchema.optional(),
 });
 
@@ -91,8 +93,9 @@ export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: str
   const wantsPlainEdit =
     d.profile !== undefined && PLAIN_PROFILE_FIELDS.some((f) => d.profile?.[f] !== undefined);
   const wantsLegacy = d.profile?.legacyDealer !== undefined;
+  const wantsEmail = d.email !== undefined;
 
-  if (!wantsStatus && !wantsRole && !wantsLimit && !wantsPlainEdit && !wantsLegacy) {
+  if (!wantsStatus && !wantsRole && !wantsLimit && !wantsPlainEdit && !wantsLegacy && !wantsEmail) {
     throw badRequest("Нечего сохранять");
   }
   if (wantsLegacy && !can("pricing.manage") && !can("dealers.edit")) {
@@ -112,7 +115,7 @@ export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: str
   }
   if (wantsRole && !can("users.manage")) throw forbidden("Нет права менять роль пользователя");
   if (wantsLimit && !can("dealers.setLimit")) throw forbidden("Нет права менять лимит лицензий");
-  if (wantsPlainEdit && !can("dealers.edit")) throw forbidden("Нет права редактировать профиль");
+  if ((wantsPlainEdit || wantsEmail) && !can("dealers.edit")) throw forbidden("Нет права редактировать профиль");
 
   // Даже с полными правами администратор не меняет собственные роль и статус:
   // это единственный способ случайно или намеренно запереть себя самого
@@ -125,6 +128,13 @@ export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: str
   if (!target) throw notFound("Дилер не найден");
   if (target.isSuperAdmin && wantsRole) {
     throw forbidden("Роль суперадминистратора менять нельзя");
+  }
+  const emailChanged = wantsEmail && d.email !== target.email;
+  if (emailChanged) {
+    // Почту сотрудников меняют в «Пользователях»: там своё право users.manage.
+    if (!target.dealerProfile || target.isSuperAdmin) throw forbidden("Здесь меняется только email дилера");
+    const taken = await db.user.findUnique({ where: { email: d.email }, select: { id: true } });
+    if (taken) throw conflict("Пользователь с таким email уже существует");
   }
 
   const currentLocation = {
@@ -199,6 +209,7 @@ export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: str
   await db.user.update({
     where: { id },
     data: {
+      ...(emailChanged && { email: d.email }),
       ...(wantsStatus && { status: d.status }),
       // Иначе после разблокировки снова заработали бы сессии, выданные до неё.
       // Отклонённого не разлогиниваем: в кабинете он сразу увидит причину.
@@ -211,6 +222,7 @@ export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: str
 
   const diff = changedFields(
     {
+      email: target.email,
       status: target.status,
       roleId: target.roleId,
       licenseLimit: target.dealerProfile?.licenseLimit,
@@ -224,6 +236,7 @@ export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: str
       ),
     },
     {
+      ...(emailChanged && { email: d.email }),
       ...(wantsStatus && { status: d.status }),
       ...(wantsRole && { roleId: d.roleId }),
       ...profileUpdate,
@@ -242,7 +255,7 @@ export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: str
   }
 
   const statusChanged = wantsStatus && d.status !== target.status;
-  if (statusChanged && d.status === "APPROVED") {
+  if ((statusChanged && d.status === "APPROVED") || emailChanged) {
     await linkLegacyDealer(id).catch((err) => console.error("[dealers] сверка со старым ЛК не удалась", err));
   }
   if (statusChanged || SITE_PROFILE_FIELDS.some((f) => f in diff)) {

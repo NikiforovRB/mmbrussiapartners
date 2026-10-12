@@ -15,7 +15,11 @@ export function LoginForm() {
   const params = useSearchParams();
   const callbackUrl = params.get("callbackUrl") || "/dealer";
   const notice =
-    params.get("notice") === "password" ? "Пароль изменён. Войдите с новым паролем." : null;
+    params.get("notice") === "password"
+      ? "Пароль изменён. Войдите с новым паролем."
+      : params.get("registered") === "1"
+        ? "Заявка отправлена. Войдите с email и паролем из регистрации — в кабинете будет виден статус заявки."
+        : null;
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [loading, setLoading] = React.useState(false);
@@ -52,7 +56,8 @@ export function LoginForm() {
           ? "Аккаунт заблокирован администратором"
           : code === "TOO_MANY_ATTEMPTS"
             ? "Слишком много попыток входа. Попробуйте позже"
-            : "Неверный email или пароль";
+            : "Неверный email или пароль. Проверьте адрес: он должен совпадать с указанным при регистрации. " +
+              "Заявка на рассмотрении входу не мешает.";
       setFormError(message);
       return;
     }

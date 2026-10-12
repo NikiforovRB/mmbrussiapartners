@@ -54,7 +54,7 @@ type LicItem = {
   bundle: string | null;
   /** Регион как его прислал DRIVEMODS — уходит в генерацию без изменений. */
   region: string | null;
-  /** Регион для подписи: если DRIVEMODS его не прислал, — из справочника или версии ПО. */
+  /** Регион продукта — рынок ШГУ из версии ПО; без него — регион DRIVEMODS или справочника. */
   productRegion: string | null;
   fullName: string;
   /** Цена комплектации; приходит с сервера, клиент её не задаёт. */
@@ -606,6 +606,7 @@ export function LicenseStepper({
                       )
                     }
                   />
+                  <Row label="Регион продукта" value={selectedItem?.productRegion || "—"} />
                   <Row label="Версия ПО" value={info.versionSoftware || "—"} />
                   <Row
                     label="Версия кастома"
@@ -838,9 +839,12 @@ function ReadonlyField({ label, value }: { label: string; value: string }) {
   );
 }
 
-/** У части продуктов пакета и региона нет — тогда подписью служит сам продукт. */
+/**
+ * Комплектация так, как её называет DRIVEMODS (FULL RUS у MB-S5WM-A9); у части
+ * продуктов пакета и региона нет — тогда подписью служит сам продукт.
+ */
 function bundleLabel(item: LicItem) {
-  return [item.bundle, item.productRegion ?? item.region].filter(Boolean).join(" ") || item.product;
+  return [item.bundle, item.region].filter(Boolean).join(" ") || item.product;
 }
 
 function ModeButton({

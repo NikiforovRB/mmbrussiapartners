@@ -3,6 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { signIn } from "next-auth/react";
 import {
   Mail,
   Lock,
@@ -65,12 +66,25 @@ export function RegisterForm() {
     setLoading(true);
     const fd = new FormData(e.currentTarget);
     const res = await registerDealerAction(fd);
-    setLoading(false);
-    if (res.ok) {
-      toast.success("Заявка отправлена. Ожидайте одобрения администратора.");
-      router.push("/login?registered=1");
-    } else {
+    if (!res.ok) {
+      setLoading(false);
       setFormError(res.error ?? "Не удалось зарегистрироваться");
+      return;
+    }
+    toast.success("Заявка отправлена. Ожидайте одобрения администратора.");
+    // Сразу входим: в кабинете дилер видит статус заявки и адрес, на который
+    // зарегистрирован, — опечатку в email заметно до того, как он не сможет войти.
+    const signedIn = await signIn("credentials", {
+      email: String(fd.get("email") ?? "").trim().toLowerCase(),
+      password,
+      redirect: false,
+    }).catch(() => null);
+    setLoading(false);
+    if (signedIn && !signedIn.error) {
+      router.push("/dealer");
+      router.refresh();
+    } else {
+      router.push("/login?registered=1");
     }
   }
 

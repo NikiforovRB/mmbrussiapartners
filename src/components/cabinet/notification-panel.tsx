@@ -37,6 +37,7 @@ const ICONS: Record<string, React.ReactNode> = {
   DEALER_REJECTED: <BadgeCheck className="h-4 w-4" />,
   DEALER_SUSPENDED: <BadgeCheck className="h-4 w-4" />,
   LICENSE_ISSUED: <KeyRound className="h-4 w-4" />,
+  LICENSE_FAILED: <KeyRound className="h-4 w-4" />,
   LICENSE_CANCELLED: <KeyRound className="h-4 w-4" />,
   LICENSE_REVOKED: <KeyRound className="h-4 w-4" />,
   CANCELLATION_REQUESTED: <ClipboardList className="h-4 w-4" />,

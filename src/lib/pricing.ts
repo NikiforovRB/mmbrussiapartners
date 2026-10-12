@@ -63,14 +63,15 @@ function applyAdjust(base: number, kind: PriceAdjustKind, value: number | null):
 type CatalogKey = { product: string; bundle: string; region: string };
 
 /**
- * Позиция справочника для запроса.
+ * Позиция справочника для запроса. Регион здесь — регион позиции DRIVEMODS
+ * (MB-S5WM-A9 FULL RUS), а не рынок ШГУ из версии ПО.
  *
- * MB-S5WM FULL RUS, MB-S5WM FULL CHN и MB-S5WM ECO — три разных товара со
- * своими ценами, поэтому цену соседа по региону не подставляем: незаполненная
- * позиция честно уходит на запасную цену и попадает в список без цен.
- * Исключения однозначны: позиция без региона — общая цена для всех регионов,
- * а если DRIVEMODS региона не прислал (у MB-S5WM его нет), подходит
- * единственная позиция с тем же продуктом и комплектацией.
+ * Позиции с разными регионами DRIVEMODS — разные товары со своими ценами,
+ * поэтому цену соседа по региону не подставляем: незаполненная позиция честно
+ * уходит на запасную цену и попадает в список без цен. Исключения однозначны:
+ * позиция без региона — общая цена для всех регионов, а если DRIVEMODS региона
+ * не прислал (у MB-S5WM его нет), подходит единственная позиция с тем же
+ * продуктом и комплектацией.
  */
 export function findPriceItem<T extends CatalogKey>(items: T[], q: PriceQuery): T | null {
   const product = normalizeKey(q.product);
@@ -85,29 +86,64 @@ export function findPriceItem<T extends CatalogKey>(items: T[], q: PriceQuery): 
 }
 
 /**
- * Регион продукта для лицензии. DRIVEMODS отдаёт его не для всех продуктов:
- * тогда берём регион позиции справочника (она для продукта и комплектации
- * одна), иначе — код рынка из версии ПО: KA4.KOR.S5W_M.V → KOR.
+ * Коды рынков, которые встречаются в версиях ПО не вторым сегментом.
+ * Вторым сегментом (KA4.KOR.S5W_M.V) идёт код рынка всегда.
+ */
+const MARKET_CODES = new Set([
+  "AUS", "BRA", "CAN", "CHN", "CIS", "EUR", "GCC", "GEN", "HKG", "IND", "JPN",
+  "KOR", "LTN", "MES", "MEX", "NZL", "RUS", "TUR", "TWN", "USA",
+]);
+
+/** Рынок ШГУ по версии ПО: SP2CPE.CHN.S5W_M.007.003.241221 → CHN. */
+export function marketRegion(versionSoftware?: string | null): string | null {
+  const version = normalizeKey(versionSoftware);
+  const second = version.split(".")[1] ?? "";
+  if (/^[A-Z]{3}$/.test(second)) return second;
+  return version.split(/[^A-Z0-9]+/).find((token) => MARKET_CODES.has(token)) ?? null;
+}
+
+/**
+ * Регион продукта для лицензии — рынок ШГУ из версии ПО. Регион DRIVEMODS
+ * сюда не годится: у MB-S5WM-A9 FULL он всегда RUS, хотя ШГУ китайский.
+ * Только если в версии ПО рынка нет (MBGEN5-0.0.1), берём регион DRIVEMODS,
+ * а за ним — регион единственной позиции справочника.
  */
 export function inferProductRegion(
   q: PriceQuery,
   items: CatalogKey[],
   versionSoftware?: string | null,
 ): string | null {
+  const market = marketRegion(versionSoftware);
+  if (market) return market;
   const own = normalizeKey(q.region);
   if (own) return own;
   const item = findPriceItem(items, q);
-  if (item && normalizeKey(item.region)) return normalizeKey(item.region);
-  const market = normalizeKey((versionSoftware ?? "").split(".")[1]);
-  return /^[A-Z]{3}$/.test(market) ? market : null;
+  return item && normalizeKey(item.region) ? normalizeKey(item.region) : null;
 }
 
 /**
  * Дозаполняет у выданных лицензий пустые регион продукта и базовую цену по
  * справочнику — после правки позиции, чтобы отчёты не показывали «—» по
- * лицензиям, выданным до того, как позицию завели.
+ * лицензиям, выданным до того, как позицию завели. Порядок тот же, что в
+ * inferProductRegion: версия ПО, регион DRIVEMODS, затем справочник.
  */
 export async function fillLicenseCatalogGaps(): Promise<void> {
+  const marketPattern = `(^|[^A-Z0-9])(${[...MARKET_CODES].join("|")})([^A-Z0-9]|$)`;
+  await db.$executeRaw`
+    UPDATE "License"
+    SET "productRegion" = CASE
+      WHEN upper(split_part(coalesce("versionSoftware", ''), '.', 2)) ~ '^[A-Z]{3}$'
+        THEN upper(split_part("versionSoftware", '.', 2))
+      ELSE (regexp_match(upper("versionSoftware"), ${marketPattern}::text))[2]
+    END
+    WHERE coalesce(trim("productRegion"), '') = ''
+      AND (upper(split_part(coalesce("versionSoftware", ''), '.', 2)) ~ '^[A-Z]{3}$'
+        OR upper(coalesce("versionSoftware", '')) ~ ${marketPattern}::text)`;
+  await db.$executeRaw`
+    UPDATE "License"
+    SET "productRegion" = upper(trim("catalogRegion"))
+    WHERE coalesce(trim("productRegion"), '') = ''
+      AND coalesce(trim("catalogRegion"), '') <> ''`;
   await db.$executeRaw`
     UPDATE "License" l
     SET "productRegion" = p."region"
@@ -128,7 +164,7 @@ export async function fillLicenseCatalogGaps(): Promise<void> {
       AND i."myPrice" IS NOT NULL
       AND upper(trim(l."product")) = i."product"
       AND upper(coalesce(trim(l."bundle"), '')) = i."bundle"
-      AND (upper(coalesce(trim(l."productRegion"), '')) = i."region" OR i."region" = '')`;
+      AND (upper(coalesce(trim(l."catalogRegion"), '')) = i."region" OR i."region" = '')`;
 }
 
 /** Регионы продукта для набора позиций одного ШГУ (см. inferProductRegion). */

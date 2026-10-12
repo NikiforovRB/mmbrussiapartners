@@ -181,8 +181,9 @@ function Catalog({ items, missing }: { items: PriceItem[]; missing: MissingPosit
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-ink-muted max-w-2xl">
           Цена привязана к тройке «продукт + комплектация + регион» — ровно к той, что присылает
-          сервис генерации. MB-S5WM FULL RUS, MB-S5WM FULL CHN и MB-S5WM ECO считаются разными
-          товарами. Если комплектации или региона у продукта нет, поле оставьте пустым.
+          DriveMods: MB-S5WM FULL, MB-S5WM-A9 FULL RUS, MB-GEN5 CUSTOM+RUS. Если комплектации или
+          региона у продукта нет, поле оставьте пустым. Регион здесь — часть названия товара в
+          DriveMods; рынок ШГУ (CHN, KOR, USA) определяется по версии ПО и на цену не влияет.
         </p>
         {/* На узком экране кнопка уходит под поиск, а не сжимается в две строки. */}
         <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
@@ -444,7 +445,7 @@ function ItemModal({
           value={product}
           onChange={(e) => setProduct(e.target.value)}
           placeholder="MB-S5WM"
-          hint="Ровно так, как продукт называется в сервисе генерации"
+          hint="Только продукт, как в DriveMods: MB-GEN5, а не MB-GEN5 CUSTOM+RUS — комплектация отдельным полем"
         />
         <div className="grid sm:grid-cols-2 gap-3">
           <Input
@@ -459,7 +460,7 @@ function ItemModal({
             value={region}
             onChange={(e) => setRegion(e.target.value)}
             placeholder="RUS"
-            hint="Пусто — регион не присылается"
+            hint="Как в DriveMods; пусто — DriveMods регион не присылает. Не рынок ШГУ из версии ПО"
           />
         </div>
         <MoneyInput

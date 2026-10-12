@@ -21,6 +21,7 @@ import { mergeAnnouncement } from "@/lib/site-settings";
 import { CommandPalette } from "@/components/cabinet/command-palette";
 import { CabinetUserProvider } from "@/components/cabinet/cabinet-user";
 import { SignOutButton } from "@/components/cabinet/sign-out-button";
+import { PendingEmailFix } from "@/components/cabinet/pending-email-fix";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { fioFromParts } from "@/lib/utils";
@@ -146,6 +147,7 @@ function PendingScreen({ email }: { email: string }) {
         Аккаунт <span className="text-ink">{email}</span> ожидает одобрения администратора.
         Вы получите уведомление сразу после одобрения.
       </p>
+      <PendingEmailFix email={email} />
     </StatusScreen>
   );
 }

@@ -222,10 +222,12 @@ export function DealerEditor({
 
   async function saveProfile() {
     if (!data.dealerProfile) return;
+    const email = data.email.trim().toLowerCase();
     if (await update({
       profile: data.dealerProfile,
+      ...(email !== dealer.email ? { email } : {}),
     })) {
-      toast.success("Профиль обновлён");
+      toast.success(email !== dealer.email ? `Профиль обновлён. Входить дилер будет с ${email}` : "Профиль обновлён");
       router.refresh();
     }
   }
@@ -272,7 +274,7 @@ export function DealerEditor({
                 <div className="font-display text-2xl  tracking-tightest">
                   {fio || "—"}
                 </div>
-                <div className="text-sm text-ink-muted">{data.email}</div>
+                <div className="text-sm text-ink-muted">{dealer.email}</div>
                 <div className="mt-2 flex items-center gap-2">
                   <StatusTag kind="user" status={data.status} />
                   <Tag tone="muted">Заявка от {formatRuDateTime(data.createdAt)}</Tag>
@@ -358,6 +360,18 @@ export function DealerEditor({
         <Card>
           <div className="font-display text-lg  tracking-tight mb-4">Личные данные</div>
           <div className="grid sm:grid-cols-2 gap-3">
+            <Input
+              label="Email (логин)"
+              type="email"
+              disabled={!canEdit}
+              value={data.email}
+              hint={
+                data.email.trim().toLowerCase() !== dealer.email
+                  ? "После сохранения дилер входит с новым адресом, уведомления уходят на него же."
+                  : undefined
+              }
+              onChange={(e) => setData({ ...data, email: e.target.value })}
+            />
             <Input
               label="Фамилия"
               disabled={!canEdit}

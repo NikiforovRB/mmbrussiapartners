@@ -153,6 +153,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (!fresh || lockedOut(fresh) || fresh.sessionVersion !== (t.sessionVersion ?? 0)) {
           return null;
         }
+        t.email = fresh.email;
         t.isSuperAdmin = fresh.isSuperAdmin;
         t.status = fresh.status;
         t.roleName = fresh.role.name;

@@ -4,12 +4,12 @@ import { db } from "@/lib/db";
 import { hasAdminScope, hasPermission } from "@/lib/permissions";
 import { ApiError, badRequest, forbidden, parseBody, route, unauthenticated } from "@/lib/api";
 import { uploadObject, getDownloadUrl, deleteObject, LICENSE_FILE_NAME } from "@/lib/s3";
-import { createLic, describeDriveModsFailure, isDriveModsConfigured, licInfo } from "@/lib/drivemods";
+import { createLic, describeDriveModsFailure, DriveModsError, isDriveModsConfigured, licInfo } from "@/lib/drivemods";
 import { syncLicenseSlots } from "@/lib/license-slots";
 import { isRepeatGeneration } from "@/lib/repeat-generation";
 import { generateLicenseNumber, fioFromParts } from "@/lib/utils";
 import { isLicenseType } from "@/lib/license-options";
-import { inferProductRegions, resolvePrice, positionLabel } from "@/lib/pricing";
+import { inferProductRegions, normalizeKey, resolvePrice, positionLabel } from "@/lib/pricing";
 import { createPayment } from "@/lib/payments/service";
 import { notifyAdmins, notifyUser } from "@/lib/app-notifications";
 import { formatRub } from "@/lib/money";
@@ -213,9 +213,39 @@ export const POST = route(async (req: Request) => {
         deviceId: device.device_id || p.deviceId || "",
       });
     } catch (err) {
-      console.error("[createlic] генерация в DRIVEMODS не удалась", err);
+      // did не пишем: это файл ШГУ целиком. Остальное — ровно то, что ушло в DRIVEMODS.
+      const sent = {
+        product: p.product,
+        bundle: p.bundle || null,
+        region: p.region || null,
+        versionSoftware,
+        versionCustom,
+        deviceId: device.device_id || p.deviceId || "",
+      };
+      console.error("[createlic] генерация в DRIVEMODS не удалась", JSON.stringify(sent), err);
       const { status, message } = describeDriveModsFailure(err);
-      throw new ApiError("UPSTREAM", message, status);
+      const rejected = err instanceof DriveModsError && err.status === 400 && err.upstream !== null;
+      if (!rejected) throw new ApiError("UPSTREAM", message, status);
+
+      await notifyAdmins(["licenses.view"], {
+        type: "LICENSE_FAILED",
+        title: `DriveMods отклонил генерацию ${positionLabel(sent)}`,
+        body:
+          `${owner.email}: «${(err as DriveModsError).message}». ` +
+          `Версия ПО ${versionSoftware || "—"}, версия кастома ${versionCustom || "пустая"}.`,
+        link: `/admin/dealers/${owner.id}`,
+      }).catch((notifyErr) => console.error("[createlic] не удалось уведомить администраторов", notifyErr));
+      // Пустую версию кастома (так у MB-GEN5 и LG-GEN5) DRIVEMODS отдаёт сам
+      // в /licinfo, а /createlic с ней отклоняет.
+      const reason = versionCustom
+        ? `«${(err as DriveModsError).message}»`
+        : "для этого ШГУ DriveMods не сообщает версию кастома, а без неё генерацию не принимает";
+      throw new ApiError(
+        "UPSTREAM",
+        `DriveMods отклонил запрос на генерацию: ${reason}. Администратор уже получил уведомление. ` +
+          "Лимит лицензий не израсходован, счёт не выставлен.",
+        status,
+      );
     }
 
     const licenseUpload = await uploadObject(
@@ -257,6 +287,7 @@ export const POST = route(async (req: Request) => {
           product: p.product,
           bundle: p.bundle || null,
           productRegion,
+          catalogRegion: normalizeKey(p.region) || null,
           versionSoftware: versionSoftware || null,
           versionCustom: versionCustom || null,
           dealerComment,

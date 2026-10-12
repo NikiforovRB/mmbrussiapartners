@@ -27,6 +27,7 @@ export const NOTIFICATION_TAB_TYPES: TabDef[] = [
     label: { admin: "Лицензии", dealer: "Лицензии" },
     types: [
       "LICENSE_ISSUED",
+      "LICENSE_FAILED",
       "LICENSE_CANCELLED",
       "LICENSE_REVOKED",
       "CANCELLATION_REQUESTED",
@@ -49,6 +50,7 @@ export const NOTIFICATION_TYPE_LABEL: Record<AppNotificationType, string> = {
   SITE_PUBLICATION_REQUESTED: "Заявка на публикацию телефона",
   SITE_PUBLICATION_REVIEWED: "Решение по публикации телефона",
   LICENSE_ISSUED: "Лицензия выдана без оплаты, повторная генерация",
+  LICENSE_FAILED: "DriveMods отклонил генерацию",
   LICENSE_CANCELLED: "Лицензия аннулирована",
   LICENSE_REVOKED: "Лицензия отозвана",
   CANCELLATION_REQUESTED: "Заявка на аннулирование",

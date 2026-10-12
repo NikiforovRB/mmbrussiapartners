@@ -44,7 +44,7 @@ export const POST = route(async (req: Request) => {
         dealerId: true,
         product: true,
         bundle: true,
-        productRegion: true,
+        catalogRegion: true,
         repeatGeneration: true,
         price: true,
         issuedWithoutPayment: true,
@@ -67,7 +67,7 @@ export const POST = route(async (req: Request) => {
       const resolved = await resolvePrice(license.dealerId, {
         product: license.product,
         bundle: license.bundle,
-        region: license.productRegion,
+        region: license.catalogRegion,
       });
       catalogPrice = resolved.price;
     }

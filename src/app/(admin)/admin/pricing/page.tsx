@@ -58,7 +58,7 @@ export default async function AdminPricingPage({
   // такой продукт не совпадёт ни с одной позицией DRIVEMODS, и в списке он
   // только мешал бы — отличаем их по пробелу в коде продукта.
   const issued = await db.license.groupBy({
-    by: ["product", "bundle", "productRegion"],
+    by: ["product", "bundle", "catalogRegion"],
     where: { deletedAt: null, product: { not: null } },
   });
   const seen = new Set<string>();
@@ -66,7 +66,7 @@ export default async function AdminPricingPage({
     .map((g) => ({
       product: (g.product ?? "").trim(),
       bundle: g.bundle ?? "",
-      region: g.productRegion ?? "",
+      region: g.catalogRegion ?? "",
     }))
     .filter((p) => {
       if (!p.product || p.product.includes(" ") || findPriceItem(items, p)) return false;
