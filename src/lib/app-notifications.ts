@@ -8,11 +8,13 @@ import { cabinetUrl } from "./cabinet-origin";
 import { mergeNotificationSettings } from "./site-settings";
 import {
   isSmtpConfigured,
+  notificationDetailsText,
   notificationEmailHtml,
   notificationTelegramText,
   sendEmail,
   sendMax,
   sendTelegram,
+  type NotifyDetail,
 } from "./notifications";
 import { isTelegramConfigured } from "./telegram";
 import { isMaxConfigured } from "./max";
@@ -21,6 +23,8 @@ type NotifyInput = {
   type: AppNotificationType;
   title: string;
   body?: string | null;
+  /** Подробности для почты и мессенджеров; в колокольчике достаточно body. */
+  details?: NotifyDetail[] | null;
   link?: string | null;
 };
 
@@ -132,7 +136,7 @@ async function deliverExternal(userIds: string[], input: NotifyInput) {
     },
   });
   const url = input.link ? cabinetUrl(input.link) : null;
-  const message = { title: input.title, body: input.body ?? null, url };
+  const message = { title: input.title, body: input.body ?? null, details: input.details ?? null, url };
 
   for (const u of users) {
     if (byEmail && u.notifyByEmail) {
@@ -143,7 +147,7 @@ async function deliverExternal(userIds: string[], input: NotifyInput) {
           ...message,
           footer: "Письмо отправлено автоматически. Отключить уведомления на почту можно в профиле кабинета.",
         }),
-        text: [input.title, input.body, url].filter(Boolean).join("\n\n"),
+        text: [input.title, input.body, notificationDetailsText(input.details), url].filter(Boolean).join("\n\n"),
         userId: u.id,
       });
     }

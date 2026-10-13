@@ -260,9 +260,12 @@ export function atolWebhookSecret(): string {
   return process.env.ATOL_WEBHOOK_SECRET ?? "";
 }
 
-/** Секрет для callback АТОЛ Pay (эквайринг). По умолчанию — общий с кассой. */
+/**
+ * Секрет для callback АТОЛ Pay (эквайринг). По умолчанию — общий с кассой:
+ * пустая строка из .env.example тоже означает «не задан».
+ */
 export function atolPayWebhookSecret(): string {
-  return process.env.ATOL_PAY_WEBHOOK_SECRET ?? process.env.ATOL_WEBHOOK_SECRET ?? "";
+  return process.env.ATOL_PAY_WEBHOOK_SECRET || process.env.ATOL_WEBHOOK_SECRET || "";
 }
 
 /**
@@ -664,6 +667,87 @@ export async function handleAtolPayCallback(
     return null;
   }
   return syncAtolPayPayment(payment.id);
+}
+
+/** Счета младше суток сверяем на каждом шаге, до 30 дней — на каждом пятнадцатом. */
+const PAYMENT_SYNC_TICK_MS = 2 * 60_000;
+const PAYMENT_SYNC_RECENT_MS = 24 * 60 * 60_000;
+const PAYMENT_SYNC_MAX_AGE_MS = 30 * 24 * 60 * 60_000;
+const PAYMENT_SYNC_FULL_EVERY = 15;
+/** Чек, о котором касса молчит дольше этого, опрашиваем сами. */
+const RECEIPT_POLL_AFTER_MS = 3 * 60_000;
+
+type PaymentSyncState = { scheduler?: NodeJS.Timeout; running?: boolean; ticks?: number };
+const paymentSyncState: PaymentSyncState = ((
+  globalThis as typeof globalThis & { __mmbPaymentSync?: PaymentSyncState }
+).__mmbPaymentSync ??= {});
+
+/**
+ * Колбэк АТОЛ Pay может не дойти (а у заказов, созданных без notificationUrl,
+ * его нет вовсе), дилер — не вернуться на страницу счёта после оплаты в
+ * приложении банка. Тогда оплату проводит фоновая сверка, а чек, по которому
+ * не пришёл колбэк кассы, дотягивает опрос АТОЛ Онлайн.
+ */
+async function syncOpenPayments(full: boolean) {
+  const now = Date.now();
+  if (process.env.ATOL_PAY_API_TOKEN) {
+    const open = await db.payment.findMany({
+      where: {
+        provider: "atol_pay",
+        createdAt: { gt: new Date(now - (full ? PAYMENT_SYNC_MAX_AGE_MS : PAYMENT_SYNC_RECENT_MS)) },
+        OR: [
+          { status: { in: ["PENDING", "FAILED", "CANCELLED"] } },
+          { status: "PAID", paidManually: true, receiptStatus: null },
+        ],
+      },
+      select: { id: true },
+      orderBy: { createdAt: "desc" },
+      take: 200,
+    });
+    for (const { id } of open) {
+      await syncAtolPayPayment(id).catch((err) => console.error(`[payments] фоновая сверка оплаты ${id} не удалась`, err));
+    }
+  }
+
+  if (isAtolConfigured()) {
+    const quietSince = new Date(now - RECEIPT_POLL_AFTER_MS);
+    const staleClaim = new Date(now - STALE_RECEIPT_CLAIM_MS);
+    const waiting = await db.payment.findMany({
+      where: {
+        updatedAt: { lt: quietSince },
+        OR: [
+          { receiptStatus: "wait", receiptUuid: { not: null } },
+          { refundReceiptStatus: "wait", refundReceiptUuid: { not: null } },
+          { receiptStatus: "wait", updatedAt: { lt: staleClaim } },
+          { refundReceiptStatus: "wait", updatedAt: { lt: staleClaim } },
+        ],
+      },
+      select: { id: true },
+      take: 50,
+    });
+    for (const { id } of waiting) {
+      await refreshReceipt(id).catch((err) => console.error(`[payments] фоновый опрос чека ${id} не удался`, err));
+    }
+  }
+}
+
+/** Фоновая сверка внутри процесса кабинета (см. src/instrumentation.ts). */
+export function startPaymentSyncScheduler(): void {
+  if (paymentSyncState.scheduler) return;
+  const tick = () => {
+    if (paymentSyncState.running) return;
+    paymentSyncState.ticks = (paymentSyncState.ticks ?? 0) + 1;
+    const full = paymentSyncState.ticks % PAYMENT_SYNC_FULL_EVERY === 1;
+    paymentSyncState.running = true;
+    void syncOpenPayments(full)
+      .catch((err) => console.error("[payments] фоновая сверка упала", err))
+      .finally(() => {
+        paymentSyncState.running = false;
+      });
+  };
+  setTimeout(tick, 60_000).unref?.();
+  paymentSyncState.scheduler = setInterval(tick, PAYMENT_SYNC_TICK_MS);
+  paymentSyncState.scheduler.unref?.();
 }
 
 const reportedOrphanOrders = new Set<string>();

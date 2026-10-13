@@ -15,6 +15,41 @@ type SendEmailParams = {
 
 export const DEFAULT_SMTP_FROM = "MMB RUSSIA <noreply@mmbrussia.ru>";
 
+/** Строка подробностей уведомления: «Телефон: +7…». */
+export type NotifyDetail = {
+  label: string;
+  value: string;
+  /** Ссылка на значение: http(s) — во всех каналах, mailto: и tel: — только в письме. */
+  href?: string | null;
+};
+
+/** Мессенджеры принимают в ссылках только http(s); URL ещё и экранирует кавычки. */
+function webHref(href: string | null | undefined): string | null {
+  if (!href) return null;
+  try {
+    const url = new URL(href);
+    return url.protocol === "https:" || url.protocol === "http:" ? url.href : null;
+  } catch {
+    return null;
+  }
+}
+
+function emailHref(href: string | null | undefined): string | null {
+  if (href && /^(mailto|tel):[^\s"<>]+$/i.test(href)) return href;
+  return webHref(href);
+}
+
+/** Подробности текстом — для текстовой части письма. */
+export function notificationDetailsText(details: NotifyDetail[] | null | undefined): string | null {
+  if (!details?.length) return null;
+  return details
+    .map((d) => {
+      const href = webHref(d.href);
+      return `${d.label}: ${d.value}${href && href !== d.value ? ` (${href})` : ""}`;
+    })
+    .join("\n");
+}
+
 let cachedTransport: nodemailer.Transporter | null = null;
 
 export function isSmtpConfigured(): boolean {
@@ -111,11 +146,12 @@ export async function sendMax(opts: {
   maxUserId: string;
   title: string;
   body?: string | null;
+  details?: NotifyDetail[] | null;
   url?: string | null;
   userId?: string | null;
 }) {
   const configured = isMaxConfigured();
-  const plain = [opts.title, opts.body].filter(Boolean).join("\n\n");
+  const plain = [opts.title, opts.body, notificationDetailsText(opts.details)].filter(Boolean).join("\n\n");
   const log = await db.notificationLog.create({
     data: {
       channel: "MAX",
@@ -132,6 +168,7 @@ export async function sendMax(opts: {
   const text = [
     `<b>${escapeMaxHtml(opts.title)}</b>`,
     opts.body ? escapeMaxHtml(opts.body) : null,
+    messengerDetails(opts.details, escapeMaxHtml),
     opts.url && !button ? `<a href="${escapeMaxHtml(opts.url)}">Открыть в кабинете</a>` : null,
   ]
     .filter(Boolean)
@@ -150,13 +187,32 @@ export async function sendMax(opts: {
   }
 }
 
-/** Письмо-уведомление: заголовок, текст и кнопка в кабинет. */
-export function notificationEmailHtml(params: { title: string; body?: string | null; url?: string | null; footer: string }) {
+/** Письмо-уведомление: заголовок, текст, подробности и кнопка в кабинет. */
+export function notificationEmailHtml(params: {
+  title: string;
+  body?: string | null;
+  details?: NotifyDetail[] | null;
+  url?: string | null;
+  footer: string;
+}) {
+  const rows = (params.details ?? [])
+    .map((d) => {
+      const href = emailHref(d.href);
+      const value = href
+        ? `<a href="${escapeHtml(href)}" style="color: #2a9fff; text-decoration: none;">${escapeHtml(d.value)}</a>`
+        : escapeHtml(d.value);
+      return (
+        `<tr><td style="padding: 4px 16px 4px 0; color: #6b7280; vertical-align: top; white-space: nowrap;">${escapeHtml(d.label)}</td>` +
+        `<td style="padding: 4px 0; vertical-align: top;">${value}</td></tr>`
+      );
+    })
+    .join("");
   return `
     <div style="font-family: Inter, Arial, sans-serif; max-width: 560px; color: #171717;">
       <div style="font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: #6b7280;">MMB RUSSIA · Партнёрский кабинет</div>
       <h2 style="margin: 12px 0; font-size: 20px; line-height: 1.3;">${escapeHtml(params.title)}</h2>
       ${params.body ? `<p style="margin: 0 0 16px; white-space: pre-line; line-height: 1.5;">${escapeHtml(params.body)}</p>` : ""}
+      ${rows ? `<table style="border-collapse: collapse; margin: 0 0 16px; font-size: 14px; line-height: 1.5;">${rows}</table>` : ""}
       ${
         params.url
           ? `<p style="margin: 20px 0;"><a href="${escapeHtml(params.url)}" style="display: inline-block; background: #2a9fff; color: #fff; padding: 10px 18px; border-radius: 12px; text-decoration: none;">Открыть в кабинете</a></p>`
@@ -166,14 +222,32 @@ export function notificationEmailHtml(params: { title: string; body?: string | n
     </div>`;
 }
 
-export function notificationTelegramText(params: { title: string; body?: string | null; url?: string | null }) {
+export function notificationTelegramText(params: {
+  title: string;
+  body?: string | null;
+  details?: NotifyDetail[] | null;
+  url?: string | null;
+}) {
   return [
     `<b>${escapeTelegramHtml(params.title)}</b>`,
     params.body ? escapeTelegramHtml(params.body) : null,
+    messengerDetails(params.details, escapeTelegramHtml),
     params.url ? `<a href="${escapeTelegramHtml(params.url)}">Открыть в кабинете</a>` : null,
   ]
     .filter(Boolean)
     .join("\n\n");
+}
+
+/** Подробности для Telegram и MAX: «Метка: значение», ссылки — только http(s). */
+function messengerDetails(details: NotifyDetail[] | null | undefined, escape: (s: string) => string): string | null {
+  if (!details?.length) return null;
+  return details
+    .map((d) => {
+      const href = webHref(d.href);
+      const value = href ? `<a href="${escape(href)}">${escape(d.value)}</a>` : escape(d.value);
+      return `${escape(d.label)}: ${value}`;
+    })
+    .join("\n");
 }
 
 function stripHtml(html: string) {

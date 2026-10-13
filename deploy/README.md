@@ -169,8 +169,9 @@ DEALER_PASSWORD_KEY="<openssl rand -base64 32>"   # пароли дилеров 
 # S3, SMTP, ATOL, DRIVEMODS и NEXT_PUBLIC_* — из .env.example
 ```
 
-Суточную сверку «Дилерской сети» запускает сам процесс кабинета
-(`src/instrumentation.ts`), cron и таймеры systemd для неё не нужны.
+Суточную сверку «Дилерской сети» и сверку оплат АТОЛ Pay с чеками АТОЛ Онлайн
+(каждые 2 минуты — на случай, если колбэк не дошёл) запускает сам процесс
+кабинета (`src/instrumentation.ts`), cron и таймеры systemd для них не нужны.
 
 ```bash
 sudo -u deploy openssl rand -base64 48   # для NEXTAUTH_SECRET

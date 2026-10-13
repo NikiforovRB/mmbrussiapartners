@@ -6,10 +6,11 @@ import { db } from "@/lib/db";
 import { ApiError } from "@/lib/api";
 import { hashPassword } from "@/lib/auth";
 import { sealPassword } from "@/lib/password-vault";
-import { normalizePhone } from "@/lib/utils";
+import { formatPhone, normalizePhone } from "@/lib/utils";
 import { notifyAdmins } from "@/lib/app-notifications";
+import type { NotifyDetail } from "@/lib/notifications";
 import { rateLimit, clientIp } from "@/lib/rate-limit";
-import { lookupIpGeo } from "@/lib/geo-ip";
+import { lookupIpGeo, type IpGeo } from "@/lib/geo-ip";
 import { linkLegacyDealer } from "@/lib/legacy-dealers";
 import { normalizeLocation, recordLocationChange, type DealerLocation } from "@/lib/dealer-location";
 import { ContactFieldError, normalizeCompanyUrl, normalizeTelegramNick } from "@/lib/dealer-contacts";
@@ -148,8 +149,42 @@ export async function registerDealerAction(formData: FormData) {
     body:
       `${data.lastName.trim()} ${data.firstName.trim()} · ${email} · ${location.city}` +
       (legacy ? " · работал в старом ЛК DriveMods" : ""),
+    details: signupDetails({ data, email, telegramNick, companyUrl, location, geo, legacy }),
     link: `/admin/dealers/${created.id}`,
   });
 
   return { ok: true as const };
+}
+
+/** Всё, что дилер указал при регистрации (кроме пароля), и откуда он регистрировался. */
+function signupDetails(input: {
+  data: z.infer<typeof schema>;
+  email: string;
+  telegramNick: string | null;
+  companyUrl: string | null;
+  location: DealerLocation;
+  geo: IpGeo;
+  legacy: boolean;
+}): NotifyDetail[] {
+  const { data, email, telegramNick: telegram, companyUrl, location, geo } = input;
+  const phone = normalizePhone(data.phone);
+  const organization = data.organization?.trim();
+  const fromIp = [geo.country, geo.region, geo.city].filter(Boolean).join(", ");
+  const rows: (NotifyDetail | null)[] = [
+    {
+      label: "ФИО",
+      value: [data.lastName, data.firstName, data.middleName].map((s) => s?.trim()).filter(Boolean).join(" "),
+    },
+    { label: "Email", value: email, href: `mailto:${email}` },
+    phone ? { label: "Телефон", value: formatPhone(phone), href: `tel:${phone}` } : null,
+    organization ? { label: "Организация", value: organization } : null,
+    telegram ? { label: "Telegram", value: telegram, href: `https://t.me/${telegram.slice(1)}` } : null,
+    companyUrl ? { label: "Сайт компании", value: companyUrl, href: companyUrl } : null,
+    { label: "Страна", value: location.country ?? "—" },
+    { label: "Регион", value: location.region ?? "—" },
+    { label: "Город", value: location.city ?? "—" },
+    geo.ip ? { label: "По IP", value: fromIp ? `${fromIp} (${geo.ip})` : geo.ip } : null,
+    { label: "Старый ЛК DriveMods", value: input.legacy ? "найден, запись привязана" : "не найден" },
+  ];
+  return rows.filter((row): row is NotifyDetail => row !== null);
 }

@@ -1,6 +1,8 @@
 export async function register() {
-  if (process.env.NEXT_RUNTIME !== "nodejs") return;
-  const { startSiteSyncScheduler } = await import("@/lib/site-dealers");
-  // Локальный dev смотрит в ту же БД, что и прод: второй планировщик не нужен.
-  if (process.env.NODE_ENV === "production") startSiteSyncScheduler();
+  // Проверка именно внутри if: по ней сборка выкидывает Node-модули из edge-бандла.
+  // Локальный dev смотрит в ту же БД, что и прод: вторые планировщики не нужны.
+  if (process.env.NEXT_RUNTIME === "nodejs" && process.env.NODE_ENV === "production") {
+    const { startSchedulers } = await import("./instrumentation-node");
+    startSchedulers();
+  }
 }
