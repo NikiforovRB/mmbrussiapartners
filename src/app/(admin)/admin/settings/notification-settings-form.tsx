@@ -284,7 +284,8 @@ export function NotificationSettingsForm({
         <div className="font-display text-lg tracking-tight mb-1">События</div>
         <p className="text-sm text-ink-muted mb-4">
           Уведомление уходит в канал, если он включён здесь и у пользователя в профиле. В колокольчике кабинета
-          события есть всегда.
+          события есть всегда. Исключение — разделы «Лицензии» и «Оплаты»: каждый администратор может отключить их
+          у себя в профиле, и тогда эти события не приходят ему никуда.
         </p>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[520px] text-sm">

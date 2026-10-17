@@ -13,6 +13,8 @@ export type CabinetUser = {
   basePath: string;
   /** Непрочитанные уведомления на момент рендера страницы. */
   unreadCount: number;
+  /** Разделы уведомлений, которые администратор отключил у себя. */
+  mutedNotificationTabs: string[];
   permissions: string[];
   isSuperAdmin: boolean;
 };

@@ -38,6 +38,8 @@ import { getUserAvatarUrl } from "@/lib/user-avatar";
 import { SIDEBAR_COOKIE } from "@/lib/sidebar";
 import { clientIp } from "@/lib/rate-limit";
 import { trackUserIp } from "@/lib/user-ips";
+import { effectiveMutedTabs } from "@/lib/notification-mutes";
+import { mutedNotificationTypes } from "@/lib/notification-tabs";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
@@ -112,8 +114,12 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   if (user.isSuperAdmin || hasPermission(user.role.permissions, "settings.edit", user.isSuperAdmin))
     items.push({ href: "/admin/settings", label: "Настройки", icon: <IconSettings className="h-4 w-4" /> });
 
+  const mutedTabs = effectiveMutedTabs(user);
+  const hiddenTypes = mutedNotificationTypes(mutedTabs);
   const [unreadCount, settings, loginNotices, cookieStore] = await Promise.all([
-    db.appNotification.count({ where: { userId: user.id, readAt: null } }),
+    db.appNotification.count({
+      where: { userId: user.id, readAt: null, ...(hiddenTypes.length ? { type: { notIn: hiddenTypes } } : {}) },
+    }),
     db.companySettings.findUnique({
       where: { id: "singleton" },
       select: { announcement: true, generation: true },
@@ -137,6 +143,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         avatarUrl,
         basePath: "/admin",
         unreadCount,
+        mutedNotificationTabs: mutedTabs,
         permissions: user.role.permissions,
         isSuperAdmin: user.isSuperAdmin,
       }}

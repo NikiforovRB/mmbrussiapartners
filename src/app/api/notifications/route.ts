@@ -5,6 +5,7 @@ import { parseBody, route } from "@/lib/api";
 import { requireApprovedUser } from "@/lib/session";
 import { hasAdminScope } from "@/lib/permissions";
 import { notificationActions } from "@/lib/notification-actions";
+import { hiddenNotificationTypes } from "@/lib/notification-mutes";
 import {
   NOTIFICATION_TAB_TYPES,
   isNotificationTab,
@@ -26,13 +27,16 @@ export const GET = route(async (req: Request) => {
   const tab: NotificationTabId = isNotificationTab(rawTab) ? rawTab : "all";
   const before = params.get("before");
   const beforeDate = before ? new Date(before) : null;
-  const types = typesForTab(tab);
+  const hidden = await hiddenNotificationTypes(session.user);
+  const tabTypes = typesForTab(tab);
+  const types = tabTypes ? tabTypes.filter((t) => !hidden.includes(t)) : null;
+  const visible = hidden.length ? { type: { notIn: hidden } } : {};
 
   const [rows, unread, unreadGroups] = await Promise.all([
     db.appNotification.findMany({
       where: {
         userId: session.user.id,
-        ...(types ? { type: { in: types } } : {}),
+        ...(types ? { type: { in: types } } : visible),
         ...(beforeDate && !Number.isNaN(beforeDate.getTime()) ? { createdAt: { lt: beforeDate } } : {}),
       },
       orderBy: { createdAt: "desc" },
@@ -47,10 +51,10 @@ export const GET = route(async (req: Request) => {
         createdAt: true,
       },
     }),
-    db.appNotification.count({ where: { userId: session.user.id, readAt: null } }),
+    db.appNotification.count({ where: { userId: session.user.id, readAt: null, ...visible } }),
     db.appNotification.groupBy({
       by: ["type"],
-      where: { userId: session.user.id, readAt: null },
+      where: { userId: session.user.id, readAt: null, ...visible },
       _count: { _all: true },
     }),
   ]);

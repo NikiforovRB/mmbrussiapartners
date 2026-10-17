@@ -18,6 +18,8 @@ import {
 } from "./notifications";
 import { isTelegramConfigured } from "./telegram";
 import { isMaxConfigured } from "./max";
+import { effectiveMutedTabs } from "./notification-mutes";
+import { isMutableNotificationTab, tabForType, type MutableNotificationTab } from "./notification-tabs";
 
 type NotifyInput = {
   type: AppNotificationType;
@@ -35,6 +37,14 @@ type NotifyInput = {
  */
 export async function notifyUser(userId: string, input: NotifyInput): Promise<void> {
   try {
+    const tab = mutableTabOf(input.type);
+    if (tab) {
+      const recipient = await db.user.findUnique({
+        where: { id: userId },
+        select: { notifyMutedTabs: true, isSuperAdmin: true, role: { select: { permissions: true } } },
+      });
+      if (recipient && effectiveMutedTabs(recipient).includes(tab)) return;
+    }
     await db.appNotification.create({
       data: {
         userId,
@@ -62,10 +72,12 @@ export async function notifyAdmins(
   opts: { exceptUserId?: string } = {},
 ): Promise<void> {
   try {
+    const tab = mutableTabOf(input.type);
     const admins = await db.user.findMany({
       where: {
         status: "APPROVED",
         ...(opts.exceptUserId ? { id: { not: opts.exceptUserId } } : {}),
+        ...(tab ? { NOT: { notifyMutedTabs: { has: tab } } } : {}),
         OR: [
           { isSuperAdmin: true },
           {
@@ -95,6 +107,11 @@ export async function notifyAdmins(
   } catch (err) {
     console.error("[notifications] не удалось разослать уведомление админам", err);
   }
+}
+
+function mutableTabOf(type: AppNotificationType): MutableNotificationTab | null {
+  const tab = tabForType(type);
+  return tab && isMutableNotificationTab(tab) ? tab : null;
 }
 
 /** Почта и мессенджеры получают уведомление после ответа клиенту: SMTP и боты не задерживают действие. */

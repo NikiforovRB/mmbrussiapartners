@@ -147,6 +147,9 @@ model User {
   maxLinkedAt     DateTime?
   maxLinkCode     String?    @unique
   maxLinkCodeExpiresAt DateTime?
+  /// Разделы колокольчика, отключённые администратором у себя (licenses,
+  /// payments): события из них ему не создаются и не уходят ни в один канал.
+  notifyMutedTabs String[]   @default([])
   lastLoginAt     DateTime?
   lastLoginIp     String?
   /// Увеличение отзывает все выданные JWT-сессии (смена пароля, блокировка).

@@ -1,4 +1,4 @@
-import { KeyRound, CalendarClock, ShieldCheck, ArrowUpRight } from "lucide-react";
+import { KeyRound, CalendarClock, ArrowUpRight } from "lucide-react";
 import { IconCreditCardCheck, IconUserPlus } from "@/components/icons";
 import Link from "next/link";
 import { db } from "@/lib/db";
@@ -22,16 +22,8 @@ export default async function AdminDashboard() {
   if (!user) return null;
 
   const monthAgo = addDays(new Date(), -30);
-  const [
-    pendingDealers,
-    activeLicenses,
-    recentLicenses,
-    last30,
-    revenue,
-    recentPending,
-  ] = await Promise.all([
+  const [pendingDealers, recentLicenses, last30, revenue, recentPending] = await Promise.all([
     db.user.count({ where: { status: "PENDING" } }),
-    db.license.count({ where: { status: "ACTIVE", deletedAt: null } }),
     db.license.count({ where: { deletedAt: null } }),
     db.license.count({ where: { deletedAt: null, createdAt: { gte: monthAgo } } }),
     db.payment.aggregate({ where: { status: "PAID" }, _sum: { amount: true } }),
@@ -56,9 +48,8 @@ export default async function AdminDashboard() {
         subtitle={formatRuDate(new Date())}
         user={{ name: fio || user.email, email: user.email, role: user.role.name }}
       />
-      <div className="mt-6 grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="mt-6 grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
         <Kpi icon={<IconUserPlus className="h-4 w-4" />} label="Заявок на одобрение" value={String(pendingDealers)} />
-        <Kpi icon={<ShieldCheck className="h-4 w-4" />} label="Активных лицензий" value={String(activeLicenses)} />
         <Kpi icon={<KeyRound className="h-4 w-4" />} label="Лицензий всего" value={String(recentLicenses)} />
         <Kpi
           icon={<IconCreditCardCheck className="h-4 w-4" />}
@@ -85,24 +76,27 @@ export default async function AdminDashboard() {
           ) : (
             <ul className="divide-y divide-hairline border-t border-hairline">
               {recentPending.map((u) => (
-                <li key={u.id} className="py-3.5 flex items-center justify-between gap-3">
-                  <div>
-                    <div className="">
+                <li
+                  key={u.id}
+                  className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 py-3.5 xl:grid-cols-[minmax(0,1fr)_auto_auto]"
+                >
+                  <div className="col-start-1 row-start-1 min-w-0">
+                    <div className="break-words">
                       {fioFromParts({
                         firstName: u.dealerProfile?.firstName,
                         lastName: u.dealerProfile?.lastName,
                         middleName: u.dealerProfile?.middleName,
                       })}
                     </div>
-                    <div className="text-xs text-ink-muted">{u.email}</div>
+                    <div className="break-all text-xs text-ink-muted">{u.email}</div>
                   </div>
-                  <div className="flex items-center gap-3 text-sm text-ink-muted">
+                  <div className="col-span-2 row-start-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-ink-muted xl:col-span-1 xl:col-start-2 xl:row-start-1">
                     <StatusTag kind="user" status={u.status} />
-                    <span>{formatRuDateTime(u.createdAt)}</span>
-                    <Link href={`/admin/dealers/${u.id}`}>
-                      <Button size="sm" variant="secondary">Открыть</Button>
-                    </Link>
+                    <span className="whitespace-nowrap">{formatRuDateTime(u.createdAt)}</span>
                   </div>
+                  <Link href={`/admin/dealers/${u.id}`} className="col-start-2 row-start-1 justify-self-end xl:col-start-3">
+                    <Button size="sm" variant="secondary">Открыть</Button>
+                  </Link>
                 </li>
               ))}
             </ul>

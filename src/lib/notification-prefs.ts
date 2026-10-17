@@ -4,6 +4,8 @@ import type { User } from "@prisma/client";
 import { isSmtpConfigured } from "./notifications";
 import { isTelegramConfigured } from "./telegram";
 import { isMaxConfigured } from "./max";
+import { hasAdminScope } from "./permissions";
+import { isMutableNotificationTab } from "./notification-tabs";
 
 /** Пропсы карточки «Уведомления» в профиле: личные настройки и доступность каналов. */
 export function notificationPrefsProps(
@@ -19,7 +21,9 @@ export function notificationPrefsProps(
     | "maxUserId"
     | "maxName"
     | "maxLinkedAt"
-  >,
+    | "notifyMutedTabs"
+    | "isSuperAdmin"
+  > & { role: { permissions: string[] } },
 ) {
   return {
     email: user.email,
@@ -41,5 +45,8 @@ export function notificationPrefsProps(
     emailAvailable: isSmtpConfigured(),
     telegramAvailable: isTelegramConfigured(),
     maxAvailable: isMaxConfigured(),
+    mutedTabs: hasAdminScope(user.role.permissions, user.isSuperAdmin)
+      ? user.notifyMutedTabs.filter(isMutableNotificationTab)
+      : null,
   };
 }

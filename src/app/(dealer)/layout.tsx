@@ -30,6 +30,8 @@ import { SIDEBAR_COOKIE } from "@/lib/sidebar";
 import { clientIp } from "@/lib/rate-limit";
 import { trackUserIp } from "@/lib/user-ips";
 import { getCabinetSections } from "@/lib/cabinet-sections";
+import { effectiveMutedTabs } from "@/lib/notification-mutes";
+import { mutedNotificationTypes } from "@/lib/notification-tabs";
 
 export default async function DealerLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
@@ -91,9 +93,13 @@ export default async function DealerLayout({ children }: { children: React.React
     </div>
   );
 
+  const mutedTabs = effectiveMutedTabs(user);
+  const hiddenTypes = mutedNotificationTypes(mutedTabs);
   const [avatarUrl, unreadCount, settings, loginNotices, cookieStore] = await Promise.all([
     getUserAvatarUrl(user.id),
-    db.appNotification.count({ where: { userId: user.id, readAt: null } }),
+    db.appNotification.count({
+      where: { userId: user.id, readAt: null, ...(hiddenTypes.length ? { type: { notIn: hiddenTypes } } : {}) },
+    }),
     db.companySettings.findUnique({ where: { id: "singleton" }, select: { announcement: true } }),
     db.loginNotice.findMany({
       where: { active: true, acknowledgements: { none: { userId: user.id } } },
@@ -119,6 +125,7 @@ export default async function DealerLayout({ children }: { children: React.React
         avatarUrl,
         basePath: "/dealer",
         unreadCount,
+        mutedNotificationTabs: mutedTabs,
         permissions: user.role.permissions,
         isSuperAdmin: user.isSuperAdmin,
       }}

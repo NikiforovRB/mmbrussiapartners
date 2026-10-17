@@ -72,9 +72,17 @@ type Feed = {
 export function NotificationPanel({ initialUnread }: { initialUnread: number }) {
   const router = useRouter();
   const cabinetUser = useCabinetUser();
-  const tabs = React.useMemo(() => notificationTabs(cabinetUser?.basePath === "/admin"), [cabinetUser?.basePath]);
+  const mutedKey = (cabinetUser?.mutedNotificationTabs ?? []).join(",");
+  const tabs = React.useMemo(
+    () => notificationTabs(cabinetUser?.basePath === "/admin", mutedKey ? mutedKey.split(",") : []),
+    [cabinetUser?.basePath, mutedKey],
+  );
   const [open, setOpen] = React.useState(false);
   const [tab, setTab] = React.useState<NotificationTabId>("all");
+  // Раздел отключили в профиле, пока он был выбран, — возвращаемся во «Все».
+  React.useEffect(() => {
+    if (!tabs.some((t) => t.id === tab)) setTab("all");
+  }, [tabs, tab]);
   const { unread, setUnread, track, mutate } = useUnreadCount(initialUnread);
   const [items, setItems] = React.useState<Notification[] | null>(null);
   const [hasMore, setHasMore] = React.useState(false);

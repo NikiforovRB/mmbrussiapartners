@@ -62,15 +62,38 @@ export const NOTIFICATION_TYPE_LABEL: Record<AppNotificationType, string> = {
   PRICE_MISSING: "Нет цены в справочнике",
 };
 
-/** Порядок вкладок: в админке чаще всего приходят заявки дилеров. */
-export function notificationTabs(admin: boolean): { id: NotificationTabId; label: string }[] {
+/**
+ * Разделы, которые администратор может отключить у себя целиком. «Дилеры» не
+ * отключаются: в них заявки, которые кто-то обязан рассмотреть.
+ */
+export const MUTABLE_NOTIFICATION_TABS = ["licenses", "payments"] as const;
+export type MutableNotificationTab = (typeof MUTABLE_NOTIFICATION_TABS)[number];
+
+export function isMutableNotificationTab(value: string): value is MutableNotificationTab {
+  return (MUTABLE_NOTIFICATION_TABS as readonly string[]).includes(value);
+}
+
+/** Типы событий из отключённых разделов. */
+export function mutedNotificationTypes(mutedTabs: readonly string[]): AppNotificationType[] {
+  return NOTIFICATION_TAB_TYPES.filter((t) => isMutableNotificationTab(t.id) && mutedTabs.includes(t.id)).flatMap(
+    (t) => t.types,
+  );
+}
+
+/** Порядок вкладок: в админке чаще всего приходят заявки дилеров. Отключённых разделов в панели нет. */
+export function notificationTabs(
+  admin: boolean,
+  mutedTabs: readonly string[] = [],
+): { id: NotificationTabId; label: string }[] {
   const order: NotificationTabDefId[] = admin ? ["dealers", "licenses", "payments"] : ["licenses", "payments", "dealers"];
   return [
     { id: "all", label: "Все" },
-    ...order.map((id) => {
-      const tab = NOTIFICATION_TAB_TYPES.find((t) => t.id === id)!;
-      return { id, label: admin ? tab.label.admin : tab.label.dealer };
-    }),
+    ...order
+      .filter((id) => !mutedTabs.includes(id))
+      .map((id) => {
+        const tab = NOTIFICATION_TAB_TYPES.find((t) => t.id === id)!;
+        return { id, label: admin ? tab.label.admin : tab.label.dealer };
+      }),
   ];
 }
 

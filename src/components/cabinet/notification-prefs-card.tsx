@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { Mail, Unlink } from "lucide-react";
 import { toast } from "sonner";
 import { MaxIcon, TelegramIcon } from "@/components/brand/messenger-icons";
@@ -8,13 +9,31 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Toggle } from "@/components/ui/toggle";
 import { formatRuDate } from "@/lib/dates";
+import { MUTABLE_NOTIFICATION_TABS, type MutableNotificationTab } from "@/lib/notification-tabs";
+import { useUnreadCount } from "./cabinet-user";
 
 export type MessengerLink = { linked: boolean; name: string | null; linkedAt: string | null };
 
 const POLL_MS = 3_000;
 const POLL_FOR_MS = 3 * 60_000;
 
-type PrefsPatch = { notifyByEmail?: boolean; notifyByTelegram?: boolean; notifyByMax?: boolean };
+type PrefsPatch = {
+  notifyByEmail?: boolean;
+  notifyByTelegram?: boolean;
+  notifyByMax?: boolean;
+  mutedTabs?: MutableNotificationTab[];
+};
+
+const SECTION_HINT: Record<MutableNotificationTab, { label: string; description: string }> = {
+  licenses: {
+    label: "Лицензии",
+    description: "Выдача без оплаты и повторная генерация, отказы DriveMods, аннулирование и заявки на него",
+  },
+  payments: {
+    label: "Оплаты",
+    description: "Новые счета и изменение стоимости, оплаты, возвраты, непробитые чеки, нет цены в справочнике",
+  },
+};
 
 export function NotificationPrefsCard({
   email,
@@ -22,6 +41,7 @@ export function NotificationPrefsCard({
   emailAvailable,
   telegramAvailable,
   maxAvailable,
+  mutedTabs: initialMuted,
 }: {
   email: string;
   initial: {
@@ -37,9 +57,27 @@ export function NotificationPrefsCard({
   telegramAvailable: boolean;
   /** Бот MAX настроен на сервере. */
   maxAvailable: boolean;
+  /** Отключённые разделы; null — не администратор, разделы не отключаются. */
+  mutedTabs: MutableNotificationTab[] | null;
 }) {
+  const router = useRouter();
+  const { refresh: refreshUnread } = useUnreadCount(0);
   const [byEmail, setByEmail] = React.useState(initial.notifyByEmail);
+  const [muted, setMuted] = React.useState(initialMuted ?? []);
   const [busy, setBusy] = React.useState(false);
+
+  async function toggleSection(tab: MutableNotificationTab, on: boolean) {
+    const prev = muted;
+    const next = on ? muted.filter((t) => t !== tab) : [...muted, tab];
+    setMuted(next);
+    if (!(await savePrefs({ mutedTabs: next }))) {
+      setMuted(prev);
+      return;
+    }
+    // Колокольчик берёт разделы из раскладки, а счётчик — с сервера.
+    router.refresh();
+    void refreshUnread();
+  }
 
   async function savePrefs(patch: PrefsPatch) {
     setBusy(true);
@@ -105,6 +143,28 @@ export function NotificationPrefsCard({
             savePrefs={savePrefs}
             busy={busy}
           />
+        ) : null}
+
+        {initialMuted ? (
+          <div className="border-t border-hairline pt-4">
+            <div className="text-sm">Разделы уведомлений</div>
+            <p className="mt-1 text-xs text-ink-muted">
+              Выключенный раздел пропадает из колокольчика, и его события не приходят ни на почту, ни в Telegram, ни в
+              MAX. Настройка действует только для вас.
+            </p>
+            <div className="mt-4 space-y-4">
+              {MUTABLE_NOTIFICATION_TABS.map((tab) => (
+                <Toggle
+                  key={tab}
+                  checked={!muted.includes(tab)}
+                  disabled={busy}
+                  onChange={(v) => void toggleSection(tab, v)}
+                  label={SECTION_HINT[tab].label}
+                  description={SECTION_HINT[tab].description}
+                />
+              ))}
+            </div>
+          </div>
         ) : null}
       </div>
     </Card>
