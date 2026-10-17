@@ -129,7 +129,7 @@ export default async function AdminAuditPage({
         user={{ name: me?.email ?? "Admin", email: me?.email ?? "", role: me?.role.name ?? "Admin" }}
       />
       <div className="mt-6">
-        <Card>
+        <Card className="border-0">
           <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
             <div className="flex items-center gap-2">
               <History className="h-4 w-4 text-accent" />
