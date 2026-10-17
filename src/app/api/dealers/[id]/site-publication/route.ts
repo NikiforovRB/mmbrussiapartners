@@ -8,20 +8,27 @@ import { requirePermission } from "@/lib/session";
 import {
   isPublishedOnSite,
   isSiteSyncConfigured,
+  normalizeSiteCities,
   queueDealerSiteSync,
+  siteCitiesOf,
   syncDealerToSiteNow,
 } from "@/lib/site-dealers";
 
 export const runtime = "nodejs";
 
 const schema = z.object({
-  action: z.enum(["approve", "reject", "resync"]),
+  action: z.enum(["approve", "reject", "resync", "cities"]),
   note: z.string().trim().max(500, "Не длиннее 500 символов").nullable().optional(),
+  cities: z
+    .array(z.string().trim().max(100, "Название города — не длиннее 100 символов"))
+    .max(20, "Не больше 20 городов")
+    .optional(),
 });
 
 /**
  * Модерация публикации телефона: одобрить (в том числе от имени дилера,
- * если он уже есть на сайте), отклонить заявку или снять с сайта, отправить заново.
+ * если он уже есть на сайте), отклонить заявку или снять с сайта, отправить
+ * заново, задать города, в которых телефон стоит на сайте.
  */
 export const POST = route(async (req: Request, ctx: { params: Promise<{ id: string }> }) => {
   const session = await requirePermission("dealers.approve", "Нет права модерировать публикацию на сайте");
@@ -38,6 +45,27 @@ export const POST = route(async (req: Request, ctx: { params: Promise<{ id: stri
     return NextResponse.json({ ok: true, outcome });
   }
 
+  if (d.action === "cities") {
+    const next = normalizeSiteCities(d.cities ?? [], profile.city);
+    if (siteCitiesOf({ city: profile.city, siteCities: next }).length === 0) {
+      throw badRequest("Укажите хотя бы один город: у дилера нет города в профиле");
+    }
+    await db.dealerProfile.update({ where: { userId: id }, data: { siteCities: next } });
+    queueDealerSiteSync(id, "publication");
+    await recordAdminAction({
+      actorId: session.user.id,
+      entity: "DEALER",
+      entityId: id,
+      action: "SITE_CITIES_CHANGED",
+      summary: target.email,
+      diff: changedFields(
+        { siteCities: siteCitiesOf(profile).join(", ") },
+        { siteCities: siteCitiesOf({ city: profile.city, siteCities: next }).join(", ") },
+      ),
+    });
+    return NextResponse.json({ ok: true, live: isPublishedOnSite(target.status, profile) });
+  }
+
   const before = {
     phoneVisibleOnSite: profile.phoneVisibleOnSite,
     sitePublication: profile.sitePublication,
@@ -46,7 +74,7 @@ export const POST = route(async (req: Request, ctx: { params: Promise<{ id: stri
 
   if (d.action === "approve") {
     if (!profile.phone.trim()) throw badRequest("У дилера не указан телефон");
-    if (!profile.city?.trim()) {
+    if (siteCitiesOf(profile).length === 0) {
       throw badRequest("Укажите город дилера: без него сайт не примет телефон");
     }
     if (profile.sitePublication === "APPROVED" && profile.phoneVisibleOnSite) {

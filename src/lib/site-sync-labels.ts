@@ -2,6 +2,34 @@
 
 export type SitePublication = "NONE" | "PENDING" | "APPROVED" | "REJECTED";
 
+/** Запись «Дилерской сети» с телефоном дилера, как её видел кабинет при последней проверке. */
+export type SiteEntry = {
+  id: string;
+  city: string;
+  phone: string;
+  comment: string | null;
+  /** Запись связана с этим дилером; иначе её добавили в админке сайта и кабинет её не ведёт. */
+  linked: boolean;
+};
+
+export function readSiteEntries(value: unknown): SiteEntry[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((e): e is Record<string, unknown> => !!e && typeof e === "object")
+    .map((e) => ({
+      id: String(e.id ?? ""),
+      city: String(e.city ?? ""),
+      phone: String(e.phone ?? ""),
+      comment: typeof e.comment === "string" && e.comment.trim() ? e.comment : null,
+      linked: e.linked === true,
+    }));
+}
+
+/** Подпись при сравнении кабинета с сайтом: пустая и отсутствующая — одно и то же. */
+export function sameSiteComment(a: string | null | undefined, b: string | null | undefined): boolean {
+  return (a ?? "").trim() === (b ?? "").trim();
+}
+
 export const SITE_RESULT_LABEL: Record<string, string> = {
   created: "создано",
   linked: "связано",
@@ -11,6 +39,7 @@ export const SITE_RESULT_LABEL: Record<string, string> = {
   conflict: "конфликт",
   error: "ошибка",
   failed: "не доставлено",
+  adopted: "взято с сайта",
 };
 
 export const SITE_ACTION_LABEL: Record<string, string> = {
@@ -27,6 +56,7 @@ export const SITE_TRIGGER_LABEL: Record<string, string> = {
   daily: "ежедневная",
   manual: "вручную",
   retry: "повтор",
+  site: "изменения на сайте",
 };
 
 /** Статусы строки ответа сайта, о которых стоит предупредить администратора. */

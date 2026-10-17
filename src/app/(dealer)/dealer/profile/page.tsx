@@ -9,6 +9,7 @@ import { ProfileForm } from "./profile-form";
 import { DriveModsAccessCard } from "./drivemods-access-card";
 import { NotificationPrefsCard } from "@/components/cabinet/notification-prefs-card";
 import { notificationPrefsProps } from "@/lib/notification-prefs";
+import { readSiteEntries } from "@/lib/site-sync-labels";
 
 export const dynamic = "force-dynamic";
 
@@ -74,6 +75,7 @@ export default async function ProfilePage() {
             at: user.dealerProfile.sitePublicationAt?.toISOString() ?? null,
             note: user.dealerProfile.sitePublicationNote,
             consent: user.dealerProfile.phoneVisibleOnSite,
+            entries: readSiteEntries(user.dealerProfile.siteEntries),
           }}
           email={user.email}
         />

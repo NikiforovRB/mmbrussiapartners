@@ -1,12 +1,22 @@
 import "server-only";
 
 import { after } from "next/server";
-import type { Prisma, SitePublicationStatus, UserStatus } from "@prisma/client";
+import { Prisma, type SitePublicationStatus, type UserStatus } from "@prisma/client";
 import { db } from "./db";
+import { notifyUser } from "./app-notifications";
+import { hasAdminScope } from "./permissions";
+import { fioFromParts } from "./utils";
+import { readSiteEntries, sameSiteComment, type SiteEntry } from "./site-sync-labels";
 
 /**
  * Синхронизация «Дилерской сети» на mmbrussia.ru: одобренные телефоны
  * дилеров уходят на сайт, снятые — удаляются оттуда.
+ *
+ * Обратная сторона: каждые 30 минут кабинет читает список сайта. Номер дилера,
+ * который уже стоит на сайте в записи из админки сайта, кабинет считает
+ * опубликованным (так советует протокол сайта) и забирает оттуда города и
+ * подпись — сверка связывает такие записи с дилером, не создавая дублей.
+ * Дальше связанные записи ведёт кабинет.
  *
  * Секрет MMB_DEALERS_SYNC_SECRET даёт право записи в список на сайте, поэтому
  * модуль работает только на сервере, а переменные — без префикса NEXT_PUBLIC_.
@@ -19,6 +29,12 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const SCHEDULER_TICK_MS = 30 * 60 * 1000;
 const LOG_RETENTION_MS = 90 * DAY_MS;
 const DEFAULT_COUNTRY = "Россия";
+/** Короче — не телефон, а обрывок: по нему записи не сопоставляем. */
+const PHONE_KEY_MIN = 10;
+const NOT_CONFIGURED = "Интеграция не настроена: нет MMB_SITE_URL или MMB_DEALERS_SYNC_SECRET";
+
+/** Пометка в карточке дилера: публикацию включил кабинет, потому что номер уже был на сайте. */
+export const SITE_TAKEOVER_NOTE = "Номер уже был на сайте — публикация включена по данным сайта";
 
 export type SiteAction = "upsert" | "remove" | "sync";
 export type SiteResultStatus =
@@ -33,11 +49,15 @@ export type SiteResultStatus =
 /** После этих статусов запись дилера есть на сайте. */
 const LISTED_STATUSES = new Set<string>(["created", "linked", "updated", "unchanged"]);
 
+/** У дилера из нескольких городов строк ответа несколько: в карточку идёт самая важная. */
+const RESULT_PRIORITY: SiteResultStatus[] = ["error", "conflict", "created", "linked", "updated", "unchanged", "removed"];
+
+export type SiteCity = { city: string; country?: string };
+
 export type SiteDealer = {
   externalId: string;
   phone: string;
-  city: string;
-  country: string;
+  cities: SiteCity[];
   comment: string | null;
 };
 
@@ -50,7 +70,7 @@ export type SiteResult = {
   message?: string | null;
 };
 
-export type SiteSummary = Partial<Record<SiteResultStatus, number>>;
+export type SiteSummary = Partial<Record<SiteResultStatus | "adopted", number>>;
 
 export type SiteOutcome = {
   ok: boolean;
@@ -79,22 +99,76 @@ export function isPublishedOnSite(
   return status === "APPROVED" && p.phoneVisibleOnSite && p.sitePublication === "APPROVED";
 }
 
+/** Телефон для сравнения так же, как его сравнивает сайт: только цифры, 8… и 10 цифр → 7…. */
+export function phoneKey(raw: string | null | undefined): string {
+  let d = String(raw ?? "").replace(/\D/g, "");
+  if (d.length === 11 && d.startsWith("8")) d = "7" + d.slice(1);
+  if (d.length === 10) d = "7" + d;
+  return d;
+}
+
+/** Город для сравнения так же, как на сайте: регистр, ё/е, «г.» и пробелы у дефиса не важны. */
+export function cityKey(raw: string | null | undefined): string {
+  return String(raw ?? "")
+    .toLowerCase()
+    .replace(/ё/g, "е")
+    .replace(/^\s*г\.?\s+/, "")
+    .replace(/\s*[-–—]\s*/g, "-")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function uniqueCities(list: readonly (string | null | undefined)[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of list) {
+    const city = raw?.trim().slice(0, 100);
+    const key = cityKey(city);
+    if (!city || seen.has(key)) continue;
+    seen.add(key);
+    out.push(city);
+  }
+  return out;
+}
+
+/** Города дилера в «Дилерской сети»: заданные для сайта, иначе город профиля. */
+export function siteCitiesOf(p: { city: string | null; siteCities: readonly string[] }): string[] {
+  return uniqueCities(p.siteCities.length > 0 ? p.siteCities : [p.city]);
+}
+
+/** Список городов для сохранения: совпадает с городом профиля — храним пустым. */
+export function normalizeSiteCities(cities: readonly string[], profileCity: string | null): string[] {
+  const list = uniqueCities(cities);
+  return list.length === 1 && cityKey(list[0]) === cityKey(profileCity) ? [] : list;
+}
+
+const sameList = (a: readonly string[], b: readonly string[]) =>
+  a.length === b.length && a.every((x, i) => x === b[i]);
+
 /**
  * Что уходит на сайт. Адрес и email не отправляем: дилер давал
  * согласие на публикацию только телефона.
  */
 export function toSiteDealer(
   userId: string,
-  p: { phone: string; city: string | null; country: string | null; siteComment: string | null },
+  p: {
+    phone: string;
+    city: string | null;
+    country: string | null;
+    siteComment: string | null;
+    siteCities: readonly string[];
+  },
 ): SiteDealer | null {
   const phone = p.phone?.trim();
-  const city = p.city?.trim();
-  if (!phone || !city) return null;
+  const cities = siteCitiesOf(p);
+  if (!phone || cities.length === 0) return null;
+  const home = cityKey(p.city);
+  const country = p.country?.trim() || DEFAULT_COUNTRY;
   return {
     externalId: userId,
     phone,
-    city,
-    country: p.country?.trim() || DEFAULT_COUNTRY,
+    // Страна известна только для города профиля; для остальных сайт берёт страну этого города у себя.
+    cities: cities.map((city) => (cityKey(city) === home ? { city, country } : { city })),
     comment: p.siteComment?.trim().slice(0, 200) || null,
   };
 }
@@ -131,9 +205,7 @@ function describeNetworkError(err: unknown): string {
 
 async function requestSite(method: "GET" | "POST", body?: unknown) {
   const cfg = siteConfig();
-  if (!cfg) {
-    throw new Error("Интеграция не настроена: нет MMB_SITE_URL или MMB_DEALERS_SYNC_SECRET");
-  }
+  if (!cfg) throw new Error(NOT_CONFIGURED);
   const res = await fetch(cfg.endpoint, {
     method,
     headers: {
@@ -154,9 +226,7 @@ function errorDetail(data: Record<string, unknown> | null): string | null {
 }
 
 async function pushToSite(body: Record<string, unknown>): Promise<SiteOutcome> {
-  if (!isSiteSyncConfigured()) {
-    return failure(null, "Интеграция не настроена: нет MMB_SITE_URL или MMB_DEALERS_SYNC_SECRET", false);
-  }
+  if (!isSiteSyncConfigured()) return failure(null, NOT_CONFIGURED, false);
   let res: Awaited<ReturnType<typeof requestSite>>;
   try {
     res = await requestSite("POST", body);
@@ -197,9 +267,7 @@ export type SiteDirectoryEntry = {
 export async function fetchSiteDealers(): Promise<
   { ok: true; dealers: SiteDirectoryEntry[] } | { ok: false; error: string }
 > {
-  if (!isSiteSyncConfigured()) {
-    return { ok: false, error: "Интеграция не настроена: нет MMB_SITE_URL или MMB_DEALERS_SYNC_SECRET" };
-  }
+  if (!isSiteSyncConfigured()) return { ok: false, error: NOT_CONFIGURED };
   try {
     const res = await requestSite("GET");
     if (!res.ok || !Array.isArray(res.data?.dealers)) {
@@ -253,6 +321,11 @@ type SyncState = {
   queue?: Promise<unknown>;
   retries?: Map<string, NodeJS.Timeout>;
   scheduler?: NodeJS.Timeout;
+  /**
+   * Отличия, оставшиеся после последней сверки (сайт их не принял). Проверка
+   * по расписанию не запускает из-за них сверку снова — только из-за новых.
+   */
+  residual?: Set<string>;
 };
 const state = globalThis as typeof globalThis & { __mmbSiteSync?: SyncState };
 const syncState: SyncState = (state.__mmbSiteSync ??= {});
@@ -295,32 +368,269 @@ function scheduleRetry(userId: string, attempt: number) {
   retries.set(userId, timer);
 }
 
+const PROFILE_SELECT = {
+  userId: true,
+  firstName: true,
+  lastName: true,
+  phone: true,
+  city: true,
+  country: true,
+  siteComment: true,
+  siteCities: true,
+  siteEntries: true,
+  phoneVisibleOnSite: true,
+  sitePublication: true,
+  sitePublicationAt: true,
+  siteListed: true,
+  siteSyncStatus: true,
+  user: { select: { status: true, isSuperAdmin: true, role: { select: { permissions: true } } } },
+} satisfies Prisma.DealerProfileSelect;
+
+type SiteProfile = Prisma.DealerProfileGetPayload<{ select: typeof PROFILE_SELECT }>;
+
+const dealerName = (p: SiteProfile) => fioFromParts(p) || p.phone;
+
+const isPublishedProfile = (p: SiteProfile) => isPublishedOnSite(p.user.status, p);
+
+// --- Записи сайта с телефоном дилера ---
+
+/** Записи из админки сайта с телефоном дилера, ещё не связанные ни с кем в кабинете. */
+function freeRecordsFor(p: { phone: string }, site: SiteDirectoryEntry[]): SiteDirectoryEntry[] {
+  const key = phoneKey(p.phone);
+  if (key.length < PHONE_KEY_MIN) return [];
+  return site.filter((r) => !r.externalId && r.phoneDigits === key);
+}
+
+function entriesFor(p: { userId: string; phone: string }, site: SiteDirectoryEntry[]): SiteEntry[] {
+  const key = phoneKey(p.phone);
+  return site
+    .filter(
+      (r) => r.externalId === p.userId || (!r.externalId && key.length >= PHONE_KEY_MIN && r.phoneDigits === key),
+    )
+    .map((r) => ({
+      id: r.id,
+      city: r.city,
+      phone: r.phone,
+      comment: r.comment?.trim() || null,
+      linked: r.externalId === p.userId,
+    }));
+}
+
+const entriesKey = (list: SiteEntry[]) =>
+  JSON.stringify(list.map((e) => [e.id, e.city, e.phone, e.comment, e.linked]));
+
+/** Запоминает, что сейчас на сайте с телефоном каждого дилера, — это видят дилер и администратор. */
+async function saveSiteEntries(
+  profiles: { userId: string; phone: string; siteEntries: Prisma.JsonValue }[],
+  site: SiteDirectoryEntry[],
+): Promise<void> {
+  const writes = profiles.flatMap((p) => {
+    const next = entriesFor(p, site);
+    if (entriesKey(next) === entriesKey(readSiteEntries(p.siteEntries))) return [];
+    return [
+      db.dealerProfile.updateMany({
+        where: { userId: p.userId },
+        data: { siteEntries: next.length > 0 ? (next as unknown as Prisma.InputJsonArray) : Prisma.DbNull },
+      }),
+    ];
+  });
+  if (writes.length === 0) return;
+  await db.$transaction(writes).catch((err) => console.error("[site-sync] не удалось сохранить записи сайта", err));
+}
+
+// --- Номера, которые уже стоят на сайте ---
+
+type Takeover = {
+  phoneVisibleOnSite?: boolean;
+  sitePublication?: SitePublicationStatus;
+  sitePublicationAt?: Date;
+  sitePublicationById?: null;
+  sitePublicationNote?: string;
+  siteCities?: string[];
+  siteComment?: string;
+};
+
+/**
+ * Города и подпись из записей сайта, нужные, чтобы сверка связала эти записи
+ * с дилером, а не создала рядом дубли. Пока у дилера нет ни связанных записей,
+ * ни заданных городов, города берутся с сайта как есть; иначе добавляются к прежним.
+ * Подпись переносится, только если в кабинете её ещё нет.
+ */
+function takeoverFields(
+  p: Pick<SiteProfile, "city" | "siteCities" | "siteComment" | "siteListed">,
+  free: SiteDirectoryEntry[],
+): Takeover {
+  if (free.length === 0) return {};
+  const keep = p.siteListed || p.siteCities.length > 0 ? siteCitiesOf(p) : [];
+  const siteCities = normalizeSiteCities([...keep, ...free.map((r) => r.city)], p.city);
+  const out: Takeover = {};
+  if (!sameList(siteCities, p.siteCities)) out.siteCities = siteCities;
+  if (!p.siteListed && !p.siteComment?.trim()) {
+    const home = cityKey(p.city);
+    const withComment = free.filter((r) => r.comment?.trim());
+    const comment = (withComment.find((r) => cityKey(r.city) === home) ?? withComment[0])?.comment?.trim();
+    if (comment) out.siteComment = comment.slice(0, 200);
+  }
+  return out;
+}
+
+type TakeoverPlan = {
+  takeovers: Map<string, Takeover>;
+  /** Заявки на рассмотрении, одобренные по данным сайта: дилеру уходит уведомление. */
+  approvedRequests: string[];
+  notes: string[];
+};
+
+function planTakeovers(profiles: SiteProfile[], site: SiteDirectoryEntry[], now: Date): TakeoverPlan {
+  const owners = new Map<string, number>();
+  for (const p of profiles) {
+    const key = phoneKey(p.phone);
+    if (key.length >= PHONE_KEY_MIN) owners.set(key, (owners.get(key) ?? 0) + 1);
+  }
+  const plan: TakeoverPlan = { takeovers: new Map(), approvedRequests: [], notes: [] };
+  for (const p of profiles) {
+    const free = freeRecordsFor(p, site);
+    if (free.length === 0) continue;
+    // Номера сотрудников на сайте — контакты компании, а не дилеров.
+    if (p.user.isSuperAdmin || hasAdminScope(p.user.role.permissions)) continue;
+    const who = `${dealerName(p)} (${free.map((r) => `${r.city}, ${r.phone}`).join("; ")})`;
+    if ((owners.get(phoneKey(p.phone)) ?? 0) > 1) {
+      plan.notes.push(`${who}: этот телефон указан у нескольких дилеров кабинета — запись сайта не связана`);
+      continue;
+    }
+    const published = p.sitePublication === "APPROVED" && p.phoneVisibleOnSite;
+    const neverAsked = p.sitePublication === "NONE" && !p.sitePublicationAt;
+    const requested = p.sitePublication === "PENDING" && p.phoneVisibleOnSite;
+    const accountOpen = p.user.status === "APPROVED" || p.user.status === "PENDING";
+    const later = p.user.status === "APPROVED" ? "" : " Записи свяжутся, когда учётная запись будет одобрена.";
+
+    if (published) {
+      const fields = takeoverFields(p, free);
+      if (Object.keys(fields).length > 0) {
+        plan.takeovers.set(p.userId, fields);
+        plan.notes.push(`${who}: на сайте нашлись записи с телефоном дилера — они связываются с кабинетом.${later}`);
+      }
+      continue;
+    }
+    if (accountOpen && (neverAsked || requested)) {
+      plan.takeovers.set(p.userId, {
+        ...takeoverFields(p, free),
+        phoneVisibleOnSite: true,
+        sitePublication: "APPROVED",
+        sitePublicationAt: now,
+        sitePublicationById: null,
+        sitePublicationNote: SITE_TAKEOVER_NOTE,
+      });
+      if (requested) plan.approvedRequests.push(p.userId);
+      plan.notes.push(`${who}: номер уже есть на сайте — в кабинете публикация включается.${later}`);
+      continue;
+    }
+    const reason = !accountOpen
+      ? "учётная запись отклонена или заблокирована"
+      : p.sitePublication === "REJECTED"
+        ? "публикация отклонена или снята администратором"
+        : "дилер выключил показ телефона";
+    plan.notes.push(
+      `${who}: номер есть на сайте в записи из админки сайта, а в кабинете ${reason}. Кабинет такую запись не трогает — проверьте её в админке сайта`,
+    );
+  }
+  return plan;
+}
+
+async function applyTakeovers(plan: TakeoverPlan): Promise<void> {
+  if (plan.takeovers.size === 0) return;
+  await db.$transaction(
+    [...plan.takeovers].map(([userId, data]) => db.dealerProfile.updateMany({ where: { userId }, data })),
+  );
+  for (const userId of plan.approvedRequests) {
+    await notifyUser(userId, {
+      type: "SITE_PUBLICATION_REVIEWED",
+      title: "Телефон опубликован на сайте",
+      body: "Номер уже был в «Дилерской сети» на mmbrussia.ru/contacts — заявка одобрена.",
+      link: "/dealer/profile",
+    });
+  }
+}
+
+/** Перед первой отправкой дилера: если его номер уже стоит на сайте, забираем оттуда города и подпись. */
+async function takeoverBeforeFirstLink(p: SiteProfile): Promise<Takeover | null> {
+  const site = await fetchSiteDealers();
+  if (!site.ok) return null;
+  const free = freeRecordsFor(p, site.dealers);
+  if (free.length === 0) return null;
+  const key = phoneKey(p.phone);
+  const others = await db.dealerProfile.findMany({ where: { userId: { not: p.userId } }, select: { phone: true } });
+  if (others.some((o) => phoneKey(o.phone) === key)) return null;
+  const fields = takeoverFields(p, free);
+  if (Object.keys(fields).length === 0) return null;
+  await db.dealerProfile.updateMany({ where: { userId: p.userId }, data: fields });
+  return fields;
+}
+
+// --- Расхождения кабинета и сайта ---
+
+type Drift = { key: string; message: string };
+
+/** Чем связанные записи сайта отличаются от того, что кабинет считает опубликованным. */
+function findDrift(profiles: SiteProfile[], site: SiteDirectoryEntry[]): Drift[] {
+  const drift: Drift[] = [];
+  const published = new Map<string, { p: SiteProfile; dealer: SiteDealer }>();
+  for (const p of profiles) {
+    const dealer = isPublishedProfile(p) ? toSiteDealer(p.userId, p) : null;
+    if (dealer) published.set(p.userId, { p, dealer });
+  }
+  const linked = site.filter((r) => r.externalId);
+  for (const { p, dealer } of published.values()) {
+    const key = phoneKey(dealer.phone);
+    for (const { city } of dealer.cities) {
+      const where = `${dealerName(p)}, ${city}`;
+      const r = linked.find((x) => x.externalId === p.userId && cityKey(x.city) === cityKey(city));
+      if (!r) {
+        drift.push({ key: `missing:${p.userId}:${cityKey(city)}`, message: `${where}: записи нет на сайте` });
+        continue;
+      }
+      if (r.phoneDigits !== key) {
+        drift.push({
+          key: `phone:${r.id}:${key}`,
+          message: `${where}: на сайте телефон ${r.phone}, в кабинете ${dealer.phone}`,
+        });
+      }
+      if (!sameSiteComment(r.comment, dealer.comment)) {
+        drift.push({
+          key: `comment:${r.id}:${dealer.comment ?? ""}`,
+          message: `${where}: подпись на сайте «${r.comment?.trim() || "—"}», в кабинете «${dealer.comment || "—"}»`,
+        });
+      }
+    }
+  }
+  for (const r of linked) {
+    const own = published.get(r.externalId ?? "");
+    if (own?.dealer.cities.some((c) => cityKey(c.city) === cityKey(r.city))) continue;
+    drift.push({
+      key: `extra:${r.id}`,
+      message: `${r.city}, ${r.phone}: запись связана с кабинетом, но там этот номер в этом городе не опубликован`,
+    });
+  }
+  return drift;
+}
+
+// --- Отправка одного дилера ---
+
 /**
  * Приводит запись дилера на сайте к текущему состоянию в БД: состояние
  * читается в момент отправки, поэтому повтор и дубли события безопасны.
  */
 async function syncDealerNow(userId: string, trigger: string, attempt: number): Promise<SiteOutcome | null> {
-  const user = await db.user.findUnique({
-    where: { id: userId },
-    select: {
-      status: true,
-      dealerProfile: {
-        select: {
-          phone: true,
-          city: true,
-          country: true,
-          siteComment: true,
-          phoneVisibleOnSite: true,
-          sitePublication: true,
-          siteListed: true,
-          siteSyncStatus: true,
-        },
-      },
-    },
-  });
-  const profile = user?.dealerProfile ?? null;
-  const dealer =
-    user && profile && isPublishedOnSite(user.status, profile) ? toSiteDealer(userId, profile) : null;
+  let profile = await db.dealerProfile.findUnique({ where: { userId }, select: PROFILE_SELECT });
+  let dealer = profile && isPublishedProfile(profile) ? toSiteDealer(userId, profile) : null;
+
+  if (profile && dealer && !profile.siteListed) {
+    const taken = await takeoverBeforeFirstLink(profile);
+    if (taken) {
+      profile = { ...profile, ...taken };
+      dealer = toSiteDealer(userId, profile);
+    }
+  }
 
   let action: "upsert" | "remove";
   let outcome: SiteOutcome;
@@ -337,9 +647,21 @@ async function syncDealerNow(userId: string, trigger: string, attempt: number): 
   }
 
   await logExchange({ action, trigger, dealers: 1, outcome });
-  if (profile) await applyDealerOutcome(userId, action, outcome);
+  if (profile) {
+    await applyDealerOutcome(userId, action, outcome);
+    if (outcome.ok) {
+      const site = await fetchSiteDealers();
+      if (site.ok) await saveSiteEntries([profile], site.dealers);
+    }
+  }
   if (!outcome.ok && outcome.retryable) scheduleRetry(userId, attempt);
   return outcome;
+}
+
+function dealerOutcome(results: SiteResult[], userId: string) {
+  const own = results.filter((r) => r.externalId === userId);
+  const main = RESULT_PRIORITY.map((s) => own.find((r) => r.status === s)).find((r) => r !== undefined);
+  return { main, listed: own.some((r) => LISTED_STATUSES.has(r.status)) };
 }
 
 async function applyDealerOutcome(userId: string, action: "upsert" | "remove", outcome: SiteOutcome) {
@@ -348,14 +670,14 @@ async function applyDealerOutcome(userId: string, action: "upsert" | "remove", o
   if (!outcome.ok) {
     data = { siteSyncedAt: now, siteSyncStatus: "failed", siteSyncMessage: outcome.error };
   } else {
-    const r = outcome.results.find((x) => x.externalId === userId);
-    const status = r?.status ?? (action === "remove" ? "removed" : "unchanged");
+    const { main, listed } = dealerOutcome(outcome.results, userId);
+    const status = main?.status ?? (action === "remove" ? "removed" : "unchanged");
     data = {
       siteSyncedAt: now,
       siteSyncStatus: status,
-      siteSyncMessage: r?.message ?? null,
+      siteSyncMessage: main?.message ?? null,
       // При conflict/error сайт ничего не менял — прежняя запись, если была, осталась.
-      ...(LISTED_STATUSES.has(status) && { siteListed: true }),
+      ...(action === "upsert" && (listed || !main) && { siteListed: true }),
       ...(action === "remove" && status !== "error" && { siteListed: false }),
     };
   }
@@ -380,7 +702,12 @@ export async function syncDealerToSiteNow(userId: string, trigger: string): Prom
   return enqueue(() => syncDealerNow(userId, trigger, 0));
 }
 
-/** Полная сверка: на сайте остаются ровно одобренные телефоны кабинета. */
+// --- Полная сверка ---
+
+/**
+ * Полная сверка: номера дилеров, уже стоящие на сайте, переносятся в кабинет,
+ * после чего на сайте остаются ровно одобренные телефоны кабинета.
+ */
 export async function runFullSiteSync(opts: {
   dryRun: boolean;
   trigger: string;
@@ -398,40 +725,63 @@ async function fullSyncNow({
   trigger: string;
   actorId?: string | null;
 }): Promise<FullSyncResult> {
-  const profiles = await db.dealerProfile.findMany({
-    where: PUBLISHED_ON_SITE_WHERE,
-    select: { userId: true, phone: true, city: true, country: true, siteComment: true },
-    orderBy: { createdAt: "asc" },
+  const finish = async (outcome: SiteOutcome, dealers: number): Promise<FullSyncResult> => {
+    await logExchange({ action: "sync", trigger, dryRun, dealers, outcome, actorId });
+    return { ...outcome, dealers };
+  };
+
+  const before = await fetchSiteDealers();
+  if (!before.ok) return finish(failure(null, before.error, true), 0);
+
+  const loaded = await db.dealerProfile.findMany({ select: PROFILE_SELECT, orderBy: { createdAt: "asc" } });
+  const plan = planTakeovers(loaded, before.dealers, new Date());
+  if (!dryRun) await applyTakeovers(plan);
+  const profiles = loaded.map((p) => {
+    const taken = plan.takeovers.get(p.userId);
+    return taken ? { ...p, ...taken } : p;
   });
   const dealers = profiles
+    .filter(isPublishedProfile)
     .map((p) => toSiteDealer(p.userId, p))
     .filter((d): d is SiteDealer => d !== null);
 
-  const finish = async (outcome: SiteOutcome): Promise<FullSyncResult> => {
-    await logExchange({ action: "sync", trigger, dryRun, dealers: dealers.length, outcome, actorId });
-    return { ...outcome, dealers: dealers.length };
-  };
+  const withPlan = (outcome: SiteOutcome, residual: Drift[] = []): SiteOutcome => ({
+    ...outcome,
+    summary:
+      outcome.summary && plan.takeovers.size > 0
+        ? { ...outcome.summary, adopted: plan.takeovers.size }
+        : outcome.summary,
+    warnings: [
+      ...plan.notes,
+      ...outcome.warnings,
+      ...residual.map((d) => `После сверки на сайте осталось отличие: ${d.message}`),
+    ],
+  });
 
   if (dealers.length > MAX_DEALERS_PER_REQUEST) {
-    return finish(failure(null, `Слишком много дилеров для одного запроса: ${dealers.length}`, false));
+    return finish(
+      withPlan(failure(null, `Слишком много дилеров для одного запроса: ${dealers.length}`, false)),
+      dealers.length,
+    );
   }
 
   let allowEmpty = false;
   if (dealers.length === 0) {
     // Пустой sync сайт принимает только с allowEmpty — это защита от случайной
     // очистки. Шлём его, лишь когда на сайте действительно остались записи кабинета.
-    const site = await fetchSiteDealers();
-    if (!site.ok) return finish(failure(null, site.error, true));
-    if (!site.dealers.some((d) => d.externalId)) {
-      return finish({
-        ok: true,
-        httpStatus: null,
-        summary: {},
-        results: [],
-        warnings: ["Одобренных публикаций нет, и записей кабинета на сайте тоже нет — отправлять нечего."],
-        error: null,
-        retryable: false,
-      });
+    if (!before.dealers.some((d) => d.externalId)) {
+      return finish(
+        withPlan({
+          ok: true,
+          httpStatus: null,
+          summary: {},
+          results: [],
+          warnings: ["Одобренных публикаций нет, и записей кабинета на сайте тоже нет — отправлять нечего."],
+          error: null,
+          retryable: false,
+        }),
+        0,
+      );
     }
     allowEmpty = true;
   }
@@ -442,26 +792,33 @@ async function fullSyncNow({
     dealers,
     ...(allowEmpty && { allowEmpty: true }),
   });
-  if (outcome.ok && !dryRun) await applySyncOutcome(dealers, outcome);
-  return finish(outcome);
+  if (!outcome.ok || dryRun) return finish(withPlan(outcome), dealers.length);
+
+  await applySyncOutcome(dealers, outcome);
+  let residual: Drift[] = [];
+  const after = await fetchSiteDealers();
+  if (after.ok) {
+    await saveSiteEntries(profiles, after.dealers);
+    residual = findDrift(profiles, after.dealers);
+    syncState.residual = new Set(residual.map((d) => d.key));
+  }
+  return finish(withPlan(outcome, residual), dealers.length);
 }
 
 async function applySyncOutcome(dealers: SiteDealer[], outcome: SiteOutcome) {
   const now = new Date();
-  const byId = new Map(outcome.results.map((r) => [r.externalId, r]));
   const ids = dealers.map((d) => d.externalId);
   try {
     await db.$transaction([
       ...dealers.map((d) => {
-        const r = byId.get(d.externalId);
-        const status = r?.status ?? "unchanged";
+        const { main, listed } = dealerOutcome(outcome.results, d.externalId);
         return db.dealerProfile.updateMany({
           where: { userId: d.externalId },
           data: {
-            siteListed: LISTED_STATUSES.has(status),
+            siteListed: listed || !main,
             siteSyncedAt: now,
-            siteSyncStatus: status,
-            siteSyncMessage: r?.message ?? null,
+            siteSyncStatus: main?.status ?? "unchanged",
+            siteSyncMessage: main?.message ?? null,
           },
         });
       }),
@@ -478,6 +835,30 @@ async function applySyncOutcome(dealers: SiteDealer[], outcome: SiteOutcome) {
     console.error("[site-sync] не удалось сохранить результаты сверки", err);
   }
 }
+
+/**
+ * Проверка по расписанию: читает список сайта и, если он разошёлся с кабинетом
+ * (на сайте добавили номер дилера, удалили или поправили связанную запись),
+ * запускает полную сверку. Иначе только обновляет то, что видно в карточках.
+ */
+async function checkSiteNow(): Promise<void> {
+  const site = await fetchSiteDealers();
+  if (!site.ok) {
+    console.error(`[site-sync] проверка списка сайта: ${site.error}`);
+    return;
+  }
+  const profiles = await db.dealerProfile.findMany({ select: PROFILE_SELECT });
+  const plan = planTakeovers(profiles, site.dealers, new Date());
+  const known = syncState.residual;
+  const drift = findDrift(profiles, site.dealers).filter((d) => !known?.has(d.key));
+  if (plan.takeovers.size > 0 || drift.length > 0) {
+    await fullSyncNow({ dryRun: false, trigger: "site" });
+    return;
+  }
+  await saveSiteEntries(profiles, site.dealers);
+}
+
+// --- Журнал и панель в настройках ---
 
 export type SiteSyncLogEntry = {
   id: string;
@@ -550,25 +931,28 @@ export async function getSiteSyncOverview() {
 
 export type SiteSyncOverview = Awaited<ReturnType<typeof getSiteSyncOverview>>;
 
-async function runDailySyncIfDue() {
+async function runScheduledCheck() {
   const last = await db.siteSyncLog.findFirst({
     where: { action: "sync", dryRun: false, ok: true },
     orderBy: { createdAt: "desc" },
     select: { createdAt: true },
   });
-  if (last && Date.now() - last.createdAt.getTime() < DAY_MS) return;
-  await runFullSiteSync({ dryRun: false, trigger: "daily" });
-  await db.siteSyncLog.deleteMany({ where: { createdAt: { lt: new Date(Date.now() - LOG_RETENTION_MS) } } });
+  if (!last || Date.now() - last.createdAt.getTime() >= DAY_MS) {
+    await runFullSiteSync({ dryRun: false, trigger: "daily" });
+    await db.siteSyncLog.deleteMany({ where: { createdAt: { lt: new Date(Date.now() - LOG_RETENTION_MS) } } });
+    return;
+  }
+  await enqueue(checkSiteNow);
 }
 
 /**
- * Ежедневная сверка внутри процесса кабинета: раз в полчаса проверяем, была ли
- * успешная сверка за последние сутки. Неудачная повторится на следующей проверке.
+ * Проверка внутри процесса кабинета: раз в полчаса сверяем список сайта с
+ * кабинетом, а раз в сутки — полная сверка, даже если отличий не видно.
  */
 export function startSiteSyncScheduler(): void {
   if (!isSiteSyncConfigured() || syncState.scheduler) return;
   const tick = () => {
-    void runDailySyncIfDue().catch((err) => console.error("[site-sync] ежедневная сверка упала", err));
+    void runScheduledCheck().catch((err) => console.error("[site-sync] проверка по расписанию упала", err));
   };
   setTimeout(tick, 2 * 60 * 1000).unref?.();
   syncState.scheduler = setInterval(tick, SCHEDULER_TICK_MS);

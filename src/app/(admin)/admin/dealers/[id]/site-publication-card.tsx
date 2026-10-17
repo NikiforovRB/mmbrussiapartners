@@ -2,12 +2,13 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, EyeOff, RefreshCw, XCircle, Globe } from "lucide-react";
+import { CheckCircle2, EyeOff, RefreshCw, XCircle, Globe, MapPin } from "lucide-react";
 import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tag } from "@/components/ui/tag";
 import { Modal } from "@/components/ui/modal";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { formatRuDateTime } from "@/lib/dates";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -15,6 +16,8 @@ import {
   SITE_PROBLEM_STATUSES,
   SITE_RESULT_LABEL,
   formatSiteSummary,
+  sameSiteComment,
+  type SiteEntry,
   type SitePublication,
 } from "@/lib/site-sync-labels";
 
@@ -34,6 +37,10 @@ export type SitePreview = {
   city: string | null;
   country: string | null;
   siteComment: string | null;
+  /** Города, в которых телефон стоит на сайте. */
+  cities: string[];
+  /** Города заданы отдельно от города профиля. */
+  customCities: boolean;
 };
 
 type Outcome = {
@@ -49,12 +56,15 @@ export function SitePublicationCard({
   accountStatus,
   publication,
   preview,
+  entries,
   integrationEnabled,
 }: {
   dealerId: string;
   accountStatus: "PENDING" | "APPROVED" | "REJECTED" | "SUSPENDED";
   publication: SitePublicationInfo;
   preview: SitePreview;
+  /** Записи сайта с телефоном дилера по последней проверке. */
+  entries: SiteEntry[];
   integrationEnabled: boolean;
 }) {
   const router = useRouter();
@@ -63,13 +73,15 @@ export function SitePublicationCard({
   const [busy, setBusy] = React.useState<string | null>(null);
   const [rejectOpen, setRejectOpen] = React.useState(false);
   const [note, setNote] = React.useState("");
+  const [citiesOpen, setCitiesOpen] = React.useState(false);
+  const [citiesText, setCitiesText] = React.useState("");
 
   const { status, consent } = publication;
   const approved = status === "APPROVED" && consent;
   const live = approved && accountStatus === "APPROVED";
   const pending = status === "PENDING" && consent;
 
-  async function act(action: "approve" | "reject" | "resync", body: Record<string, unknown> = {}) {
+  async function act(action: "approve" | "reject" | "resync" | "cities", body: Record<string, unknown> = {}) {
     setBusy(action);
     const res = await fetch(`/api/dealers/${dealerId}/site-publication`, {
       method: "POST",
@@ -139,6 +151,23 @@ export function SitePublicationCard({
     router.refresh();
   }
 
+  function openCities() {
+    setCitiesText(preview.customCities ? preview.cities.join(", ") : "");
+    setCitiesOpen(true);
+  }
+
+  async function saveCities() {
+    const cities = citiesText
+      .split(/[,;\n]/)
+      .map((c) => c.trim())
+      .filter(Boolean);
+    const j = await act("cities", { cities });
+    if (!j) return;
+    toast.success(j.live ? "Города сохранены, сайт обновляется" : "Города сохранены");
+    setCitiesOpen(false);
+    refreshWithSiteResult(Boolean(j.live));
+  }
+
   const statusTag = live ? (
     <Tag tone="success">На сайте</Tag>
   ) : approved ? (
@@ -163,6 +192,7 @@ export function SitePublicationCard({
           <div>Решение от {formatRuDateTime(publication.at)}</div>
         ) : null}
         {status === "REJECTED" && publication.note ? <div>Причина: {publication.note}</div> : null}
+        {status === "APPROVED" && publication.note ? <div>{publication.note}</div> : null}
         {!consent && status === "NONE" ? (
           <div>Дилер не включал «Показывать телефон на сайте».</div>
         ) : null}
@@ -171,15 +201,23 @@ export function SitePublicationCard({
       <div className="mt-4 rounded-panel border border-hairline p-3 text-xs space-y-1">
         <div className="text-ink-subtle uppercase tracking-tight text-[11px] mb-1">На сайте будет</div>
         <div>
-          <span className="text-ink-muted">Город: </span>
-          {preview.city?.trim() ? (
+          <span className="text-ink-muted">{preview.cities.length > 1 ? "Города: " : "Город: "}</span>
+          {preview.cities.length > 0 ? (
             <>
-              {preview.city} <span className="text-ink-muted">({preview.country?.trim() || "Россия"})</span>
+              {preview.cities.join(", ")}
+              {!preview.customCities ? (
+                <span className="text-ink-muted"> ({preview.country?.trim() || "Россия"})</span>
+              ) : null}
             </>
           ) : (
             <span className="text-danger">не указан</span>
           )}
         </div>
+        {preview.customCities ? (
+          <div className="text-ink-muted">
+            Так номер размещён на сайте; город в профиле — {preview.city?.trim() || "не указан"}.
+          </div>
+        ) : null}
         <div>
           <span className="text-ink-muted">Телефон: </span>
           {preview.phone || <span className="text-danger">не указан</span>}
@@ -189,6 +227,8 @@ export function SitePublicationCard({
           {preview.siteComment?.trim() || "—"}
         </div>
       </div>
+
+      <SiteEntries entries={entries} comment={preview.siteComment} live={live} />
 
       {publication.syncedAt ? (
         <div className={`mt-3 text-xs ${syncProblem ? "text-danger" : "text-ink-muted"}`}>
@@ -224,6 +264,9 @@ export function SitePublicationCard({
                   Отправить заново
                 </Button>
               ) : null}
+              <Button size="sm" variant="ghost" onClick={openCities} icon={<MapPin className="h-4 w-4" />}>
+                Города на сайте
+              </Button>
             </>
           ) : (
             <Button
@@ -266,6 +309,58 @@ export function SitePublicationCard({
           </Button>
         </div>
       </Modal>
+
+      <Modal
+        open={citiesOpen}
+        onClose={() => setCitiesOpen(false)}
+        title="Города на сайте"
+        description="В каждом из этих городов «Дилерской сети» будет стоять телефон дилера. Город, которого нет в списке, сайт уберёт."
+      >
+        <Input
+          label="Города через запятую"
+          placeholder={preview.city?.trim() || "Например: Брянск, Карачев"}
+          value={citiesText}
+          onChange={(e) => setCitiesText(e.target.value)}
+          hint={`Пусто — город из профиля${preview.city?.trim() ? ` (${preview.city.trim()})` : ""}.`}
+        />
+        <div className="mt-6 flex justify-end gap-2">
+          <Button variant="ghost" onClick={() => setCitiesOpen(false)}>
+            Отмена
+          </Button>
+          <Button loading={busy === "cities"} onClick={saveCities} icon={<MapPin className="h-4 w-4" />}>
+            Сохранить
+          </Button>
+        </div>
+      </Modal>
     </Card>
+  );
+}
+
+/** Что сейчас стоит на сайте с телефоном дилера — по последней проверке кабинетом. */
+function SiteEntries({ entries, comment, live }: { entries: SiteEntry[]; comment: string | null; live: boolean }) {
+  if (entries.length === 0) {
+    return live ? (
+      <div className="mt-3 text-xs text-ink-muted">На сайте записей с этим телефоном пока не видно.</div>
+    ) : null;
+  }
+  return (
+    <div className="mt-3 rounded-panel border border-hairline p-3 text-xs space-y-1.5">
+      <div className="text-ink-subtle uppercase tracking-tight text-[11px]">Сейчас на сайте</div>
+      {entries.map((e) => (
+        <div key={e.id}>
+          <div>
+            {e.city} · {e.phone}
+            {e.comment ? <span className="text-ink-muted"> · {e.comment}</span> : null}{" "}
+            <Tag tone={e.linked ? "success" : "muted"}>{e.linked ? "связана с кабинетом" : "из админки сайта"}</Tag>
+          </div>
+          {e.linked && !sameSiteComment(e.comment, comment) ? (
+            <div className="text-strong-warning">Подпись на сайте отличается от кабинета.</div>
+          ) : null}
+          {!e.linked && !live ? (
+            <div className="text-ink-muted">Кабинет эту запись не ведёт: её меняют и удаляют в админке сайта.</div>
+          ) : null}
+        </div>
+      ))}
+    </div>
   );
 }

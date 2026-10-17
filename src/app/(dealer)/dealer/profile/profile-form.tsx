@@ -13,7 +13,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { LocationFields } from "@/components/cabinet/location-fields";
 import { formatRuDate } from "@/lib/dates";
 import { COMPANY_URL_PLACEHOLDER, TELEGRAM_NICK_PLACEHOLDER } from "@/lib/dealer-contacts";
-import type { SitePublication } from "@/lib/site-sync-labels";
+import type { SiteEntry, SitePublication } from "@/lib/site-sync-labels";
 
 type ProfileInitial = {
   firstName: string;
@@ -38,6 +38,8 @@ type PublicationState = {
   note: string | null;
   /** Сохранённое значение тоггла — от него зависит, что будет после «Сохранить». */
   consent: boolean;
+  /** Записи сайта с телефоном дилера по последней проверке кабинетом. */
+  entries?: SiteEntry[];
 };
 
 export function ProfileForm({
@@ -130,6 +132,7 @@ export function ProfileForm({
         at: new Date().toISOString(),
         note: null,
         consent: data.phoneVisibleOnSite,
+        entries: publication.entries,
       });
       toast.success(
         data.phoneVisibleOnSite
@@ -341,6 +344,19 @@ function PublicationStatus({
   onRequestAgain: () => void;
 }) {
   const box = "mt-4 rounded-panel border border-hairline p-3 text-xs text-ink-muted space-y-2";
+  const entries = publication.entries ?? [];
+  const listed = entries.filter((e) => e.linked);
+  const manual = entries.filter((e) => !e.linked);
+  const entryList = (list: SiteEntry[]) => (
+    <ul className="space-y-0.5 text-ink">
+      {list.map((e) => (
+        <li key={e.id}>
+          {e.city} · {e.phone}
+          {e.comment ? <span className="text-ink-muted"> · {e.comment}</span> : null}
+        </li>
+      ))}
+    </ul>
+  );
 
   if (toggle !== publication.consent) {
     return (
@@ -353,7 +369,14 @@ function PublicationStatus({
       </div>
     );
   }
-  if (!publication.consent) return null;
+  if (!publication.consent) {
+    return manual.length > 0 ? (
+      <div className={box}>
+        <div className="mb-1">Ваш номер есть на сайте в записи, которую добавил администратор сайта:</div>
+        {entryList(manual)}
+      </div>
+    ) : null;
+  }
 
   if (publication.status === "PENDING") {
     return (
@@ -382,6 +405,12 @@ function PublicationStatus({
           </a>
           . Выключите переключатель и сохраните, чтобы убрать его.
         </div>
+        {listed.length > 0 ? (
+          <div>
+            <div className="mb-1">Сейчас на сайте:</div>
+            {entryList(listed)}
+          </div>
+        ) : null}
       </div>
     );
   }
@@ -398,6 +427,12 @@ function PublicationStatus({
           </>
         ) : null}
       </div>
+      {manual.length > 0 ? (
+        <div>
+          <div className="mb-1">Ваш номер есть на сайте в записи, которую добавил администратор сайта:</div>
+          {entryList(manual)}
+        </div>
+      ) : null}
       <Button
         size="sm"
         variant="secondary"

@@ -12,7 +12,8 @@ import { Card } from "@/components/ui/card";
 import { Tag } from "@/components/ui/tag";
 import { formatRuDateTime } from "@/lib/dates";
 import { cn, fioFromParts, plural } from "@/lib/utils";
-import { isSiteSyncConfigured } from "@/lib/site-dealers";
+import { isSiteSyncConfigured, siteCitiesOf } from "@/lib/site-dealers";
+import { readSiteEntries } from "@/lib/site-sync-labels";
 import { isPasswordVaultConfigured } from "@/lib/password-vault";
 import { DealerEditor } from "./dealer-editor";
 import { DealerPasswordCard } from "./dealer-password-card";
@@ -225,7 +226,15 @@ export default async function AdminDealerPage({
                   syncStatus: p.siteSyncStatus,
                   syncMessage: p.siteSyncMessage,
                 }}
-                preview={{ phone: p.phone, city: p.city, country: p.country, siteComment: p.siteComment }}
+                preview={{
+                  phone: p.phone,
+                  city: p.city,
+                  country: p.country,
+                  siteComment: p.siteComment,
+                  cities: siteCitiesOf(p),
+                  customCities: p.siteCities.length > 0,
+                }}
+                entries={readSiteEntries(p.siteEntries)}
               />
             ) : null
           }
