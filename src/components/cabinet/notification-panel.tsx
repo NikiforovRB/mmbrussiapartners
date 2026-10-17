@@ -335,11 +335,14 @@ export function NotificationPanel({ initialUnread }: { initialUnread: number }) 
                   ) : items && items.length > 0 ? (
                     <ul className="divide-y divide-hairline">
                       {items.map((n) => (
-                        <li key={n.id} className={cn(!n.readAt && "bg-card-light")}>
+                        <li
+                          key={n.id}
+                          className={cn("transition-colors hover:bg-surface-muted", !n.readAt && "bg-card-light")}
+                        >
                           <button
                             type="button"
                             onClick={() => openItem(n)}
-                            className="flex w-full items-start gap-3 px-5 py-4 text-left transition-colors hover:bg-surface-muted"
+                            className="flex w-full items-start gap-3 px-5 py-4 text-left"
                           >
                             <span
                               className={cn(

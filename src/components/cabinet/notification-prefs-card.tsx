@@ -1,8 +1,9 @@
 "use client";
 
 import * as React from "react";
-import { Mail, MessageCircle, Send, Unlink } from "lucide-react";
+import { Mail, Unlink } from "lucide-react";
 import { toast } from "sonner";
+import { MaxIcon, TelegramIcon } from "@/components/brand/messenger-icons";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Toggle } from "@/components/ui/toggle";
@@ -80,7 +81,7 @@ export function NotificationPrefsCard({
 
         <MessengerSection
           title="Telegram"
-          icon={<Send className="h-4 w-4" />}
+          icon={<TelegramIcon className="h-4 w-4" />}
           endpoint="/api/profile/telegram"
           prefKey="notifyByTelegram"
           available={telegramAvailable}
@@ -94,7 +95,7 @@ export function NotificationPrefsCard({
         {maxAvailable || initial.max.linked ? (
           <MessengerSection
             title="MAX"
-            icon={<MessageCircle className="h-4 w-4" />}
+            icon={<MaxIcon className="h-4 w-4" />}
             endpoint="/api/profile/max"
             prefKey="notifyByMax"
             available={maxAvailable}

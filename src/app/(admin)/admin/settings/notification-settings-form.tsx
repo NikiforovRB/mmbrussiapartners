@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Mail, MessageCircle, Send, Save, Webhook } from "lucide-react";
+import { Mail, Save, Webhook } from "lucide-react";
 import { toast } from "sonner";
 import type { AppNotificationType } from "@prisma/client";
 import { Card } from "@/components/ui/card";
@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Tag } from "@/components/ui/tag";
 import { Toggle } from "@/components/ui/toggle";
 import { Checkbox } from "@/components/ui/checkbox";
+import { MaxIcon, TelegramIcon } from "@/components/brand/messenger-icons";
 import { usePermissions } from "@/hooks/use-permissions";
 import { formatRuDateTime } from "@/lib/dates";
 import { NOTIFICATION_TAB_TYPES, NOTIFICATION_TYPE_LABEL } from "@/lib/notification-tabs";
@@ -163,7 +164,7 @@ export function NotificationSettingsForm({
 
       <Card>
         <div className="flex items-center gap-2 mb-1">
-          <Send className="h-5 w-5 text-accent" />
+          <TelegramIcon className="h-5 w-5" />
           <div className="font-display text-lg tracking-tight">Telegram</div>
         </div>
         <div className="mt-2 flex flex-wrap gap-2">
@@ -211,7 +212,7 @@ export function NotificationSettingsForm({
             variant="ghost"
             disabled={!telegram.configured || !canEdit}
             loading={busy === "test-telegram"}
-            icon={<Send className="h-4 w-4" />}
+            icon={<TelegramIcon className="h-4 w-4" />}
             onClick={() => test("telegram")}
           >
             Тест себе
@@ -221,7 +222,7 @@ export function NotificationSettingsForm({
 
       <Card>
         <div className="flex items-center gap-2 mb-1">
-          <MessageCircle className="h-5 w-5 text-accent" />
+          <MaxIcon className="h-5 w-5" />
           <div className="font-display text-lg tracking-tight">MAX</div>
         </div>
         <div className="mt-2 flex flex-wrap gap-2">
@@ -271,7 +272,7 @@ export function NotificationSettingsForm({
             variant="ghost"
             disabled={!max.configured || !canEdit}
             loading={busy === "test-max"}
-            icon={<MessageCircle className="h-4 w-4" />}
+            icon={<MaxIcon className="h-4 w-4" />}
             onClick={() => test("max")}
           >
             Тест себе
