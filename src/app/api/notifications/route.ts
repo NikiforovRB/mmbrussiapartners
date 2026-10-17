@@ -3,6 +3,8 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { parseBody, route } from "@/lib/api";
 import { requireApprovedUser } from "@/lib/session";
+import { hasAdminScope } from "@/lib/permissions";
+import { notificationActions } from "@/lib/notification-actions";
 import {
   NOTIFICATION_TAB_TYPES,
   isNotificationTab,
@@ -60,8 +62,13 @@ export const GET = route(async (req: Request) => {
     if (id) unreadByTab[id] += g._count._all;
   }
 
+  const page = rows.slice(0, PAGE_SIZE);
+  const actions = hasAdminScope(session.user.permissions, session.user.isSuperAdmin)
+    ? await notificationActions(page, session.user)
+    : null;
+
   return NextResponse.json({
-    items: rows.slice(0, PAGE_SIZE),
+    items: page.map((n) => ({ ...n, action: actions?.get(n.id) ?? null })),
     hasMore: rows.length > PAGE_SIZE,
     unread,
     unreadByTab,

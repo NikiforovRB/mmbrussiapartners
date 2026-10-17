@@ -100,32 +100,37 @@ export function PricingManager({
     initialDealerId ? "dealers" : "catalog",
   );
 
+  const tabs = (
+    <div className="flex flex-wrap gap-2">
+      {[
+        { key: "catalog" as const, label: "Справочник" },
+        { key: "dealers" as const, label: "Цены дилеров" },
+      ].map((t) => (
+        <button
+          key={t.key}
+          type="button"
+          onClick={() => setTab(t.key)}
+          className={`rounded-btn px-4 h-9 inline-flex items-center text-sm transition-colors ${
+            tab === t.key
+              ? "bg-accent text-white"
+              : "border border-hairline text-ink hover:border-accent hover:text-accent"
+          }`}
+        >
+          {t.label}
+        </button>
+      ))}
+    </div>
+  );
+
   return (
     <div>
-      <div className="mb-5 flex flex-wrap gap-2">
-        {[
-          { key: "catalog" as const, label: "Справочник" },
-          { key: "dealers" as const, label: "Цены дилеров" },
-        ].map((t) => (
-          <button
-            key={t.key}
-            type="button"
-            onClick={() => setTab(t.key)}
-            className={`rounded-btn px-4 h-9 inline-flex items-center text-sm transition-colors ${
-              tab === t.key
-                ? "bg-accent text-white"
-                : "border border-hairline text-ink hover:border-accent hover:text-accent"
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-
       {tab === "catalog" ? (
-        <Catalog items={items} missing={missing} />
+        <Catalog tabs={tabs} items={items} missing={missing} />
       ) : (
-        <DealerPrices items={items} dealers={dealers} initialDealerId={initialDealerId} />
+        <>
+          <div className="mb-5">{tabs}</div>
+          <DealerPrices items={items} dealers={dealers} initialDealerId={initialDealerId} />
+        </>
       )}
     </div>
   );
@@ -133,7 +138,16 @@ export function PricingManager({
 
 // ─────────────────────────── справочник ───────────────────────────
 
-function Catalog({ items, missing }: { items: PriceItem[]; missing: MissingPosition[] }) {
+function Catalog({
+  tabs,
+  items,
+  missing,
+}: {
+  /** Вкладки раздела: на широком экране стоят в одной строке с поиском. */
+  tabs: React.ReactNode;
+  items: PriceItem[];
+  missing: MissingPosition[];
+}) {
   const router = useRouter();
   const [editing, setEditing] = React.useState<PriceItem | "new" | MissingPosition | null>(null);
   const [query, setQuery] = React.useState("");
@@ -179,12 +193,7 @@ function Catalog({ items, missing }: { items: PriceItem[]; missing: MissingPosit
   return (
     <>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-ink-muted max-w-2xl">
-          Цена привязана к тройке «продукт + комплектация + регион» — ровно к той, что присылает
-          DriveMods: MB-S5WM FULL, MB-S5WM-A9 FULL RUS, MB-GEN5 CUSTOM+RUS. Если комплектации или
-          региона у продукта нет, поле оставьте пустым. Регион здесь — часть названия товара в
-          DriveMods; рынок ШГУ (CHN, KOR, USA) определяется по версии ПО и на цену не влияет.
-        </p>
+        {tabs}
         {/* На узком экране кнопка уходит под поиск, а не сжимается в две строки. */}
         <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
           <div className="relative w-full sm:w-72">
@@ -205,6 +214,12 @@ function Catalog({ items, missing }: { items: PriceItem[]; missing: MissingPosit
           </Button>
         </div>
       </div>
+      <p className="mb-5 text-sm text-ink-muted">
+        Цена привязана к тройке «продукт + комплектация + регион» — ровно к той, что присылает
+        DriveMods: MB-S5WM FULL, MB-S5WM-A9 FULL RUS, MB-GEN5 CUSTOM+RUS. Если комплектации или
+        региона у продукта нет, поле оставьте пустым. Регион здесь — часть названия товара в
+        DriveMods; рынок ШГУ (CHN, KOR, USA) определяется по версии ПО и на цену не влияет.
+      </p>
 
       {missing.length > 0 ? (
         <div className="mb-5 rounded-panel border border-hairline bg-soft-warning/60 p-4">
@@ -285,7 +300,17 @@ function Catalog({ items, missing }: { items: PriceItem[]; missing: MissingPosit
                 </div>
               </div>
               <div className={cn("overflow-x-auto scrollbar-clean", !open && "hidden")}>
-              <table className="w-full min-w-[680px] text-sm">
+              {/* Ширины колонок заданы явно: у каждого продукта своя таблица, и
+                  без этого столбцы соседних блоков не стояли бы друг под другом. */}
+              <table className="w-full min-w-[760px] table-fixed text-sm">
+                <colgroup>
+                  <col className="w-[24%]" />
+                  <col className="w-[16%]" />
+                  <col className="w-[14%]" />
+                  <col className="w-[14%]" />
+                  <col className="w-[14%]" />
+                  <col className="w-[256px]" />
+                </colgroup>
                 <thead>
                   <tr className="text-left text-[11px] uppercase tracking-tight text-ink-subtle">
                     <th className="px-4 py-2.5 font-normal">Комплектация</th>
@@ -299,14 +324,14 @@ function Catalog({ items, missing }: { items: PriceItem[]; missing: MissingPosit
                 <tbody className="divide-y divide-hairline border-t border-hairline">
                   {list.map((item) => (
                     <tr key={item.id} className="transition-colors hover:bg-surface-muted">
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 break-words">
                         {item.bundle ? (
                           <Tag tone="accent">{item.bundle}</Tag>
                         ) : (
                           <span className="text-ink-muted">Без комплектации</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-ink-muted">{item.region || "Без региона"}</td>
+                      <td className="px-4 py-3 text-ink-muted break-words">{item.region || "Без региона"}</td>
                       <td className="px-4 py-3 text-ink-muted">
                         {item.myPrice == null ? "—" : <Money value={item.myPrice} />}
                       </td>

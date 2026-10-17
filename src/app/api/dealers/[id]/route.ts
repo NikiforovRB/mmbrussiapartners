@@ -161,6 +161,8 @@ export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: str
     location !== null &&
     siteCities.length > 0 &&
     [currentLocation.city, location.city].some((city) => normalizeSiteCities(siteCities, city).length === 0);
+  // Доступ выдан — заявка закрыта: после отключения доступа она не должна всплыть снова.
+  const closeDriveModsRequest = d.profile?.driveModsAccess === true;
 
   const profileUpdate: Record<string, unknown> = {};
   if (d.profile) {
@@ -225,7 +227,17 @@ export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: str
       ...(wantsRole && { roleId: d.roleId }),
       ...(Object.keys(profileUpdate).length > 0 &&
         target.dealerProfile && {
-          dealerProfile: { update: { ...profileUpdate, ...(dropSiteCities && { siteCities: [] }) } },
+          dealerProfile: {
+            update: {
+              ...profileUpdate,
+              ...(dropSiteCities && { siteCities: [] }),
+              ...(closeDriveModsRequest && {
+                driveModsRequestedAt: null,
+                driveModsRejectedAt: null,
+                driveModsRejectReason: null,
+              }),
+            },
+          },
         }),
     },
   });

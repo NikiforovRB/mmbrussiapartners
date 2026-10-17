@@ -399,6 +399,10 @@ model DealerProfile {
   driveModsAccess      Boolean  @default(false)
   /// Когда дилер отправил заявку на подключение к ЛК DriveMods.
   driveModsRequestedAt DateTime?
+  /// Последняя заявка отклонена: когда и почему (причину видит дилер).
+  /// Новая заявка или выданный доступ это сбрасывают.
+  driveModsRejectedAt   DateTime?
+  driveModsRejectReason String?
   /// Общее правило пересчёта цен справочника для этого дилера.
   priceAdjustKind     PriceAdjustKind @default(NONE)
   priceAdjustValue    Decimal? @db.Decimal(12, 2)

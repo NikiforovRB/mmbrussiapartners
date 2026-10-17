@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { badRequest, notFound, route } from "@/lib/api";
 import { notifyAdmins } from "@/lib/app-notifications";
+import { DRIVEMODS_REQUEST_TITLE } from "@/lib/notification-actions";
 import { requireApprovedUser } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -23,14 +24,14 @@ export const POST = route(async () => {
 
   await db.dealerProfile.update({
     where: { userId: session.user.id },
-    data: { driveModsRequestedAt: new Date() },
+    data: { driveModsRequestedAt: new Date(), driveModsRejectedAt: null, driveModsRejectReason: null },
   });
 
   await notifyAdmins(["dealers.edit", "dealers.approve"], {
     // Отдельного типа для этого события нет — используем dealer-событие; смысл
-    // несёт заголовок. Так избегаем миграции enum ради одной строки.
+    // несёт заголовок, по нему же панель уведомлений показывает кнопки решения.
     type: "DEALER_REGISTERED",
-    title: "Запрос доступа к ЛК DriveMods",
+    title: DRIVEMODS_REQUEST_TITLE,
     body: `${profile.user.email} запросил доступ к личному кабинету DriveMods`,
     link: `/admin/dealers/${session.user.id}`,
   });

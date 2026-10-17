@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   BadgeCheck,
   CheckCheck,
+  CheckCircle2,
   ClipboardList,
   CreditCard,
   KeyRound,
@@ -14,11 +15,21 @@ import {
   Undo2,
   UserPlus,
   X,
+  XCircle,
 } from "lucide-react";
+import { toast } from "sonner";
 import { IconBell } from "@/components/icons";
+import { Button } from "@/components/ui/button";
+import { Tag } from "@/components/ui/tag";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { formatRuDateTime } from "@/lib/dates";
 import { notificationTabs, tabForType, type NotificationTabId } from "@/lib/notification-tabs";
+import type {
+  NotificationAction,
+  NotificationActionKind,
+  NotificationActionState,
+} from "@/lib/notification-actions";
 import { useCabinetUser, useUnreadCount } from "./cabinet-user";
 
 type Notification = {
@@ -29,6 +40,8 @@ type Notification = {
   link: string | null;
   readAt: string | null;
   createdAt: string;
+  /** Заявка дилера, по которой можно решить прямо отсюда. */
+  action: NotificationAction | null;
 };
 
 const ICONS: Record<string, React.ReactNode> = {
@@ -185,19 +198,38 @@ export function NotificationPanel({ initialUnread }: { initialUnread: number }) 
     await markRead(tab === "all" ? {} : { tab });
   }
 
+  async function markItemRead(n: Notification) {
+    if (n.readAt) return;
+    setUnread((v) => Math.max(0, v - 1));
+    decrementTabs(n.type);
+    setItems((prev) =>
+      prev?.map((x) => (x.id === n.id ? { ...x, readAt: new Date().toISOString() } : x)) ?? prev,
+    );
+    await markRead({ ids: [n.id] });
+  }
+
   async function openItem(n: Notification) {
-    if (!n.readAt) {
-      setUnread((v) => Math.max(0, v - 1));
-      decrementTabs(n.type);
-      setItems((prev) =>
-        prev?.map((x) => (x.id === n.id ? { ...x, readAt: new Date().toISOString() } : x)) ?? prev,
-      );
-      await markRead({ ids: [n.id] });
-    }
+    await markItemRead(n);
     if (n.link) {
       setOpen(false);
       router.push(n.link);
     }
+  }
+
+  /** У дилера бывает несколько событий по одной заявке — итог виден во всех. */
+  function decided(n: Notification, state: NotificationActionState) {
+    const a = n.action;
+    if (!a) return;
+    setItems(
+      (prev) =>
+        prev?.map((x) =>
+          x.action && x.action.kind === a.kind && x.action.dealerId === a.dealerId
+            ? { ...x, action: { ...x.action, state } }
+            : x,
+        ) ?? prev,
+    );
+    void markItemRead(n);
+    router.refresh();
   }
 
   return (
@@ -303,14 +335,11 @@ export function NotificationPanel({ initialUnread }: { initialUnread: number }) 
                   ) : items && items.length > 0 ? (
                     <ul className="divide-y divide-hairline">
                       {items.map((n) => (
-                        <li key={n.id}>
+                        <li key={n.id} className={cn(!n.readAt && "bg-card-light")}>
                           <button
                             type="button"
                             onClick={() => openItem(n)}
-                            className={cn(
-                              "flex w-full items-start gap-3 px-5 py-4 text-left transition-colors hover:bg-surface-muted",
-                              !n.readAt && "bg-card-light",
-                            )}
+                            className="flex w-full items-start gap-3 px-5 py-4 text-left transition-colors hover:bg-surface-muted"
                           >
                             <span
                               className={cn(
@@ -337,6 +366,15 @@ export function NotificationPanel({ initialUnread }: { initialUnread: number }) 
                               <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
                             ) : null}
                           </button>
+                          {n.action ? (
+                            <div className="-mt-2 pb-4 pl-16 pr-5">
+                              <Decision
+                                action={n.action}
+                                onDecided={(state) => decided(n, state)}
+                                onStale={() => void load(tab)}
+                              />
+                            </div>
+                          ) : null}
                         </li>
                       ))}
                       {hasMore ? (
@@ -369,5 +407,157 @@ export function NotificationPanel({ initialUnread }: { initialUnread: number }) 
           )
         : null}
     </>
+  );
+}
+
+const REASON_MIN = 6;
+const REASON_MAX = 500;
+
+const RESULT: Record<NotificationActionKind, Record<Exclude<NotificationActionState, "pending">, string>> = {
+  registration: {
+    approved: "Дилер одобрен",
+    rejected: "Заявка отклонена",
+    closed: "Учётная запись заблокирована",
+  },
+  drivemods: {
+    approved: "Доступ к ЛК DriveMods подключён",
+    rejected: "Заявка отклонена",
+    closed: "Заявка закрыта",
+  },
+  site: {
+    approved: "Телефон опубликован на сайте",
+    rejected: "Заявка отклонена",
+    closed: "Заявка закрыта",
+  },
+};
+
+const RESULT_TONE = { approved: "success", rejected: "danger", closed: "muted" } as const;
+
+function decisionRequest(a: NotificationAction, decision: "approve" | "reject", reason: string) {
+  const base = `/api/dealers/${a.dealerId}`;
+  if (a.kind === "registration") {
+    return {
+      url: base,
+      method: "PATCH",
+      body: decision === "approve" ? { status: "APPROVED" } : { status: "REJECTED", rejectionReason: reason },
+    };
+  }
+  if (a.kind === "site") {
+    return {
+      url: `${base}/site-publication`,
+      method: "POST",
+      body: { action: decision, note: decision === "reject" ? reason || null : undefined },
+    };
+  }
+  return {
+    url: `${base}/drivemods-access`,
+    method: "POST",
+    body: { action: decision, reason: decision === "reject" ? reason || null : undefined },
+  };
+}
+
+function Decision({
+  action,
+  onDecided,
+  onStale,
+}: {
+  action: NotificationAction;
+  onDecided: (state: NotificationActionState) => void;
+  /** Заявку уже рассмотрели в другом месте — перечитать ленту. */
+  onStale: () => void;
+}) {
+  const [rejecting, setRejecting] = React.useState(false);
+  const [reason, setReason] = React.useState("");
+  const [busy, setBusy] = React.useState<"approve" | "reject" | null>(null);
+  const reasonRequired = action.kind === "registration";
+
+  if (action.state !== "pending") {
+    return <Tag tone={RESULT_TONE[action.state]}>{RESULT[action.kind][action.state]}</Tag>;
+  }
+
+  async function decide(decision: "approve" | "reject") {
+    if (busy) return;
+    const text = reason.trim();
+    const req = decisionRequest(action, decision, text);
+    setBusy(decision);
+    try {
+      const res = await fetch(req.url, {
+        method: req.method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(req.body),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        toast.error(j.error ?? "Не удалось сохранить решение");
+        onStale();
+        return;
+      }
+    } catch {
+      toast.error("Нет связи с сервером — попробуйте ещё раз");
+      return;
+    } finally {
+      setBusy(null);
+    }
+    const state = decision === "approve" ? "approved" : "rejected";
+    toast.success(RESULT[action.kind][state]);
+    onDecided(state);
+  }
+
+  if (rejecting) {
+    return (
+      <div className="space-y-2">
+        <Textarea
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          rows={3}
+          maxLength={REASON_MAX}
+          autoFocus
+          aria-label="Причина отказа"
+          placeholder="Причина отказа"
+          hint={
+            reasonRequired
+              ? `Дилер увидит причину в кабинете. Минимум ${REASON_MIN} символов.`
+              : "Необязательно. Дилер увидит причину в уведомлении."
+          }
+        />
+        <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            variant="danger"
+            loading={busy === "reject"}
+            disabled={reasonRequired && reason.trim().length < REASON_MIN}
+            onClick={() => decide("reject")}
+            icon={<XCircle className="h-4 w-4" />}
+          >
+            Отклонить
+          </Button>
+          <Button size="sm" variant="ghost" disabled={busy !== null} onClick={() => setRejecting(false)}>
+            Отмена
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      <Button
+        size="sm"
+        loading={busy === "approve"}
+        onClick={() => decide("approve")}
+        icon={<CheckCircle2 className="h-4 w-4" />}
+      >
+        Одобрить
+      </Button>
+      <Button
+        size="sm"
+        variant="ghostDanger"
+        disabled={busy !== null}
+        onClick={() => setRejecting(true)}
+        icon={<XCircle className="h-4 w-4" />}
+      >
+        Отклонить
+      </Button>
+    </div>
   );
 }

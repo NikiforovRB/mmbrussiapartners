@@ -7,14 +7,18 @@ import { toast } from "sonner";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tag } from "@/components/ui/tag";
+import { formatRuDateTime } from "@/lib/dates";
 
 export function DriveModsAccessCard({
   access,
   requestedAt,
+  rejection,
   requirements,
 }: {
   access: boolean;
   requestedAt: string | null;
+  /** Прошлая заявка отклонена; новая заявка это сбрасывает. */
+  rejection: { at: string; reason: string | null } | null;
   requirements: string;
 }) {
   const router = useRouter();
@@ -63,12 +67,22 @@ export function DriveModsAccessCard({
               {requirements}
             </div>
           ) : null}
+          {rejection && !requested ? (
+            <div className="mt-3 rounded-panel border border-danger/25 bg-danger/5 px-4 py-3 text-sm">
+              <div className="text-xs uppercase tracking-widest text-danger">
+                Заявка отклонена · {formatRuDateTime(rejection.at)}
+              </div>
+              {rejection.reason ? (
+                <p className="mt-1 whitespace-pre-line break-words">{rejection.reason}</p>
+              ) : null}
+            </div>
+          ) : null}
           <div className="mt-4">
             {requested ? (
               <Tag tone="warning">Заявка на рассмотрении</Tag>
             ) : (
               <Button loading={loading} icon={<Send className="h-4 w-4" />} onClick={request}>
-                Запросить доступ
+                {rejection ? "Отправить заявку снова" : "Запросить доступ"}
               </Button>
             )}
           </div>

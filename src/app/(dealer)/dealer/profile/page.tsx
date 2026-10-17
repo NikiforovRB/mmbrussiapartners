@@ -48,6 +48,14 @@ export default async function ProfilePage() {
               ? user.dealerProfile.driveModsRequestedAt.toISOString()
               : null
           }
+          rejection={
+            user.dealerProfile.driveModsRejectedAt
+              ? {
+                  at: user.dealerProfile.driveModsRejectedAt.toISOString(),
+                  reason: user.dealerProfile.driveModsRejectReason,
+                }
+              : null
+          }
           requirements={support.requirements ?? ""}
         />
         <ProfileForm

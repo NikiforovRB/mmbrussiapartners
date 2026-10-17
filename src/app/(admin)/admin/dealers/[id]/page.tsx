@@ -177,6 +177,8 @@ export default async function AdminDealerPage({
                   licensesUsed: dealer.dealerProfile.licensesUsed,
                   driveModsAccess: dealer.dealerProfile.driveModsAccess,
                   driveModsRequestedAt: dealer.dealerProfile.driveModsRequestedAt?.toISOString() ?? null,
+                  driveModsRejectedAt: dealer.dealerProfile.driveModsRejectedAt?.toISOString() ?? null,
+                  driveModsRejectReason: dealer.dealerProfile.driveModsRejectReason,
                   legacyDealer: dealer.dealerProfile.legacyDealer,
                 }
               : null,

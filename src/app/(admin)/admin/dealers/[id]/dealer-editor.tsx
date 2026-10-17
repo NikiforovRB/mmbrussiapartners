@@ -57,6 +57,8 @@ type Dealer = {
     licensesUsed: number;
     driveModsAccess: boolean;
     driveModsRequestedAt: string | null;
+    driveModsRejectedAt: string | null;
+    driveModsRejectReason: string | null;
     legacyDealer: boolean;
   } | null;
   role: { name: string };
@@ -113,6 +115,7 @@ export function DealerEditor({
   const canSetLimit = can("dealers.setLimit") || canEdit;
   const canManageStatus = canApprove || canEdit || can("dealers.suspend");
   const canSetLegacy = canEdit || can("pricing.manage");
+  const canReviewDriveMods = canApprove || canEdit;
   const [data, setData] = React.useState(dealer);
   // Статус меняют и другие вкладки/администраторы: свежий ответ сервера
   // после router.refresh() должен перекрывать локальное значение.
@@ -123,6 +126,8 @@ export function DealerEditor({
   const [rejectReason, setRejectReason] = React.useState("");
   const [suspendOpen, setSuspendOpen] = React.useState(false);
   const [suspendReason, setSuspendReason] = React.useState("");
+  const [driveModsRejectOpen, setDriveModsRejectOpen] = React.useState(false);
+  const [driveModsRejectReason, setDriveModsRejectReason] = React.useState("");
   const [busy, setBusy] = React.useState<string | null>(null);
   const [photo, setPhoto] = React.useState<string | null>(avatarUrl ?? null);
   const [photoBusy, setPhotoBusy] = React.useState(false);
@@ -218,6 +223,38 @@ export function DealerEditor({
       toast.success("Разблокирован");
       router.refresh();
     }
+  }
+
+  async function reviewDriveMods(action: "approve" | "reject") {
+    if (busy) return;
+    const reason = driveModsRejectReason.trim();
+    setBusy(`drivemods-${action}`);
+    const res = await fetch(`/api/dealers/${data.id}/drivemods-access`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action, reason: action === "reject" ? reason || null : undefined }),
+    });
+    setBusy(null);
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      toast.error(j.error ?? "Не удалось сохранить решение");
+      router.refresh();
+      return;
+    }
+    setData((d) => ({
+      ...d,
+      dealerProfile: d.dealerProfile && {
+        ...d.dealerProfile,
+        driveModsAccess: action === "approve",
+        driveModsRequestedAt: null,
+        driveModsRejectedAt: action === "reject" ? new Date().toISOString() : null,
+        driveModsRejectReason: action === "reject" ? reason || null : null,
+      },
+    }));
+    toast.success(action === "approve" ? "Доступ к ЛК DriveMods подключён" : "Заявка отклонена");
+    setDriveModsRejectOpen(false);
+    setDriveModsRejectReason("");
+    router.refresh();
   }
 
   async function saveProfile() {
@@ -534,7 +571,11 @@ export function DealerEditor({
               if (!canEdit) return;
               setData({
                 ...data,
-                dealerProfile: data.dealerProfile && { ...data.dealerProfile, driveModsAccess: v },
+                dealerProfile: data.dealerProfile && {
+                  ...data.dealerProfile,
+                  driveModsAccess: v,
+                  ...(v && { driveModsRequestedAt: null, driveModsRejectedAt: null, driveModsRejectReason: null }),
+                },
               });
               await update({ profile: { driveModsAccess: v } });
               router.refresh();
@@ -546,9 +587,40 @@ export function DealerEditor({
             }
             description="Видно только администраторам. Часть типов лицензий выдаётся только там."
           />
-          {data.dealerProfile?.driveModsRequestedAt && !data.dealerProfile?.driveModsAccess ? (
+          {data.dealerProfile?.driveModsRequestedAt && !data.dealerProfile.driveModsAccess ? (
             <div className="mt-3 rounded-panel border border-hairline p-3 text-xs text-ink-muted">
               Дилер запросил доступ {formatRuDateTime(data.dealerProfile.driveModsRequestedAt)}.
+              {canReviewDriveMods ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    loading={busy === "drivemods-approve"}
+                    onClick={() => reviewDriveMods("approve")}
+                    icon={<CheckCircle2 className="h-4 w-4" />}
+                  >
+                    Одобрить
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghostDanger"
+                    onClick={() => setDriveModsRejectOpen(true)}
+                    icon={<XCircle className="h-4 w-4" />}
+                  >
+                    Отклонить
+                  </Button>
+                </div>
+              ) : null}
+            </div>
+          ) : data.dealerProfile?.driveModsRejectedAt && !data.dealerProfile.driveModsAccess ? (
+            <div className="mt-3 rounded-panel border border-hairline p-3 text-xs text-ink-muted">
+              Заявка отклонена {formatRuDateTime(data.dealerProfile.driveModsRejectedAt)}
+              {data.dealerProfile.driveModsRejectReason ? (
+                <span className="mt-1 block whitespace-pre-line break-words text-ink">
+                  {data.dealerProfile.driveModsRejectReason}
+                </span>
+              ) : (
+                "."
+              )}
             </div>
           ) : null}
         </Card>
@@ -717,6 +789,41 @@ export function DealerEditor({
           autoFocus
           placeholder="Например: задолженность по счетам за лицензии — оплатите счета, и доступ восстановят."
           hint={`Минимум ${REJECT_REASON_MIN} символов.`}
+        />
+      </Modal>
+
+      <Modal
+        open={driveModsRejectOpen}
+        onClose={() => setDriveModsRejectOpen(false)}
+        title="Отклонить заявку на доступ к ЛК DriveMods"
+        description="Дилер получит уведомление и увидит причину в профиле. Заявку он сможет отправить снова."
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setDriveModsRejectOpen(false)}>
+              Отмена
+            </Button>
+            <Button
+              variant="danger"
+              disabled={!canReviewDriveMods}
+              loading={busy === "drivemods-reject"}
+              onClick={() => reviewDriveMods("reject")}
+              icon={<Ban className="h-4 w-4" />}
+            >
+              Отклонить
+            </Button>
+          </>
+        }
+      >
+        <Textarea
+          label="Причина"
+          value={driveModsRejectReason}
+          onChange={(e) => setDriveModsRejectReason(e.target.value)}
+          rows={4}
+          maxLength={REJECT_REASON_MAX}
+          counter
+          autoFocus
+          placeholder="Например: доступ выдаётся после первых пяти оплаченных лицензий."
+          hint="Необязательно."
         />
       </Modal>
     </div>
