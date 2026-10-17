@@ -12,7 +12,7 @@ import { Card } from "@/components/ui/card";
 import { Tag } from "@/components/ui/tag";
 import { formatRuDateTime } from "@/lib/dates";
 import { cn, fioFromParts, plural } from "@/lib/utils";
-import { isSiteSyncConfigured, siteCitiesOf } from "@/lib/site-dealers";
+import { isSiteSyncConfigured, normalizeSiteCities, siteCitiesOf } from "@/lib/site-dealers";
 import { readSiteEntries } from "@/lib/site-sync-labels";
 import { isPasswordVaultConfigured } from "@/lib/password-vault";
 import { DealerEditor } from "./dealer-editor";
@@ -232,7 +232,7 @@ export default async function AdminDealerPage({
                   country: p.country,
                   siteComment: p.siteComment,
                   cities: siteCitiesOf(p),
-                  customCities: p.siteCities.length > 0,
+                  customCities: normalizeSiteCities(p.siteCities, p.city).length > 0,
                 }}
                 entries={readSiteEntries(p.siteEntries)}
               />

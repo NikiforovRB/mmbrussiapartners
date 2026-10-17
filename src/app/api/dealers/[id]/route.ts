@@ -9,7 +9,7 @@ import { dealerFootprint, deleteDealerCompletely, describeFootprint, settleDeale
 import { ContactFieldError, normalizeCompanyUrl, normalizeTelegramNick } from "@/lib/dealer-contacts";
 import { fioFromParts, normalizePhone } from "@/lib/utils";
 import { requireApprovedUser, requirePermission } from "@/lib/session";
-import { queueDealerSiteSync } from "@/lib/site-dealers";
+import { normalizeSiteCities, queueDealerSiteSync } from "@/lib/site-dealers";
 import { linkLegacyDealer } from "@/lib/legacy-dealers";
 import { clientIp } from "@/lib/rate-limit";
 import { LOCATION_TEXT_MAX, normalizeLocation, recordLocationChange } from "@/lib/dealer-location";
@@ -154,6 +154,14 @@ export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: str
         )
       : null;
 
+  // Город на сайте, совпадающий с городом профиля, оставил бы номер на сайте
+  // в прежнем городе после переезда дилера.
+  const siteCities = target.dealerProfile?.siteCities ?? [];
+  const dropSiteCities =
+    location !== null &&
+    siteCities.length > 0 &&
+    [currentLocation.city, location.city].some((city) => normalizeSiteCities(siteCities, city).length === 0);
+
   const profileUpdate: Record<string, unknown> = {};
   if (d.profile) {
     if (wantsPlainEdit) {
@@ -216,7 +224,9 @@ export const PATCH = route(async (req: Request, ctx: { params: Promise<{ id: str
       ...(d.status === "SUSPENDED" && d.status !== target.status && { sessionVersion: { increment: 1 } }),
       ...(wantsRole && { roleId: d.roleId }),
       ...(Object.keys(profileUpdate).length > 0 &&
-        target.dealerProfile && { dealerProfile: { update: profileUpdate } }),
+        target.dealerProfile && {
+          dealerProfile: { update: { ...profileUpdate, ...(dropSiteCities && { siteCities: [] }) } },
+        }),
     },
   });
 
